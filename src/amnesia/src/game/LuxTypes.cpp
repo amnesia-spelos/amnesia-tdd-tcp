@@ -23,6 +23,7 @@
 #include "LuxArea.h"
 #include "LuxProp.h"
 #include "LuxMap.h"
+#include "LuxSocketServer.h"
 
 //////////////////////////////////////////////////////////////////////////
 // TYPE CONVERSIONS
@@ -178,6 +179,8 @@ void iLuxCollideCallbackContainer::CheckCollisionCallback(const tString& asName,
 				tString sCommand = pCallback->msCallbackFunc+"(\"" + asName + "\", \""+ pEntity->GetName()+"\", "+cString::ToString(lState)+")" ;
 				apMap->RunScript(sCommand);
 			
+				gpBase->mpSocketServer->SendMessage("SCRIPT_CALL:" + sCommand);
+
 				///////////////////////
 				// Auto remove
 				if(pCallback->mbDeleteWhenColliding)

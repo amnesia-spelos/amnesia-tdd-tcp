@@ -576,6 +576,7 @@ void cLuxScriptHandler::InitScriptFunctions()
 	AddFunc("void SetEntityVisible(string &in asName, bool abVisible)",(void *)SetEntityVisible);
 	AddFunc("bool GetEntityExists(string &in asName)",(void *)GetEntityExists);
 	AddFunc("void SetEntityPos(string &in asName, float afX, float afY, float afZ)",(void *)SetEntityPos);
+	AddFunc("void SetEntityPosRot(string &in asName, float afX, float afY, float afZ, float afYaw, float afPitch, float afRoll)",(void *)SetEntityPosRot);
 	AddFunc("float GetEntityPosX(string &in asName)",(void *)GetEntityPosX);
 	AddFunc("float GetEntityPosY(string &in asName)",(void *)GetEntityPosY);
 	AddFunc("float GetEntityPosZ(string &in asName)",(void *)GetEntityPosZ);
@@ -606,6 +607,7 @@ void cLuxScriptHandler::InitScriptFunctions()
 	AddFunc("void SetSwingDoorLocked(string &in asName, bool abLocked, bool abEffects)",(void *)SetSwingDoorLocked);
 	AddFunc("void SetSwingDoorClosed(string &in asName, bool abClosed, bool abEffects)",(void *)SetSwingDoorClosed);
 	AddFunc("void SetSwingDoorDisableAutoClose(string &in asName, bool abDisableAutoClose)",(void *)SetSwingDoorDisableAutoClose);
+	AddFunc("void SetSwingDoorOpenAmount(string &in asName, float afAmount)", (void *)SetSwingDoorOpenAmount);
 	AddFunc("void SetLevelDoorLocked(string &in asName, bool abLocked)", (void *)SetLevelDoorLocked);
 	AddFunc("void SetLevelDoorLockedSound(string &in asName, string &in asSound)", (void *)SetLevelDoorLockedSound);
 	AddFunc("void SetLevelDoorLockedText(string &in asName, string &in asTextCat, string &in asTextEntry)", (void *)SetLevelDoorLockedText);
@@ -2286,6 +2288,44 @@ void __stdcall cLuxScriptHandler::SetEntityPos(string& asName, float afX, float 
 	END_SET_PROPERTY
 }
 
+void __stdcall cLuxScriptHandler::SetEntityPosRot(string& asName, float afX, float afY, float afZ, float afYaw, float afPitch, float afRoll)
+{
+	BEGIN_SET_PROPERTY(eLuxEntityType_LastEnum, -1)
+
+		if (pEntity->GetEntityType() == eLuxEntityType_Enemy)
+		{
+			iLuxEnemy* pEnemy = ToEnemy(pEntity);
+			pEnemy->GetCharacterBody()->SetFeetPosition(cVector3f(afX, afY, afZ));
+			// Set yaw and pitch if needed — but roll is not used in CharacterBody
+			pEnemy->GetCharacterBody()->SetYaw(cMath::ToRad(afYaw));
+			pEnemy->GetCharacterBody()->SetPitch(cMath::ToRad(afPitch));
+		}
+		else
+		{
+			if (pEntity->GetBodyNum() == 0) continue;
+
+			iPhysicsBody* pBody = pEntity->GetBody(0);
+			if (!pBody) continue;
+
+			// Convert angles to radians
+			float fYawRad = cMath::ToRad(afYaw);
+			float fPitchRad = cMath::ToRad(afPitch);
+			float fRollRad = cMath::ToRad(afRoll);
+
+			// Build rotation matrix
+			cMatrixf mtxTransform = cMath::MatrixRotate(cVector3f(fPitchRad, fYawRad, fRollRad), eEulerRotationOrder_XYZ);
+
+			// Set position
+			mtxTransform.SetTranslation(cVector3f(afX, afY, afZ));
+
+			// Apply to physics body
+			pBody->SetWorldMatrix(mtxTransform);
+		}
+
+	END_SET_PROPERTY
+}
+
+
 //-----------------------------------------------------------------------
 
 float __stdcall cLuxScriptHandler::GetEntityPosX(string& asName)
@@ -2747,6 +2787,17 @@ void __stdcall cLuxScriptHandler::SetSwingDoorClosed(string& asName, bool abClos
 		pSwingDoor->SetClosed(abClosed, abEffects);
 
 	END_SET_PROPERTY
+}
+
+void __stdcall cLuxScriptHandler::SetSwingDoorOpenAmount(string& asName, float afAmount)
+{
+	iLuxEntity* pEntity = GetEntity(asName, eLuxEntityType_Prop, eLuxPropType_SwingDoor);
+	if (!pEntity) return;
+
+	cLuxProp_SwingDoor* pDoor = ToSwingDoor(pEntity);
+	if (!pDoor) return;
+
+	pDoor->SetOpenAmount(afAmount);
 }
 
 //-----------------------------------------------------------------------

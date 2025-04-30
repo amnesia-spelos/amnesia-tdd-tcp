@@ -121,6 +121,55 @@ void cLuxSocketServer::Update(float afTimeStep)
             {
 				SendMessage("RESPONSE:ping:pong");
             }
+			else if (strcmp(buffer, "getposrot") == 0)
+			{
+				if (gpBase->mpMapHandler && gpBase->mpMapHandler->GetCurrentMap())
+				{
+					iCharacterBody* pCharBody = gpBase->mpPlayer->GetCharacterBody();
+					cVector3f vPos = pCharBody->GetFeetPosition();
+
+					float yaw = pCharBody->GetYaw();
+					float pitch = pCharBody->GetPitch();
+					float roll = 0.0f; // Roll not tracked in CharacterBody
+
+					// Convert from radians to degrees
+					yaw *= (180.0f / 3.14159265f);
+					pitch *= (180.0f / 3.14159265f);
+
+					char response[160];
+					sprintf(response, "RESPONSE:getposrot:%.2f, %.2f, %.2f:%.2f, %.2f, %.2f",
+							vPos.x, vPos.y, vPos.z,
+							yaw, pitch, roll);
+					SendMessage(response);
+				}
+				else
+				{
+					SendMessage("RESPONSE:getposrot:no map loaded");
+				}
+			}
+			else if (strcmp(buffer, "getrot") == 0)
+			{
+				if (gpBase->mpMapHandler && gpBase->mpMapHandler->GetCurrentMap())
+				{
+					iCharacterBody* pCharBody = gpBase->mpPlayer->GetCharacterBody();
+
+					float yaw = pCharBody->GetYaw();
+					float pitch = pCharBody->GetPitch();
+					float roll = 0.0f; // Roll is not tracked, assume 0.
+
+					// Convert from radians to degrees
+					yaw *= (180.0f / 3.14159265f);
+					pitch *= (180.0f / 3.14159265f);
+
+					char response[128];
+					sprintf(response, "RESPONSE:getrot:%.2f, %.2f, %.2f", yaw, pitch, roll);
+					SendMessage(response);
+				}
+				else
+				{
+					SendMessage("RESPONSE:getrot:no map loaded");
+				}
+			}
             else if (strcmp(buffer, "getpos") == 0)
             {
                 if (gpBase->mpMapHandler && gpBase->mpMapHandler->GetCurrentMap())

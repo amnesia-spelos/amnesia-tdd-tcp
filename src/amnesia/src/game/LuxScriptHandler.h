@@ -342,6 +342,7 @@ private:
 	static void __stdcall SetEntityVisible(string& asName, bool abVisible);
 	static bool __stdcall GetEntityExists(string& asName);
 	static void __stdcall SetEntityPos(string& asName, float afX, float afY, float afZ);
+	static void __stdcall SetEntityPosRot(string& asName, float afX, float afY, float afZ, float afPitch, float afYaw, float afRoll);
 	static float __stdcall GetEntityPosX(string& asName);
 	static float __stdcall GetEntityPosY(string& asName);
 	static float __stdcall GetEntityPosZ(string& asName);
@@ -395,6 +396,7 @@ private:
 	static void __stdcall SetSwingDoorDisableAutoClose(string& asName, bool abDisableAutoClose);
 	static bool __stdcall GetSwingDoorLocked(string &asName);
 	static bool __stdcall GetSwingDoorClosed(string &asName);
+	static void __stdcall SetSwingDoorOpenAmount(string& asName, float afAmount);
 	/**
 	 * -1 = angle is close to 0, 1=angle is 70% or higher of max, 0=inbetween -1 and 1.
 	 */
