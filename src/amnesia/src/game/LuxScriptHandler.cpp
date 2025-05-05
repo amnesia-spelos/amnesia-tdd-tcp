@@ -2447,34 +2447,32 @@ void __stdcall cLuxScriptHandler::CreateEntityAtArea(string& asEntityName, strin
 
 void __stdcall cLuxScriptHandler::CreateEntityAtFirstArea(string& asEntityName, string& asEntityFile, bool abFullGameSave)
 {
-	cLuxMap *pMap = gpBase->mpMapHandler->GetCurrentMap();
-	if(pMap == NULL)
-	{
-		return;
-	}
+	cLuxMap* pMap = gpBase->mpMapHandler->GetCurrentMap();
+	if (!pMap) return;
 
-	auto areaToCast = pMap->GetFirstEntityOfType(eLuxEntityType_Area);
-	if(areaToCast == NULL)
-	{
-		return;
-	}
+	cMatrixf mtxTransform;
+	memset(&mtxTransform, 0, sizeof(cMatrixf));
 
-	iLuxArea *pArea = ToArea(areaToCast);
-	if(pArea == NULL)
-	{
-		return;
-	}
+	mtxTransform.m[0][0] = 1.0f;
+	mtxTransform.m[1][1] = 1.0f;
+	mtxTransform.m[2][2] = 1.0f;
+	mtxTransform.m[3][3] = 1.0f;
+
+	mtxTransform.SetTranslation(cVector3f(0.0f, 0.0f, 0.0f));
+
+	cVector3f vScale(1.0f, 1.0f, 1.0f);
 
 	pMap->ResetLatestEntity();
-	pMap->CreateEntity(asEntityName, asEntityFile, pArea->GetBody()->GetWorldMatrix(),1);
-	iLuxEntity *pEntity = pMap->GetLatestEntity();
-	if(pEntity && pEntity->GetName() == asEntityName)
+	pMap->CreateEntity(asEntityName, asEntityFile, mtxTransform, vScale);
+
+	iLuxEntity* pEntity = pMap->GetLatestEntity();
+	if (pEntity && pEntity->GetName() == asEntityName)
 	{
-		pEntity->SetFullGameSave(abFullGameSave);	
+		pEntity->SetFullGameSave(abFullGameSave);
 	}
 	else
 	{
-		Error("Could not create entity '%s' from file '%s'!\n", asEntityName.c_str(), asEntityFile.c_str());
+		Error("Failed to create entity '%s' from file '%s'!\n", asEntityName.c_str(), asEntityFile.c_str());
 	}
 }
 
@@ -2797,7 +2795,7 @@ void __stdcall cLuxScriptHandler::SetSwingDoorOpenAmount(string& asName, float a
 	cLuxProp_SwingDoor* pDoor = ToSwingDoor(pEntity);
 	if (!pDoor) return;
 
-	pDoor->SetOpenAmount(afAmount);
+	//pDoor->SetOpenAmount(afAmount); // TODO(amnesia-tdd-tcp): Reimplement
 }
 
 //-----------------------------------------------------------------------
