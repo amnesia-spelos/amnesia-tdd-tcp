@@ -35,3 +35,5 @@ Feel free to provide ideas, improvements, bug reports, or if you're technically 
 Just browse through [the GitHub issues](https://github.com/amnesia-spelos/amnesia-tdd-tcp/issues) and take a pick. Or create a new one.
 
 Thank you so much for considering helping out! 💕
+
+Feel free to also read through our [CONTRIBUTING](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) documents.
