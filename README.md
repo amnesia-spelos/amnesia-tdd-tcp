@@ -1,4 +1,4 @@
-# amnesia-tdd-tcp
+# Amnesia-TDD-TCP
 
 _A fork of Frictional Games' Amnesia: The Dark Descent aiming to create a TCP communication protocol for client application to interact with or control the game_
 
@@ -13,6 +13,10 @@ _Control the game from any language, any environment, you bring your own tools._
 - 🧪 Developer facing functions
 
 _Developing a standard custom story? Don't ship with amnesia-tdd-tcp, use it to make your development life easier._
+
+## 💻 Setting up your Development Environment
+
+If you'd like to try building the project yourself, you can [follow the development environment setup guide](https://github.com/amnesia-spelos/amnesia-tdd-tcp/wiki/dev-env-setup), which should get you started with everything you need. 🙂 Thanks for considering helping out, it means a lot!
 
 ## 🚀 Projects using amnesia-tdd-tcp
 
