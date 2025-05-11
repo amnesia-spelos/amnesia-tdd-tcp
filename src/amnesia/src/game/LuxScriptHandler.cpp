@@ -698,6 +698,8 @@ void cLuxScriptHandler::InitScriptFunctions()
 	AddFunc("float StringToFloat(string&in asString)",(void *)ScriptStringToFloat);
 	AddFunc("bool StringToBool(string&in asString)",(void *)ScriptStringToBool);
 
+	// Amnesia: TDD TCP
+	AddFunc("void CreateEntityInFrontOfPlayer(string &in asEntityName, string &in asEntityFile, bool abFullGameSave)",(void *)CreateEntityInFrontOfPlayer);
 }
 //-----------------------------------------------------------------------
 
@@ -3779,4 +3781,47 @@ bool __stdcall cLuxScriptHandler::ScriptStringToBool(string& asString)
 
 //-----------------------------------------------------------------------
 
+// Amnesia: TDD TCP
+void __stdcall cLuxScriptHandler::CreateEntityInFrontOfPlayer(string& asEntityName, string& asEntityFile, bool abFullGameSave)
+{
+	cLuxMap* pMap = gpBase->mpMapHandler->GetCurrentMap();
+	if (!pMap) return;
 
+	iCharacterBody* pCharBody = gpBase->mpPlayer->GetCharacterBody();
+	if (!pCharBody) return;
+
+	cVector3f vPlayerPos = pCharBody->GetPosition();
+	float fYaw = pCharBody->GetYaw();
+
+	cVector3f vForward;
+	vForward.x = -sinf(fYaw);
+	vForward.y = 0;
+	vForward.z = -cosf(fYaw);
+	vForward.Normalize();
+
+	const float fDistance = 2.0f;
+	cVector3f vSpawnPos = vPlayerPos + vForward * fDistance;
+
+	cMatrixf mtxTransform;
+	memset(&mtxTransform, 0, sizeof(cMatrixf));
+	mtxTransform.m[0][0] = 1.0f;
+	mtxTransform.m[1][1] = 1.0f;
+	mtxTransform.m[2][2] = 1.0f;
+	mtxTransform.m[3][3] = 1.0f;
+	mtxTransform.SetTranslation(vSpawnPos);
+
+	cVector3f vScale(1.0f, 1.0f, 1.0f);
+
+	pMap->ResetLatestEntity();
+	pMap->CreateEntity(asEntityName, asEntityFile, mtxTransform, vScale);
+
+	iLuxEntity* pEntity = pMap->GetLatestEntity();
+	if (pEntity && pEntity->GetName() == asEntityName)
+	{
+		pEntity->SetFullGameSave(abFullGameSave);
+	}
+	else
+	{
+		Error("Failed to create entity '%s' from file '%s'!\n", asEntityName.c_str(), asEntityFile.c_str());
+	}
+}

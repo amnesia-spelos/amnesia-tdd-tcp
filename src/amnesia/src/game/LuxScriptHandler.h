@@ -539,8 +539,9 @@ private:
 	static bool __stdcall ScriptStringToBool(string& asString);
 
 	//////////////////////////////
-	// Spelos
+	// Amnesia TDD TCP
 	static void __stdcall CreateEntityAtFirstArea(string& asEntityName, string& asEntityFile, bool abFullGameSave);
+	static void __stdcall CreateEntityInFrontOfPlayer(string& asEntityName, string& asEntityFile, bool abFullGameSave);
 };
 
 //----------------------------------------------
