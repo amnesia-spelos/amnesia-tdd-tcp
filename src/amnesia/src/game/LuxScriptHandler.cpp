@@ -699,7 +699,7 @@ void cLuxScriptHandler::InitScriptFunctions()
 	AddFunc("bool StringToBool(string&in asString)",(void *)ScriptStringToBool);
 
 	// Amnesia: TDD TCP
-	AddFunc("void CreateEntityInFrontOfPlayer(string &in asEntityName, string &in asEntityFile, bool abFullGameSave)",(void *)CreateEntityInFrontOfPlayer);
+	AddFunc("void CreateEntityInFrontOfPlayer(string &in asEntityName, string &in asEntityFile, float afDistance, float afHeight, bool abFullGameSave)",(void *)CreateEntityInFrontOfPlayer);
 }
 //-----------------------------------------------------------------------
 
@@ -3782,7 +3782,7 @@ bool __stdcall cLuxScriptHandler::ScriptStringToBool(string& asString)
 //-----------------------------------------------------------------------
 
 // Amnesia: TDD TCP
-void __stdcall cLuxScriptHandler::CreateEntityInFrontOfPlayer(string& asEntityName, string& asEntityFile, bool abFullGameSave)
+void __stdcall cLuxScriptHandler::CreateEntityInFrontOfPlayer(string& asEntityName, string& asEntityFile, float afDistance, float afHeight, bool abFullGameSave)
 {
 	cLuxMap* pMap = gpBase->mpMapHandler->GetCurrentMap();
 	if (!pMap) return;
@@ -3799,8 +3799,9 @@ void __stdcall cLuxScriptHandler::CreateEntityInFrontOfPlayer(string& asEntityNa
 	vForward.z = -cosf(fYaw);
 	vForward.Normalize();
 
-	const float fDistance = 2.0f;
+	const float fDistance = 1.0f + afDistance;
 	cVector3f vSpawnPos = vPlayerPos + vForward * fDistance;
+	vSpawnPos.y += afHeight - 0.9f;
 
 	cMatrixf mtxTransform;
 	memset(&mtxTransform, 0, sizeof(cMatrixf));

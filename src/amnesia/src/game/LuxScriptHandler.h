@@ -541,7 +541,7 @@ private:
 	//////////////////////////////
 	// Amnesia TDD TCP
 	static void __stdcall CreateEntityAtFirstArea(string& asEntityName, string& asEntityFile, bool abFullGameSave);
-	static void __stdcall CreateEntityInFrontOfPlayer(string& asEntityName, string& asEntityFile, bool abFullGameSave);
+	static void __stdcall CreateEntityInFrontOfPlayer(string& asEntityName, string& asEntityFile, float afDistance, float afHeight, bool abFullGameSave);
 };
 
 //----------------------------------------------
