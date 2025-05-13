@@ -12,7 +12,7 @@ cLuxSocketServer::cLuxSocketServer()
     mClientSocket = INVALID_SOCKET;
 
 	InitSocket();
-    Log("cLuxSocketServer created!\n");
+    Log("[amnesia-tdd-tcp] cLuxSocketServer created!\n");
 }
 
 bool cLuxSocketServer::InitSocket()
@@ -20,14 +20,14 @@ bool cLuxSocketServer::InitSocket()
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
     {
-        Log("WSAStartup failed\n");
+        Log("[amnesia-tdd-tcp] WSAStartup failed\n");
         return false;
     }
 
     mListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (mListenSocket == INVALID_SOCKET)
     {
-        Log("Socket creation failed\n");
+        Log("[amnesia-tdd-tcp] Socket creation failed\n");
         WSACleanup();
         return false;
     }
@@ -42,7 +42,7 @@ bool cLuxSocketServer::InitSocket()
 
     if (bind(mListenSocket, (SOCKADDR*)&service, sizeof(service)) == SOCKET_ERROR)
     {
-        Log("Bind failed\n");
+        Log("[amnesia-tdd-tcp] Bind failed\n");
         closesocket(mListenSocket);
         WSACleanup();
         return false;
@@ -50,13 +50,13 @@ bool cLuxSocketServer::InitSocket()
 
     if (listen(mListenSocket, SOMAXCONN) == SOCKET_ERROR)
     {
-        Log("Listen failed\n");
+        Log("[amnesia-tdd-tcp] Listen failed\n");
         closesocket(mListenSocket);
         WSACleanup();
         return false;
     }
 
-    Log("Socket listening on %s:%d\n", mHost.c_str(), mPort);
+    Log("[amnesia-tdd-tcp] Socket listening on %s:%d\n", mHost.c_str(), mPort);
     return true;
 }
 
@@ -88,7 +88,7 @@ void cLuxSocketServer::Update(float afTimeStep)
 
         if (clientSocket != INVALID_SOCKET)
         {
-            Log("Client connected!\n");
+            Log("[amnesia-tdd-tcp] Client connected!\n");
             mClientSocket = clientSocket;
 
             SendMessage("Hello, from Amnesia: The Dark Descent!");
@@ -115,7 +115,7 @@ void cLuxSocketServer::Update(float afTimeStep)
                 }
             }
 
-            Log("Client says: %s\n", buffer);
+            Log("[amnesia-tdd-tcp] Client message:\n<message>\n%s\n</message>\n", buffer);
 
             if (strcmp(buffer, "ping") == 0)
             {
@@ -216,7 +216,7 @@ void cLuxSocketServer::Update(float afTimeStep)
         }
         else if (bytesReceived == 0 || (bytesReceived == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK))
         {
-            Log("Client disconnected.\n");
+            Log("[amnesia-tdd-tcp] Client disconnected.\n");
             closesocket(mClientSocket);
             mClientSocket = INVALID_SOCKET;
         }
@@ -234,6 +234,9 @@ void cLuxSocketServer::SendMessage(const tString& message)
             safeMessage += "\n";
 
         send(mClientSocket, safeMessage.c_str(), (int)safeMessage.length(), 0);
+
+		tString log = "[amnesia-tdd-tcp] Sent Message: " + safeMessage;
+		Log(log.c_str());
     }
 }
 
@@ -242,7 +245,7 @@ void cLuxSocketServer::SetConnectionSettings(const tString& host, int port)
     mHost = host;
     mPort = port;
 
-	Log("LuxSocketServer config changed: re-init\n");
+	Log("[amnesia-tdd-tcp] LuxSocketServer config changed: re-init\n");
 	ShutdownSocket();
     InitSocket();
 }
@@ -250,5 +253,5 @@ void cLuxSocketServer::SetConnectionSettings(const tString& host, int port)
 cLuxSocketServer::~cLuxSocketServer()
 {
 	ShutdownSocket();
-    Log("cLuxSocketServer destroyed!\n");
+    Log("[amnesia-tdd-tcp] cLuxSocketServer destroyed!\n");
 }
