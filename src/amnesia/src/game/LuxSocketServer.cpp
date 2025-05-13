@@ -10,6 +10,7 @@ cLuxSocketServer::cLuxSocketServer()
 	mPort = 5150;
 	mListenSocket = INVALID_SOCKET;
     mClientSocket = INVALID_SOCKET;
+	bIsAuthority = true;
 
 	InitSocket();
     Log("[amnesia-tdd-tcp] cLuxSocketServer created!\n");

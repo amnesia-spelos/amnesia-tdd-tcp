@@ -438,9 +438,26 @@ void cLuxMapHandler::SetCurrentMap(cLuxMap* apMap, bool abRunScript, bool abFirs
 	
 	if (gpBase && gpBase->mpSocketServer && apMap)
 	{
-		tString mapFile = apMap->GetFileName();
-		gpBase->mpSocketServer->SendMessage("EVENT:MapChanged:" + mapFile);
+		if (gpBase->mpSocketServer->IsAuthority())
+		{
+			Log("[amnesia-tdd-tcp] Sending map change as an authority\n");
+			tString mapFile = apMap->GetFileName();
+			gpBase->mpSocketServer->SendMessage("EVENT:MapChanged:" + mapFile + ":" + (abFirstTime ? "true" : "false") + ":" + asPlayerPos);
+		}
+		else
+		{
+			// Note(spelos): Non-authority clients do not execute map changes
+			Log("[amnesia-tdd-tcp] Stopping SetCurrentMap, because the client is not an authority\n");
+			return;
+		}
 	}
+
+	this->ForceCurrentMap(apMap, abRunScript, abFirstTime, asPlayerPos);
+}
+
+void cLuxMapHandler::ForceCurrentMap(cLuxMap* apMap, bool abRunScript, bool abFirstTime, const tString& asPlayerPos)
+{
+	if(mpCurrentMap == apMap) return;
 
 	//////////////////////////////////
 	//Unload stuff from previous map

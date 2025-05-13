@@ -114,6 +114,8 @@ public:
 	void SetCurrentMap(cLuxMap* apMap, bool abRunScript, bool abFirstTime, const tString& asPlayerPos);
 	cLuxMap* GetCurrentMap(){ return mpCurrentMap;}
 
+	void ForceCurrentMap(cLuxMap* apMap, bool abRunScript, bool abFirstTime, const tString& asPlayerPos);
+
 	cViewport* GetViewport(){ return mpViewport;}
 
 	const tString& GetMapFolder(){ return msMapFolder;}

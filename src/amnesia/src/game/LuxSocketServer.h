@@ -15,12 +15,14 @@ public:
 	void SetConnectionSettings(const tString& host, int port);
 	const tString& GetHost() const { return mHost; }
 	int GetPort() const { return mPort; }
+	bool IsAuthority() const { return bIsAuthority; }
 private:
 	SOCKET mListenSocket;
 	SOCKET mClientSocket;
 	
 	tString mHost;
 	int mPort;
+	bool bIsAuthority;
 
 	bool InitSocket();
 	void ShutdownSocket();
