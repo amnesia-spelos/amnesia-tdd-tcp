@@ -409,6 +409,7 @@ void cLuxMainMenu_CustomStoryList::PopulateStoryList()
 	PopulateUserDirStoryList();
 #endif
 
+	// TODO(amnesia-tdd-tcp): This is where we would add workshop support @parity @feature
 	tWString sPath = cString::AddSlashAtEndW(cString::To16Char(gpBase->msCustomStoryPath));
 
 	tWStringList lstStoryDirs;

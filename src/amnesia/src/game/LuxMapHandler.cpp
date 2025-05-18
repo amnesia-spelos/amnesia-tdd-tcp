@@ -446,9 +446,8 @@ void cLuxMapHandler::SetCurrentMap(cLuxMap* apMap, bool abRunScript, bool abFirs
 		}
 		else
 		{
-			// Note(spelos): Non-authority clients do not execute map changes
-			Log("[amnesia-tdd-tcp] Stopping SetCurrentMap, because the client is not an authority\n");
-			return;
+			// Note(spelos): Non-authority clients do not send map changes
+			Log("[amnesia-tdd-tcp] Not sending map change because the client is not an authority\n");
 		}
 	}
 

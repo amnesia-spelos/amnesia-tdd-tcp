@@ -122,6 +122,55 @@ void cLuxSocketServer::Update(float afTimeStep)
             {
 				SendMessage("RESPONSE:ping:pong");
             }
+			else if (strcmp(buffer, "setlistener") == 0)
+			{
+				this->bIsAuthority = false;
+			}
+			else if (strncmp(buffer, "setmap:", 7) == 0)
+			{
+				// Expected format: setmap:<map-path>:<true/false>:<playerpos>
+				char* token = strtok(buffer + 7, ":");
+				if (token == NULL)
+				{
+					SendMessage("RESPONSE:setmap:invalid format");
+					return;
+				}
+
+				tString mapPath = token;
+
+				token = strtok(NULL, ":");
+				if (token == NULL)
+				{
+					SendMessage("RESPONSE:setmap:missing firstTime");
+					return;
+				}
+				bool firstTime = (strcmp(token, "true") == 0 || strcmp(token, "1") == 0);
+
+				// The player position can be optional or empty
+				token = strtok(NULL, "");
+				tString playerPos = token ? token : ""; // Allows empty string
+
+				Log("[amnesia-tdd-tcp] setmap command received: Map Path: %s - First Time: %s - Player Pos: %s\n",
+					mapPath.c_str(), firstTime ? "true" : "false", playerPos.c_str());
+
+				// Attempt to load the map
+				if (!gpBase->mpMapHandler)
+				{
+					SendMessage("RESPONSE:setmap:error:MapHandler is null");
+					return;
+				}
+
+				cLuxMap* pMap = gpBase->mpMapHandler->LoadMap(mapPath, true);
+				if (pMap)
+				{
+					gpBase->mpMapHandler->ForceCurrentMap(pMap, true, firstTime, playerPos);
+					SendMessage("RESPONSE:setmap:ok");
+				}
+				else
+				{
+					SendMessage("RESPONSE:setmap:error:Failed to load map");
+				}
+			}
 			else if (strcmp(buffer, "getposrot") == 0)
 			{
 				if (gpBase->mpMapHandler && gpBase->mpMapHandler->GetCurrentMap())
