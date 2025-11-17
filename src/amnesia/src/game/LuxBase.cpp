@@ -97,6 +97,7 @@
 #include "LuxCommentaryIcon.h"
 #include "LuxAchievementHandler.h"
 
+#include "impl/tinyXML/tinyxml.h"
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -1406,6 +1407,8 @@ bool cLuxBase::InitGame()
 	mpSocketServer = hplNew(cLuxSocketServer, ());
 	AddGlobalModule(mpSocketServer);
 
+	LoadSideAppDefinitions();
+
 	return true;
 }
 
@@ -1737,4 +1740,54 @@ void cLuxBase::InitAchievements()
 	mpAchievementHandler->UnlockAchievement(eLuxAchievement_StillAlive);
 	mpAchievementHandler->UnlockAchievement(eLuxAchievement_MasterArchivist);
 	*/
+}
+
+//-----------------------------------------------------------------------
+
+bool cLuxBase::LoadSideAppDefinitions()
+{
+	tWString sWorkingDir = cString::AddSlashAtEndW(cPlatform::GetWorkingDir());
+	tWString sDefinitionPath = sWorkingDir + _W("side-apps.xml");
+	tString sDefinitionPath8 = cString::To8Char(sDefinitionPath);
+
+	if(cPlatform::FileExists(sDefinitionPath.c_str()) == false)
+	{
+		Log("LuxSideApps: '%s' not found, skipping.\n", sDefinitionPath8.c_str());
+		return false;
+	}
+
+	TiXmlDocument* pDoc = hplNew(TiXmlDocument, ());
+
+	if(pDoc->LoadFile(sDefinitionPath8.c_str()) == false)
+	{
+		Warning("LuxSideApps: Could not load '%s'\n", sDefinitionPath8.c_str());
+		hplDelete(pDoc);
+		return false;
+	}
+
+	TiXmlElement* pRootElem = pDoc->RootElement();
+	if(pRootElem == NULL)
+	{
+		Warning("LuxSideApps: Root element missing in '%s'\n", sDefinitionPath8.c_str());
+		hplDelete(pDoc);
+		return false;
+	}
+
+	for(TiXmlElement* pAppElem = pRootElem->FirstChildElement("App"); pAppElem; pAppElem = pAppElem->NextSiblingElement("App"))
+	{
+		const char* kpBehavior = pAppElem->Attribute("CrashBehavior");
+		const char* kpPath = pAppElem->GetText();
+
+		if(kpPath == NULL || kpPath[0] == '\0')
+		{
+			Log("LuxSideApps: Skipping entry without executable path.\n");
+			continue;
+		}
+
+		tString sBehavior = kpBehavior ? kpBehavior : "Ignore";
+		Log("LuxSideApps: definition path='%s' behavior='%s'\n", kpPath, sBehavior.c_str());
+	}
+
+	hplDelete(pDoc);
+	return true;
 }

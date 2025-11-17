@@ -193,6 +193,7 @@ public:
 	bool CheckFirstStartFlag();
 
 	void InitAchievements();
+	bool LoadSideAppDefinitions();
 
 	/////////////////////////
 	// Public variables
