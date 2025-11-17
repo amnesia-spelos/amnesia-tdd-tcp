@@ -138,6 +138,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="LuxSideAppManager.cpp" />
     <ClCompile Include="LuxAchievementHandler.cpp" />
     <ClCompile Include="LuxBase.cpp" />
     <ClCompile Include="LuxConfigHandler.cpp" />
@@ -248,6 +249,7 @@
     <ClCompile Include="LuxPlayerState_UseItem.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="LuxSideAppManager.h" />
     <ClInclude Include="LuxAchievementHandler.h" />
     <ClInclude Include="LuxBase.h" />
     <ClInclude Include="LuxConfigHandler.h" />

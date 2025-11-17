@@ -65,6 +65,7 @@ class cLuxMainMenu;
 class cLuxPlayer;
 
 class cLuxSocketServer;
+class cLuxSideAppManager;
 
 
 //----------------------------------------------
@@ -85,6 +86,30 @@ extern void LuxCalcGuiSetScreenOffset(const cVector2f &avVirtualSizeIn, cVector2
 extern void ProgLog(eLuxProgressLogLevel aLevel, const tString& asMessage);
 
 //----------------------------------------------
+
+enum eLuxSideAppCrashBehavior
+{
+	eLuxSideAppCrashBehavior_Ignore,
+	eLuxSideAppCrashBehavior_Restart,
+	eLuxSideAppCrashBehavior_CrashGame,
+	eLuxSideAppCrashBehavior_LastEnum
+};
+
+enum eLuxSideAppLoadResult
+{
+	eLuxSideAppLoadResult_None,
+	eLuxSideAppLoadResult_Loaded,
+	eLuxSideAppLoadResult_FatalError
+};
+
+//----------------------------------------------
+
+struct cLuxSideAppDefinition
+{
+	tString msExecutableOriginal;
+	tWString msExecutableFullPath;
+	eLuxSideAppCrashBehavior mCrashBehavior;
+};
 
 /**
  * LuxCustomStorySettings - class used to store custom made story data
@@ -193,6 +218,7 @@ public:
 	bool CheckFirstStartFlag();
 
 	void InitAchievements();
+	eLuxSideAppLoadResult LoadSideAppDefinitions();
 
 	/////////////////////////
 	// Public variables
@@ -245,6 +271,7 @@ public:
 	iLuxAchievementHandler* mpAchievementHandler;
 
 	cLuxSocketServer* mpSocketServer;
+	cLuxSideAppManager* mpSideAppManager;
 
 	tString msGameName;
 	tWString msErrorMessage;
@@ -309,6 +336,7 @@ public:
     bool mbSaveConfigAtExit;
 
 	std::vector<iLuxUpdateable*> mvModules;
+	std::vector<cLuxSideAppDefinition> mvSideAppDefinitions;
 
 };
 

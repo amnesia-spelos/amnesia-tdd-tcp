@@ -56,6 +56,7 @@
 #include "LuxPlayer.h"
 
 #include "LuxSocketServer.h"
+#include "LuxSideAppManager.h"
 
 #include "LuxStaticProp.h"
 
@@ -97,6 +98,7 @@
 #include "LuxCommentaryIcon.h"
 #include "LuxAchievementHandler.h"
 
+#include "impl/tinyXML/tinyxml.h"
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -336,6 +338,46 @@ static inline unsigned int GetFileCRC(const tWString& asFilePath, unsigned int a
 	return buff.GetCRC(alKey, 0);
 }
 
+static bool LuxSideAppIsAbsolutePath(const tString& asPath)
+{
+	if(asPath.length() > 1 && asPath[1] == ':') return true;
+	if(asPath.length() > 0 && (asPath[0] == '\\' || asPath[0] == '/')) return true;
+	return false;
+}
+
+static tString LuxSideAppTrimRelativePrefix(const tString& asPath)
+{
+	if(asPath.length() >= 2 && asPath[0] == '.' && (asPath[1] == '\\' || asPath[1] == '/'))
+		return asPath.substr(2);
+
+	return asPath;
+}
+
+static eLuxSideAppCrashBehavior LuxSideAppStringToBehavior(const tString& asBehavior)
+{
+	tString sLower = cString::ToLowerCase(asBehavior);
+
+	if(sLower == "restart") return eLuxSideAppCrashBehavior_Restart;
+	if(sLower == "crashgame") return eLuxSideAppCrashBehavior_CrashGame;
+
+	if(sLower != "" && sLower != "ignore")
+		Log("LuxSideApps: Unknown CrashBehavior '%s', defaulting to Ignore.\n", asBehavior.c_str());
+
+	return eLuxSideAppCrashBehavior_Ignore;
+}
+
+static const char* LuxSideAppBehaviorToString(eLuxSideAppCrashBehavior aBehavior)
+{
+	switch(aBehavior)
+	{
+	case eLuxSideAppCrashBehavior_Restart: return "Restart";
+	case eLuxSideAppCrashBehavior_CrashGame: return "CrashGame";
+	default: break;
+	}
+
+	return "Ignore";
+}
+
 //-----------------------------------------------------------------------
 
 static unsigned char gv_main_init_str[27] = {0x4B, 0x4A, 0xC1, 0xA5, 0x8, 0x40, 0x3A, 0xA4, 0x5C, 0x4D, 0x5B, 0x5C, 0x77, 0x45, 0x49, 0x41, 0x46, 0x77, 0x41, 0x46, 0x41, 0x5C, 0x6, 0x4B, 0x4E, 0x4F, 0};
@@ -367,6 +409,7 @@ cLuxBase::cLuxBase()
 	mpMenuCfg = NULL;
 	mpGameCfg = NULL;
 	mpDemoCfg = NULL;
+	mpSideAppManager = NULL;
 
 	mpCurrentMapLoading = NULL;
 
@@ -1295,6 +1338,7 @@ bool cLuxBase::InitGame()
 	mpSaveHandler = CreateGlobalModule( cLuxSaveHandler);
 	mpScriptHandler = CreateGlobalModule( cLuxScriptHandler);
 	mpProgressLogHandler = CreateGlobalModule( cLuxProgressLogHandler);
+	mpSideAppManager = CreateGlobalModule( cLuxSideAppManager);
 	
 	//Default
 	mpMapHandler = CreateModule( cLuxMapHandler, "Default");
@@ -1405,6 +1449,12 @@ bool cLuxBase::InitGame()
 
 	mpSocketServer = hplNew(cLuxSocketServer, ());
 	AddGlobalModule(mpSocketServer);
+
+	eLuxSideAppLoadResult eSideAppLoad = LoadSideAppDefinitions();
+	if(eSideAppLoad == eLuxSideAppLoadResult_FatalError)
+		return false;
+	if(eSideAppLoad == eLuxSideAppLoadResult_Loaded && mpSideAppManager)
+		mpSideAppManager->StartSideApps(mvSideAppDefinitions);
 
 	return true;
 }
@@ -1737,4 +1787,85 @@ void cLuxBase::InitAchievements()
 	mpAchievementHandler->UnlockAchievement(eLuxAchievement_StillAlive);
 	mpAchievementHandler->UnlockAchievement(eLuxAchievement_MasterArchivist);
 	*/
+}
+
+//-----------------------------------------------------------------------
+
+eLuxSideAppLoadResult cLuxBase::LoadSideAppDefinitions()
+{
+	mvSideAppDefinitions.clear();
+
+	tWString sWorkingDir = cString::AddSlashAtEndW(cPlatform::GetWorkingDir());
+	tWString sDefinitionPath = sWorkingDir + _W("side-apps.xml");
+	tString sDefinitionPath8 = cString::To8Char(sDefinitionPath);
+
+	if(cPlatform::FileExists(sDefinitionPath.c_str()) == false)
+	{
+		Log("LuxSideApps: '%s' not found, skipping.\n", sDefinitionPath8.c_str());
+		return eLuxSideAppLoadResult_None;
+	}
+
+	TiXmlDocument* pDoc = hplNew(TiXmlDocument, ());
+
+	if(pDoc->LoadFile(sDefinitionPath8.c_str()) == false)
+	{
+		Warning("LuxSideApps: Could not load '%s'\n", sDefinitionPath8.c_str());
+		hplDelete(pDoc);
+		return eLuxSideAppLoadResult_None;
+	}
+
+	TiXmlElement* pRootElem = pDoc->RootElement();
+	if(pRootElem == NULL)
+	{
+		Warning("LuxSideApps: Root element missing in '%s'\n", sDefinitionPath8.c_str());
+		hplDelete(pDoc);
+		return eLuxSideAppLoadResult_None;
+	}
+
+	bool bHasDefinitions = false;
+
+	for(TiXmlElement* pAppElem = pRootElem->FirstChildElement("App"); pAppElem; pAppElem = pAppElem->NextSiblingElement("App"))
+	{
+		const char* kpBehavior = pAppElem->Attribute("CrashBehavior");
+		const char* kpPath = pAppElem->GetText();
+
+		if(kpPath == NULL || kpPath[0] == '\0')
+		{
+			Log("LuxSideApps: Skipping entry without executable path.\n");
+			continue;
+		}
+
+		tString sBehavior = kpBehavior ? kpBehavior : "Ignore";
+		tString sExecutable = kpPath;
+		tString sNormalized = LuxSideAppTrimRelativePrefix(sExecutable);
+
+		cLuxSideAppDefinition definition;
+		definition.mCrashBehavior = LuxSideAppStringToBehavior(sBehavior);
+		definition.msExecutableOriginal = sExecutable;
+
+		if(LuxSideAppIsAbsolutePath(sExecutable))
+			definition.msExecutableFullPath = cString::To16Char(sExecutable);
+		else
+			definition.msExecutableFullPath = sWorkingDir + cString::To16Char(sNormalized);
+
+		if(cPlatform::FileExists(definition.msExecutableFullPath.c_str()) == false)
+		{
+			tString sError = "The SideApp \"" + definition.msExecutableOriginal + "\" could not be found";
+			msErrorMessage = cString::To16Char(sError);
+			Log("LuxSideApps: %s\n", sError.c_str());
+			hplDelete(pDoc);
+			return eLuxSideAppLoadResult_FatalError;
+		}
+
+		mvSideAppDefinitions.push_back(definition);
+		bHasDefinitions = true;
+
+		Log("LuxSideApps: definition path='%s' resolved='%s' behavior='%s'\n",
+			definition.msExecutableOriginal.c_str(),
+			cString::To8Char(definition.msExecutableFullPath).c_str(),
+			LuxSideAppBehaviorToString(definition.mCrashBehavior));
+	}
+
+	hplDelete(pDoc);
+	return bHasDefinitions ? eLuxSideAppLoadResult_Loaded : eLuxSideAppLoadResult_None;
 }
