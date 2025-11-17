@@ -52,20 +52,63 @@ void cLuxSideAppManager::ShutdownSideApps()
 				TerminateProcess(instance.mProcessInfo.hProcess, 0);
 				WaitForSingleObject(instance.mProcessInfo.hProcess, 2000);
 			}
-
-			CloseHandle(instance.mProcessInfo.hProcess);
-			instance.mProcessInfo.hProcess = NULL;
 		}
 
-		if(instance.mProcessInfo.hThread)
-		{
-			CloseHandle(instance.mProcessInfo.hThread);
-			instance.mProcessInfo.hThread = NULL;
-		}
+		CloseProcessHandles(instance);
 	}
 #endif
 
 	mvRunningApps.clear();
+}
+
+void cLuxSideAppManager::Update(float afTimeStep)
+{
+#ifdef WIN32
+	(void)afTimeStep;
+
+	size_t i = 0;
+	while(i < mvRunningApps.size())
+	{
+		cSideAppInstance& instance = mvRunningApps[i];
+		bool bRemove = false;
+
+		if(instance.mProcessInfo.hProcess == NULL)
+		{
+			bRemove = true;
+		}
+		else
+		{
+			DWORD dwWaitResult = WaitForSingleObject(instance.mProcessInfo.hProcess, 0);
+			if(dwWaitResult == WAIT_OBJECT_0)
+			{
+				DWORD dwExitCode = 0;
+				GetExitCodeProcess(instance.mProcessInfo.hProcess, &dwExitCode);
+				Log("LuxSideApps: '%s' exited (code %lu)\n", instance.mDefinition.msExecutableOriginal.c_str(), dwExitCode);
+				HandleSideAppExit(instance);
+				bRemove = true;
+			}
+			else if(dwWaitResult == WAIT_FAILED)
+			{
+				DWORD dwError = GetLastError();
+				Warning("LuxSideApps: Wait failed for '%s' (error %lu)\n", instance.mDefinition.msExecutableOriginal.c_str(), dwError);
+				HandleSideAppExit(instance);
+				bRemove = true;
+			}
+		}
+
+		if(bRemove)
+		{
+			CloseProcessHandles(instance);
+			mvRunningApps.erase(mvRunningApps.begin() + i);
+		}
+		else
+		{
+			++i;
+		}
+	}
+#else
+	(void)afTimeStep;
+#endif
 }
 
 void cLuxSideAppManager::StartSideApp(const cLuxSideAppDefinition& aDefinition)
@@ -118,4 +161,53 @@ void cLuxSideAppManager::StartSideApp(const cLuxSideAppDefinition& aDefinition)
 	(void)aDefinition;
 	Warning("LuxSideApps: Side applications are not supported on this platform.\n");
 #endif
+}
+
+void cLuxSideAppManager::HandleSideAppExit(cSideAppInstance& aInstance)
+{
+	switch(aInstance.mDefinition.mCrashBehavior)
+	{
+	case eLuxSideAppCrashBehavior_Restart:
+		Log("LuxSideApps: Restarting '%s'\n", aInstance.mDefinition.msExecutableOriginal.c_str());
+		StartSideApp(aInstance.mDefinition);
+		break;
+	case eLuxSideAppCrashBehavior_CrashGame:
+		CrashGameForSideApp(aInstance.mDefinition);
+		break;
+	case eLuxSideAppCrashBehavior_Ignore:
+	default:
+		break;
+	}
+}
+
+void cLuxSideAppManager::CloseProcessHandles(cSideAppInstance& aInstance)
+{
+#ifdef WIN32
+	if(aInstance.mProcessInfo.hProcess)
+	{
+		CloseHandle(aInstance.mProcessInfo.hProcess);
+		aInstance.mProcessInfo.hProcess = NULL;
+	}
+
+	if(aInstance.mProcessInfo.hThread)
+	{
+		CloseHandle(aInstance.mProcessInfo.hThread);
+		aInstance.mProcessInfo.hThread = NULL;
+	}
+#else
+	(void)aInstance;
+#endif
+}
+
+void cLuxSideAppManager::CrashGameForSideApp(const cLuxSideAppDefinition& aDefinition)
+{
+	tString sChildName = cString::GetFileName(aDefinition.msExecutableOriginal);
+	if(sChildName == "")
+		sChildName = aDefinition.msExecutableOriginal;
+
+	tString sMessage = "The child process \"" + sChildName + "\" closed unexpectedly";
+	gpBase->msErrorMessage = cString::To16Char(sMessage);
+
+	cPlatform::CreateMessageBox(_W("Error!"), gpBase->msErrorMessage.c_str());
+	gpBase->mpEngine->Exit();
 }

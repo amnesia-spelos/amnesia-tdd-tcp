@@ -87,11 +87,28 @@ extern void ProgLog(eLuxProgressLogLevel aLevel, const tString& asMessage);
 
 //----------------------------------------------
 
+enum eLuxSideAppCrashBehavior
+{
+	eLuxSideAppCrashBehavior_Ignore,
+	eLuxSideAppCrashBehavior_Restart,
+	eLuxSideAppCrashBehavior_CrashGame,
+	eLuxSideAppCrashBehavior_LastEnum
+};
+
+enum eLuxSideAppLoadResult
+{
+	eLuxSideAppLoadResult_None,
+	eLuxSideAppLoadResult_Loaded,
+	eLuxSideAppLoadResult_FatalError
+};
+
+//----------------------------------------------
+
 struct cLuxSideAppDefinition
 {
 	tString msExecutableOriginal;
 	tWString msExecutableFullPath;
-	tString msCrashBehavior;
+	eLuxSideAppCrashBehavior mCrashBehavior;
 };
 
 /**
@@ -201,7 +218,7 @@ public:
 	bool CheckFirstStartFlag();
 
 	void InitAchievements();
-	bool LoadSideAppDefinitions();
+	eLuxSideAppLoadResult LoadSideAppDefinitions();
 
 	/////////////////////////
 	// Public variables

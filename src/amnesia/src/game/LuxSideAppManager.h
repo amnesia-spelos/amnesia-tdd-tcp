@@ -13,11 +13,15 @@ public:
 
 	void StartSideApps(const std::vector<cLuxSideAppDefinition>& aDefinitions);
 	void ShutdownSideApps();
+	void Update(float afTimeStep);
 
 private:
-	void StartSideApp(const cLuxSideAppDefinition& aDefinition);
-
 	struct cSideAppInstance;
+
+	void StartSideApp(const cLuxSideAppDefinition& aDefinition);
+	void HandleSideAppExit(cSideAppInstance& aInstance);
+	void CloseProcessHandles(cSideAppInstance& aInstance);
+	void CrashGameForSideApp(const cLuxSideAppDefinition& aDefinition);
 
 	std::vector<cSideAppInstance> mvRunningApps;
 };
