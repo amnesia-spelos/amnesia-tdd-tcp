@@ -79,6 +79,8 @@ void cLuxSideAppManager::StartSideApp(const cLuxSideAppDefinition& aDefinition)
 	memset(&StartupInfo, 0, sizeof(STARTUPINFOW));
 	memset(&ProcessInfo, 0, sizeof(PROCESS_INFORMATION));
 	StartupInfo.cb = sizeof(STARTUPINFOW);
+	StartupInfo.dwFlags |= STARTF_USESHOWWINDOW;
+	StartupInfo.wShowWindow = SW_SHOWMINNOACTIVE;
 
 	tWString sCommand = _W("\"") + aDefinition.msExecutableFullPath + _W("\"");
 	std::vector<wchar_t> vCommand(sCommand.length()+1);
@@ -86,7 +88,19 @@ void cLuxSideAppManager::StartSideApp(const cLuxSideAppDefinition& aDefinition)
 		vCommand[i] = sCommand[i];
 	vCommand[sCommand.length()] = 0;
 
-	if(CreateProcessW(NULL, &vCommand[0], NULL, NULL, FALSE, 0, NULL, NULL, &StartupInfo, &ProcessInfo))
+	tWString sCurrentDir = cString::GetFilePathW(aDefinition.msExecutableFullPath);
+	std::vector<wchar_t> vCurrentDir;
+	wchar_t* pCurrentDir = NULL;
+	if(sCurrentDir != _W(""))
+	{
+		vCurrentDir.resize(sCurrentDir.length()+1);
+		for(size_t i=0; i<sCurrentDir.length(); ++i)
+			vCurrentDir[i] = sCurrentDir[i];
+		vCurrentDir[sCurrentDir.length()] = 0;
+		pCurrentDir = &vCurrentDir[0];
+	}
+
+	if(CreateProcessW(NULL, &vCommand[0], NULL, NULL, FALSE, 0, NULL, pCurrentDir, &StartupInfo, &ProcessInfo))
 	{
 		cSideAppInstance instance;
 		instance.mDefinition = aDefinition;
