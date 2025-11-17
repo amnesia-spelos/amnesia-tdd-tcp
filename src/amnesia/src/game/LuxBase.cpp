@@ -56,6 +56,7 @@
 #include "LuxPlayer.h"
 
 #include "LuxSocketServer.h"
+#include "LuxSideAppManager.h"
 
 #include "LuxStaticProp.h"
 
@@ -337,6 +338,21 @@ static inline unsigned int GetFileCRC(const tWString& asFilePath, unsigned int a
 	return buff.GetCRC(alKey, 0);
 }
 
+static bool LuxSideAppIsAbsolutePath(const tString& asPath)
+{
+	if(asPath.length() > 1 && asPath[1] == ':') return true;
+	if(asPath.length() > 0 && (asPath[0] == '\\' || asPath[0] == '/')) return true;
+	return false;
+}
+
+static tString LuxSideAppTrimRelativePrefix(const tString& asPath)
+{
+	if(asPath.length() >= 2 && asPath[0] == '.' && (asPath[1] == '\\' || asPath[1] == '/'))
+		return asPath.substr(2);
+
+	return asPath;
+}
+
 //-----------------------------------------------------------------------
 
 static unsigned char gv_main_init_str[27] = {0x4B, 0x4A, 0xC1, 0xA5, 0x8, 0x40, 0x3A, 0xA4, 0x5C, 0x4D, 0x5B, 0x5C, 0x77, 0x45, 0x49, 0x41, 0x46, 0x77, 0x41, 0x46, 0x41, 0x5C, 0x6, 0x4B, 0x4E, 0x4F, 0};
@@ -368,6 +384,7 @@ cLuxBase::cLuxBase()
 	mpMenuCfg = NULL;
 	mpGameCfg = NULL;
 	mpDemoCfg = NULL;
+	mpSideAppManager = NULL;
 
 	mpCurrentMapLoading = NULL;
 
@@ -1296,6 +1313,7 @@ bool cLuxBase::InitGame()
 	mpSaveHandler = CreateGlobalModule( cLuxSaveHandler);
 	mpScriptHandler = CreateGlobalModule( cLuxScriptHandler);
 	mpProgressLogHandler = CreateGlobalModule( cLuxProgressLogHandler);
+	mpSideAppManager = CreateGlobalModule( cLuxSideAppManager);
 	
 	//Default
 	mpMapHandler = CreateModule( cLuxMapHandler, "Default");
@@ -1407,7 +1425,8 @@ bool cLuxBase::InitGame()
 	mpSocketServer = hplNew(cLuxSocketServer, ());
 	AddGlobalModule(mpSocketServer);
 
-	LoadSideAppDefinitions();
+	if(LoadSideAppDefinitions() && mpSideAppManager)
+		mpSideAppManager->StartSideApps(mvSideAppDefinitions);
 
 	return true;
 }
@@ -1746,6 +1765,8 @@ void cLuxBase::InitAchievements()
 
 bool cLuxBase::LoadSideAppDefinitions()
 {
+	mvSideAppDefinitions.clear();
+
 	tWString sWorkingDir = cString::AddSlashAtEndW(cPlatform::GetWorkingDir());
 	tWString sDefinitionPath = sWorkingDir + _W("side-apps.xml");
 	tString sDefinitionPath8 = cString::To8Char(sDefinitionPath);
@@ -1773,6 +1794,8 @@ bool cLuxBase::LoadSideAppDefinitions()
 		return false;
 	}
 
+	bool bHasDefinitions = false;
+
 	for(TiXmlElement* pAppElem = pRootElem->FirstChildElement("App"); pAppElem; pAppElem = pAppElem->NextSiblingElement("App"))
 	{
 		const char* kpBehavior = pAppElem->Attribute("CrashBehavior");
@@ -1785,9 +1808,27 @@ bool cLuxBase::LoadSideAppDefinitions()
 		}
 
 		tString sBehavior = kpBehavior ? kpBehavior : "Ignore";
-		Log("LuxSideApps: definition path='%s' behavior='%s'\n", kpPath, sBehavior.c_str());
+		tString sExecutable = kpPath;
+		tString sNormalized = LuxSideAppTrimRelativePrefix(sExecutable);
+
+		cLuxSideAppDefinition definition;
+		definition.msCrashBehavior = sBehavior;
+		definition.msExecutableOriginal = sExecutable;
+
+		if(LuxSideAppIsAbsolutePath(sExecutable))
+			definition.msExecutableFullPath = cString::To16Char(sExecutable);
+		else
+			definition.msExecutableFullPath = sWorkingDir + cString::To16Char(sNormalized);
+
+		mvSideAppDefinitions.push_back(definition);
+		bHasDefinitions = true;
+
+		Log("LuxSideApps: definition path='%s' resolved='%s' behavior='%s'\n",
+			definition.msExecutableOriginal.c_str(),
+			cString::To8Char(definition.msExecutableFullPath).c_str(),
+			definition.msCrashBehavior.c_str());
 	}
 
 	hplDelete(pDoc);
-	return true;
+	return bHasDefinitions;
 }
