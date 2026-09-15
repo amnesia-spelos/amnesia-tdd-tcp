@@ -16,7 +16,24 @@ _Developing a standard custom story? Don't ship with amnesia-tdd-tcp, use it to 
 
 ## 💻 Setting up your Development Environment
 
-If you'd like to try building the project yourself, you can [follow the development environment setup guide](https://github.com/amnesia-spelos/amnesia-tdd-tcp/wiki/dev-env-setup), which should get you started with everything you need. 🙂 Thanks for considering helping out, it means a lot!
+The Windows game build is verified with Visual Studio 2026 and its `v145` MSVC toolset. In the Visual Studio Installer, install the **Desktop development with C++** workload and make sure these individual components are selected:
+
+- MSVC v145 C++ x86/x64 build tools
+- A Windows 10 or Windows 11 SDK
+
+The game is a 32-bit application, so the x86 compiler and libraries are required. CMake is not required for this Windows workflow.
+
+From a PowerShell prompt at the repository root, run:
+
+```powershell
+.\scripts\build-windows.ps1
+```
+
+The script extracts `src/HPL2/dependencies.zip` when needed, builds the HPL2 static library in Release configuration, and then builds the Amnesia game with the same toolchain. The executable is written to `artifacts/Release/Amnesia.exe`; it is not copied into a Steam installation automatically.
+
+You can also open `src/amnesia/src/game/Lux.sln` in Visual Studio, select `Release` and `Win32`, and build the solution after extracting `src/HPL2/dependencies.zip` into `src/HPL2`.
+
+> The bundled Autodesk FBX SDK 2012 library is tied to the Visual Studio 2010 C++ ABI. Modern Windows builds therefore omit the raw `.fbx` mesh importer. Runtime `.msh` and Collada loading, the game, and its TCP interaction remain in the build.
 
 ## 🚀 Projects using amnesia-tdd-tcp
 

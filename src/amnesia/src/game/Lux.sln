@@ -1,6 +1,6 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.26730.10
+# Visual Studio Version 18
+VisualStudioVersion = 18.0.11212.127
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Lux", "Lux.vcxproj", "{C6E72C29-38A3-4897-AA05-E87B0323AA71}"
 EndProject
