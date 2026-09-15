@@ -1,7 +1,39 @@
 #include "LuxSocketServer.h"
+#include "LegacyGameInteractionProtocol.h"
 #include "LuxMap.h"
 #include "LuxMapHandler.h"
 #include "LuxPlayer.h"
+
+namespace
+{
+	class cLuxLegacyGameAdapter : public iLegacyGameAdapter
+	{
+	public:
+		virtual bool IsMapLoaded() const
+		{
+			return gpBase->mpMapHandler && gpBase->mpMapHandler->GetCurrentMap();
+		}
+
+		virtual cLegacyPeerState GetPeerState() const
+		{
+			iCharacterBody* pCharBody = gpBase->mpPlayer->GetCharacterBody();
+			const cVector3f position = pCharBody->GetFeetPosition();
+			cLegacyPeerState state = { true, position.x, position.y, position.z,
+				pCharBody->GetYaw(), pCharBody->GetPitch(), "" };
+			return state;
+		}
+
+		virtual std::string GetMapFile() const
+		{
+			return gpBase->mpMapHandler->GetCurrentMap()->GetFileName();
+		}
+
+		virtual void RunScript(const std::string& asScript)
+		{
+			gpBase->mpMapHandler->GetCurrentMap()->RunScript(asScript);
+		}
+	};
+}
 
 cLuxSocketServer::cLuxSocketServer()
     : iLuxUpdateable("LuxSocketServer")
@@ -91,7 +123,7 @@ void cLuxSocketServer::Update(float afTimeStep)
             Log("Client connected!\n");
             mClientSocket = clientSocket;
 
-            SendMessage("Hello, from Amnesia: The Dark Descent!");
+            SendMessage(cLegacyGameInteractionProtocol::Greeting());
         }
     }
 
@@ -103,116 +135,14 @@ void cLuxSocketServer::Update(float afTimeStep)
 
         if (bytesReceived > 0)
         {
-            buffer[bytesReceived] = '\0';
+			buffer[bytesReceived] = '\0';
+			const std::string command = cLegacyGameInteractionProtocol::FirstCommandFromReceive(buffer);
 
-            // Strip trailing \r or \n
-            for (int i = 0; buffer[i]; ++i)
-            {
-                if (buffer[i] == '\r' || buffer[i] == '\n')
-                {
-                    buffer[i] = '\0';
-                    break;
-                }
-            }
+			Log("Client says: %s\n", command.c_str());
 
-            Log("Client says: %s\n", buffer);
-
-            if (strcmp(buffer, "ping") == 0)
-            {
-				SendMessage("RESPONSE:ping:pong");
-            }
-			else if (strcmp(buffer, "getposrot") == 0)
-			{
-				if (gpBase->mpMapHandler && gpBase->mpMapHandler->GetCurrentMap())
-				{
-					iCharacterBody* pCharBody = gpBase->mpPlayer->GetCharacterBody();
-					cVector3f vPos = pCharBody->GetFeetPosition();
-
-					float yaw = pCharBody->GetYaw();
-					float pitch = pCharBody->GetPitch();
-					float roll = 0.0f; // Roll not tracked in CharacterBody
-
-					// Convert from radians to degrees
-					yaw *= (180.0f / 3.14159265f);
-					pitch *= (180.0f / 3.14159265f);
-
-					char response[160];
-					sprintf(response, "RESPONSE:getposrot:%.2f, %.2f, %.2f:%.2f, %.2f, %.2f",
-							vPos.x, vPos.y, vPos.z,
-							yaw, pitch, roll);
-					SendMessage(response);
-				}
-				else
-				{
-					SendMessage("RESPONSE:getposrot:no map loaded");
-				}
-			}
-			else if (strcmp(buffer, "getrot") == 0)
-			{
-				if (gpBase->mpMapHandler && gpBase->mpMapHandler->GetCurrentMap())
-				{
-					iCharacterBody* pCharBody = gpBase->mpPlayer->GetCharacterBody();
-
-					float yaw = pCharBody->GetYaw();
-					float pitch = pCharBody->GetPitch();
-					float roll = 0.0f; // Roll is not tracked, assume 0.
-
-					// Convert from radians to degrees
-					yaw *= (180.0f / 3.14159265f);
-					pitch *= (180.0f / 3.14159265f);
-
-					char response[128];
-					sprintf(response, "RESPONSE:getrot:%.2f, %.2f, %.2f", yaw, pitch, roll);
-					SendMessage(response);
-				}
-				else
-				{
-					SendMessage("RESPONSE:getrot:no map loaded");
-				}
-			}
-            else if (strcmp(buffer, "getpos") == 0)
-            {
-                if (gpBase->mpMapHandler && gpBase->mpMapHandler->GetCurrentMap())
-                {
-                    cVector3f vPos = gpBase->mpPlayer->GetCharacterBody()->GetFeetPosition();
-                    char response[128];
-                    sprintf(response, "RESPONSE:getpos:%.2f, %.2f, %.2f", vPos.x, vPos.y, vPos.z);
-                    SendMessage(response);
-                }
-                else
-                {
-                    SendMessage("RESPONSE:getpos:no map loaded");
-                }
-            }
-			else if (strcmp(buffer, "getmap") == 0)
-			{
-				if (gpBase->mpMapHandler && gpBase->mpMapHandler->GetCurrentMap())
-				{
-					tString mapFile = gpBase->mpMapHandler->GetCurrentMap()->GetFileName();
-					SendMessage("RESPONSE:getmap:" + mapFile);
-				}
-				else
-				{
-					SendMessage("RESPONSE:getmap:no map loaded");
-				}
-			}
-            else if (strncmp(buffer, "exec:", 5) == 0)
-            {
-                const char* script = buffer + 5;
-                if (gpBase->mpMapHandler && gpBase->mpMapHandler->GetCurrentMap())
-                {
-                    gpBase->mpMapHandler->GetCurrentMap()->RunScript(script);
-					SendMessage("RESPONSE:exec:script executed");
-                }
-                else
-                {
-					SendMessage("RESPONSE:exec:no map loaded");
-                }
-            }
-            else
-            {
-                SendMessage("WARNING:Unknown command");
-            }
+			cLuxLegacyGameAdapter gameAdapter;
+			cLegacyGameInteractionProtocol protocol(gameAdapter);
+			SendMessage(protocol.HandleCommand(command));
         }
         else if (bytesReceived == 0 || (bytesReceived == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK))
         {
@@ -227,11 +157,7 @@ void cLuxSocketServer::SendMessage(const tString& message)
 {
     if (mClientSocket != INVALID_SOCKET)
     {
-        tString safeMessage = message;
-
-        // Add newline if not already present
-        if (safeMessage.empty() || safeMessage[safeMessage.length() - 1] != '\n')
-            safeMessage += "\n";
+        tString safeMessage = cLegacyGameInteractionProtocol::ToWireLine(message);
 
         send(mClientSocket, safeMessage.c_str(), (int)safeMessage.length(), 0);
     }

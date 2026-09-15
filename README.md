@@ -31,6 +31,12 @@ From a PowerShell prompt at the repository root, run:
 
 The script extracts `src/HPL2/dependencies.zip` when needed, builds the HPL2 static library in Release configuration, and then builds the Amnesia game with the same toolchain. The executable is written to `artifacts/Release/Amnesia.exe`; it is not copied into a Steam installation automatically.
 
+The legacy Game Interaction Protocol contract can be exercised without an interactive game session:
+
+```powershell
+.\scripts\test-legacy-protocol.ps1
+```
+
 You can also open `src/amnesia/src/game/Lux.sln` in Visual Studio, select `Release` and `Win32`, and build the solution after extracting `src/HPL2/dependencies.zip` into `src/HPL2`.
 
 > The bundled Autodesk FBX SDK 2012 library is tied to the Visual Studio 2010 C++ ABI. Modern Windows builds therefore omit the raw `.fbx` mesh importer. Runtime `.msh` and Collada loading, the game, and its TCP interaction remain in the build.

@@ -1,0 +1,93 @@
+#include "LegacyGameInteractionProtocol.h"
+
+#include <cstdio>
+
+namespace
+{
+	const float kRadiansToDegrees = 180.0f / 3.14159265f;
+
+	std::string FormatPosition(const char* apCommand, const cLegacyPeerState& aState)
+	{
+		char response[128];
+		sprintf(response, "RESPONSE:%s:%.2f, %.2f, %.2f", apCommand,
+			aState.mfPositionX, aState.mfPositionY, aState.mfPositionZ);
+		return response;
+	}
+
+	std::string FormatRotation(const char* apCommand, const cLegacyPeerState& aState)
+	{
+		char response[128];
+		sprintf(response, "RESPONSE:%s:%.2f, %.2f, %.2f", apCommand,
+			aState.mfYawRadians * kRadiansToDegrees,
+			aState.mfPitchRadians * kRadiansToDegrees,
+			0.0f);
+		return response;
+	}
+}
+
+cLegacyGameInteractionProtocol::cLegacyGameInteractionProtocol(iLegacyGameAdapter& aGameAdapter)
+	: mGameAdapter(aGameAdapter)
+{
+}
+
+const char* cLegacyGameInteractionProtocol::Greeting()
+{
+	return "Hello, from Amnesia: The Dark Descent!";
+}
+
+std::string cLegacyGameInteractionProtocol::MapChangedEvent(const std::string& asMapFile)
+{
+	return "EVENT:MapChanged:" + asMapFile;
+}
+
+std::string cLegacyGameInteractionProtocol::ScriptCallObservation(const std::string& asScriptCall)
+{
+	return "SCRIPT_CALL:" + asScriptCall;
+}
+
+std::string cLegacyGameInteractionProtocol::ToWireLine(const std::string& asMessage)
+{
+	if (!asMessage.empty() && asMessage[asMessage.length() - 1] == '\n')
+		return asMessage;
+	return asMessage + "\n";
+}
+
+std::string cLegacyGameInteractionProtocol::FirstCommandFromReceive(const std::string& asReceivedBytes)
+{
+	const std::string::size_type delimiter = asReceivedBytes.find_first_of("\r\n");
+	return asReceivedBytes.substr(0, delimiter);
+}
+
+std::string cLegacyGameInteractionProtocol::HandleCommand(const std::string& asCommand)
+{
+	if (asCommand == "ping")
+		return "RESPONSE:ping:pong";
+
+	if (asCommand == "getpos")
+		return mGameAdapter.IsMapLoaded() ? FormatPosition("getpos", mGameAdapter.GetPeerState()) : "RESPONSE:getpos:no map loaded";
+	if (asCommand == "getrot")
+		return mGameAdapter.IsMapLoaded() ? FormatRotation("getrot", mGameAdapter.GetPeerState()) : "RESPONSE:getrot:no map loaded";
+	if (asCommand == "getposrot")
+	{
+		if (!mGameAdapter.IsMapLoaded())
+			return "RESPONSE:getposrot:no map loaded";
+		const cLegacyPeerState state = mGameAdapter.GetPeerState();
+		char response[160];
+		sprintf(response, "RESPONSE:getposrot:%.2f, %.2f, %.2f:%.2f, %.2f, %.2f",
+			state.mfPositionX, state.mfPositionY, state.mfPositionZ,
+			state.mfYawRadians * kRadiansToDegrees,
+			state.mfPitchRadians * kRadiansToDegrees,
+			0.0f);
+		return response;
+	}
+	if (asCommand == "getmap")
+		return mGameAdapter.IsMapLoaded() ? "RESPONSE:getmap:" + mGameAdapter.GetMapFile() : "RESPONSE:getmap:no map loaded";
+	if (asCommand.compare(0, 5, "exec:") == 0)
+	{
+		if (!mGameAdapter.IsMapLoaded())
+			return "RESPONSE:exec:no map loaded";
+		mGameAdapter.RunScript(asCommand.substr(5));
+		return "RESPONSE:exec:script executed";
+	}
+	return "WARNING:Unknown command";
+}

@@ -141,6 +141,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="LegacyGameInteractionProtocol.cpp" />
     <ClCompile Include="LuxSideAppManager.cpp" />
     <ClCompile Include="LuxAchievementHandler.cpp" />
     <ClCompile Include="LuxBase.cpp" />
@@ -252,6 +253,7 @@
     <ClCompile Include="LuxPlayerState_UseItem.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="LegacyGameInteractionProtocol.h" />
     <ClInclude Include="LuxSideAppManager.h" />
     <ClInclude Include="LuxAchievementHandler.h" />
     <ClInclude Include="LuxBase.h" />

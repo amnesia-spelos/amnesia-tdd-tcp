@@ -1,0 +1,15 @@
+{"name":"connection greeting","kind":"greeting","expected_wire":"Hello, from Amnesia: The Dark Descent!\n"}
+{"name":"ping Command","kind":"command","request_wire":"ping\n","map_loaded":false,"expected_wire":"RESPONSE:ping:pong\n"}
+{"name":"getpos Command","kind":"command","request_wire":"getpos\r\n","map_loaded":true,"position":[1.25,-2.5,3.75],"expected_wire":"RESPONSE:getpos:1.25, -2.50, 3.75\n"}
+{"name":"getrot Command","kind":"command","request_wire":"getrot\n","map_loaded":true,"rotation_radians":[1.570796325,-0.7853981625],"expected_wire":"RESPONSE:getrot:90.00, -45.00, 0.00\n"}
+{"name":"getposrot Command","kind":"command","request_wire":"getposrot\n","map_loaded":true,"position":[1.25,-2.5,3.75],"rotation_radians":[1.570796325,-0.7853981625],"expected_wire":"RESPONSE:getposrot:1.25, -2.50, 3.75:90.00, -45.00, 0.00\n"}
+{"name":"getmap Command","kind":"command","request_wire":"getmap\n","map_loaded":true,"map_file":"maps/main/level01.map","expected_wire":"RESPONSE:getmap:maps/main/level01.map\n"}
+{"name":"exec Command","kind":"command","request_wire":"exec:SetLocalVarInt(\"lever\", 1)\n","map_loaded":true,"expected_script":"SetLocalVarInt(\"lever\", 1)","expected_wire":"RESPONSE:exec:script executed\n"}
+{"name":"getpos without map","kind":"command","request_wire":"getpos\n","map_loaded":false,"expected_wire":"RESPONSE:getpos:no map loaded\n"}
+{"name":"getrot without map","kind":"command","request_wire":"getrot\n","map_loaded":false,"expected_wire":"RESPONSE:getrot:no map loaded\n"}
+{"name":"getposrot without map","kind":"command","request_wire":"getposrot\n","map_loaded":false,"expected_wire":"RESPONSE:getposrot:no map loaded\n"}
+{"name":"getmap without map","kind":"command","request_wire":"getmap\n","map_loaded":false,"expected_wire":"RESPONSE:getmap:no map loaded\n"}
+{"name":"exec without map","kind":"command","request_wire":"exec:DoThing()\n","map_loaded":false,"expected_wire":"RESPONSE:exec:no map loaded\n"}
+{"name":"unknown Command","kind":"command","request_wire":"dance\n","map_loaded":true,"expected_wire":"WARNING:Unknown command\n"}
+{"name":"map-change Event","kind":"map_changed_event","map_file":"maps/main/level02.map","expected_wire":"EVENT:MapChanged:maps/main/level02.map\n"}
+{"name":"script-call observation is not an Event","kind":"script_call_observation","script_call":"OnCollide(\"Player\", \"Door\", 1)","expected_wire":"SCRIPT_CALL:OnCollide(\"Player\", \"Door\", 1)\n"}
