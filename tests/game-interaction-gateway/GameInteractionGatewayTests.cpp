@@ -25,11 +25,13 @@ namespace
 		virtual cGameInteractionPosition GetPosition() const { return mPosition; }
 		virtual cGameInteractionRotation GetRotation() const { return mRotation; }
 		virtual std::string GetMapFile() const { return msMapFile; }
+		virtual void RunScript(const std::string& asScript) { msExecutedScript = asScript; }
 
 		bool mbMapLoaded;
 		cGameInteractionPosition mPosition;
 		cGameInteractionRotation mRotation;
 		std::string msMapFile;
+		std::string msExecutedScript;
 	};
 
 	void ExpectSuccess(const cGameInteractionResponse& aResponse,
@@ -70,7 +72,25 @@ int main()
 	ExpectSuccess(map, eGameInteractionCommand_GetMap, eGameInteractionResponse_Map);
 	Expect(map.GetMapFile() == "maps/main/level01.map", "getmap returns the adapter's map file");
 
+	const std::string script = "SetLocalVarInt(\"lever\", 1):with:colons";
+	const cGameInteractionCommand execute(eGameInteractionCommand_ExecuteScript, script);
+	Expect(execute.GetClassification() == eGameInteractionCommandClassification_StateChanging,
+		"exec is classified as a state-changing Command");
+	const cGameInteractionResponse execution = gateway.Handle(execute, adapter);
+	ExpectSuccess(execution, eGameInteractionCommand_ExecuteScript, eGameInteractionResponse_ScriptExecuted);
+	Expect(adapter.msExecutedScript == script, "exec passes arbitrary script text through the game adapter");
+
 	adapter.mbMapLoaded = false;
+	adapter.msExecutedScript.clear();
+	const cGameInteractionResponse executionWithoutMap = gateway.Handle(execute, adapter);
+	Expect(executionWithoutMap.GetCommandType() == eGameInteractionCommand_ExecuteScript,
+		"map-not-loaded exec Response identifies the handled Command");
+	Expect(executionWithoutMap.GetType() == eGameInteractionResponse_ScriptExecuted,
+		"map-not-loaded exec retains its typed Response");
+	Expect(executionWithoutMap.GetOutcome() == eGameInteractionCommandOutcome_MapNotLoaded,
+		"map-not-loaded exec has a stable Command Outcome");
+	Expect(adapter.msExecutedScript.empty(), "exec does not reach the game adapter without a loaded map");
+
 	const eGameInteractionCommandType observationalCommands[] = {
 		eGameInteractionCommand_GetPosition,
 		eGameInteractionCommand_GetRotation,

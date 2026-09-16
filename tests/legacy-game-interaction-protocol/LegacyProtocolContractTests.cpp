@@ -51,7 +51,7 @@ namespace
 		}
 	}
 
-	class cFixtureGameAdapter : public iLegacyGameAdapter
+	class cFixtureGameAdapter : public iGameInteractionGameAdapter
 	{
 	public:
 		bool mbMapLoaded;

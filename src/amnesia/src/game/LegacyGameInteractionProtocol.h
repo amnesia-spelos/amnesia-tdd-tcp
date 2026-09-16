@@ -18,17 +18,10 @@ private:
 	std::string::size_type mSearchStart;
 };
 
-class iLegacyGameAdapter : public iGameInteractionGameAdapter
-{
-public:
-	virtual ~iLegacyGameAdapter() {}
-	virtual void RunScript(const std::string& asScript) = 0;
-};
-
 class cLegacyGameInteractionProtocol
 {
 public:
-	cLegacyGameInteractionProtocol(cGameInteractionGateway& aGateway, iLegacyGameAdapter& aGameAdapter);
+	cLegacyGameInteractionProtocol(cGameInteractionGateway& aGateway, iGameInteractionGameAdapter& aGameAdapter);
 
 	static const char* Greeting();
 	static std::string MapChangedEvent(const std::string& asMapFile);
@@ -40,7 +33,7 @@ public:
 
 private:
 	cGameInteractionGateway& mGateway;
-	iLegacyGameAdapter& mGameAdapter;
+	iGameInteractionGameAdapter& mGameAdapter;
 };
 
 #endif

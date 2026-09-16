@@ -1,8 +1,31 @@
 #include "GameInteractionGateway.h"
 
-cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType)
-	: mType(aType)
+cGameInteractionGateway::cGameInteractionGateway()
+	: mbSessionActive(false)
 {
+}
+
+void cGameInteractionGateway::BeginLegacySession()
+{
+	mbSessionActive = true;
+}
+
+void cGameInteractionGateway::EndSession()
+{
+	mbSessionActive = false;
+}
+
+cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
+	const std::string& asData)
+	: mType(aType), msData(asData)
+{
+}
+
+eGameInteractionCommandClassification cGameInteractionCommand::GetClassification() const
+{
+	return mType == eGameInteractionCommand_ExecuteScript ?
+		eGameInteractionCommandClassification_StateChanging :
+		eGameInteractionCommandClassification_Observational;
 }
 
 cGameInteractionResponse::cGameInteractionResponse(eGameInteractionCommandType aCommandType,
@@ -12,7 +35,7 @@ cGameInteractionResponse::cGameInteractionResponse(eGameInteractionCommandType a
 }
 
 cGameInteractionResponse cGameInteractionGateway::Handle(const cGameInteractionCommand& aCommand,
-	const iGameInteractionGameAdapter& aGameAdapter) const
+	iGameInteractionGameAdapter& aGameAdapter) const
 {
 	switch (aCommand.GetType())
 	{
@@ -51,6 +74,15 @@ cGameInteractionResponse cGameInteractionGateway::Handle(const cGameInteractionC
 				eGameInteractionCommandOutcome_MapNotLoaded);
 		if (response.GetOutcome() == eGameInteractionCommandOutcome_Success)
 			response.SetMapFile(aGameAdapter.GetMapFile());
+		return response;
+	}
+	case eGameInteractionCommand_ExecuteScript:
+	{
+		cGameInteractionResponse response(aCommand.GetType(), eGameInteractionResponse_ScriptExecuted,
+			aGameAdapter.IsMapLoaded() ? eGameInteractionCommandOutcome_Success :
+				eGameInteractionCommandOutcome_MapNotLoaded);
+		if (response.GetOutcome() == eGameInteractionCommandOutcome_Success)
+			aGameAdapter.RunScript(aCommand.GetData());
 		return response;
 	}
 	default:

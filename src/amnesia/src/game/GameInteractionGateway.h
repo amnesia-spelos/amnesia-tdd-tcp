@@ -9,17 +9,28 @@ enum eGameInteractionCommandType
 	eGameInteractionCommand_GetPosition,
 	eGameInteractionCommand_GetRotation,
 	eGameInteractionCommand_GetPositionRotation,
-	eGameInteractionCommand_GetMap
+	eGameInteractionCommand_GetMap,
+	eGameInteractionCommand_ExecuteScript
+};
+
+enum eGameInteractionCommandClassification
+{
+	eGameInteractionCommandClassification_Observational,
+	eGameInteractionCommandClassification_StateChanging
 };
 
 class cGameInteractionCommand
 {
 public:
-	explicit cGameInteractionCommand(eGameInteractionCommandType aType);
+	explicit cGameInteractionCommand(eGameInteractionCommandType aType,
+		const std::string& asData = std::string());
 	eGameInteractionCommandType GetType() const { return mType; }
+	eGameInteractionCommandClassification GetClassification() const;
+	const std::string& GetData() const { return msData; }
 
 private:
 	eGameInteractionCommandType mType;
+	std::string msData;
 };
 
 enum eGameInteractionResponseType
@@ -28,7 +39,8 @@ enum eGameInteractionResponseType
 	eGameInteractionResponse_Position,
 	eGameInteractionResponse_Rotation,
 	eGameInteractionResponse_PositionRotation,
-	eGameInteractionResponse_Map
+	eGameInteractionResponse_Map,
+	eGameInteractionResponse_ScriptExecuted
 };
 
 enum eGameInteractionCommandOutcome
@@ -62,6 +74,7 @@ public:
 	virtual cGameInteractionPosition GetPosition() const = 0;
 	virtual cGameInteractionRotation GetRotation() const = 0;
 	virtual std::string GetMapFile() const = 0;
+	virtual void RunScript(const std::string& asScript) = 0;
 };
 
 class cGameInteractionResponse
@@ -91,8 +104,15 @@ private:
 class cGameInteractionGateway
 {
 public:
+	cGameInteractionGateway();
+	void BeginLegacySession();
+	void EndSession();
+	bool CanStartQueuedCommand() const { return mbSessionActive; }
 	cGameInteractionResponse Handle(const cGameInteractionCommand& aCommand,
-		const iGameInteractionGameAdapter& aGameAdapter) const;
+		iGameInteractionGameAdapter& aGameAdapter) const;
+
+private:
+	bool mbSessionActive;
 };
 
 #endif

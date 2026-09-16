@@ -78,7 +78,7 @@ namespace
 }
 
 cLegacyGameInteractionProtocol::cLegacyGameInteractionProtocol(cGameInteractionGateway& aGateway,
-	iLegacyGameAdapter& aGameAdapter)
+	iGameInteractionGameAdapter& aGameAdapter)
 	: mGateway(aGateway), mGameAdapter(aGameAdapter)
 {
 }
@@ -135,9 +135,10 @@ std::string cLegacyGameInteractionProtocol::HandleCommand(const std::string& asC
 	}
 	if (asCommand.compare(0, 5, "exec:") == 0)
 	{
-		if (!mGameAdapter.IsMapLoaded())
+		const cGameInteractionCommand command(eGameInteractionCommand_ExecuteScript, asCommand.substr(5));
+		const cGameInteractionResponse response = mGateway.Handle(command, mGameAdapter);
+		if (response.GetOutcome() == eGameInteractionCommandOutcome_MapNotLoaded)
 			return "RESPONSE:exec:no map loaded";
-		mGameAdapter.RunScript(asCommand.substr(5));
 		return "RESPONSE:exec:script executed";
 	}
 	return "WARNING:Unknown command";

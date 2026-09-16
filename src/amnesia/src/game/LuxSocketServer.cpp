@@ -6,7 +6,7 @@
 
 namespace
 {
-	class cLuxLegacyGameAdapter : public iLegacyGameAdapter
+	class cLuxGameInteractionGameAdapter : public iGameInteractionGameAdapter
 	{
 	public:
 		virtual bool IsMapLoaded() const
@@ -68,12 +68,17 @@ void cLuxSocketServer::Update(float afTimeStep)
 	{
 		Log("Peer connected!\n");
 		mInboundLines.Clear();
+		mGateway.BeginLegacySession();
 		SendMessage(cLegacyGameInteractionProtocol::Greeting());
 	}
 	else if (event == eGameInteractionTransportEvent_PeerDisconnected)
 	{
 		mInboundLines.Clear();
+		mGateway.EndSession();
 		Log("Peer disconnected: %s\n", mTransport.GetDiagnostic().c_str());
+		// ReceiveBytes may have queued complete Commands before observing the orderly
+		// disconnect. They still belong to the closed Session and must not execute.
+		return;
 	}
 
 	for (std::vector<std::string>::const_iterator bytes = receivedBytes.begin(); bytes != receivedBytes.end(); ++bytes)
@@ -82,9 +87,10 @@ void cLuxSocketServer::Update(float afTimeStep)
 	std::string command;
 	while (mInboundLines.TryPopLine(command)) commands.push_back(command);
 
-	cLuxLegacyGameAdapter gameAdapter;
+	cLuxGameInteractionGameAdapter gameAdapter;
 	cLegacyGameInteractionProtocol protocol(mGateway, gameAdapter);
-	for (std::vector<std::string>::const_iterator command = commands.begin(); command != commands.end(); ++command)
+	for (std::vector<std::string>::const_iterator command = commands.begin();
+		command != commands.end() && mGateway.CanStartQueuedCommand(); ++command)
 	{
 		Log("Peer says: %s\n", command->c_str());
 		SendMessage(protocol.HandleCommand(*command));
@@ -96,7 +102,10 @@ void cLuxSocketServer::SendMessage(const tString& message)
 	const bool hadPeer = mTransport.HasPeer();
 	mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(message));
 	if (hadPeer && !mTransport.HasPeer())
+	{
+		mGateway.EndSession();
 		Log("Game Interaction Protocol delivery failed: %s\n", mTransport.GetDiagnostic().c_str());
+	}
 }
 
 void cLuxSocketServer::SetConnectionSettings(const tString& host, int port)
