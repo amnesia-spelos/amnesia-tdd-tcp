@@ -1,12 +1,15 @@
 #ifndef GAME_INTERACTION_GATEWAY_H
 #define GAME_INTERACTION_GATEWAY_H
 
+#include "ChatModel.h"
+
 #include <string>
 
 enum eGameInteractionEventType
 {
 	eGameInteractionEvent_MapChanged,
-	eGameInteractionEvent_ScriptCallObserved
+	eGameInteractionEvent_ScriptCallObserved,
+	eGameInteractionEvent_LocalChatSubmitted
 };
 
 class cGameInteractionEvent
@@ -14,12 +17,18 @@ class cGameInteractionEvent
 public:
 	cGameInteractionEvent(eGameInteractionEventType aType = eGameInteractionEvent_MapChanged,
 		const std::string& asData = std::string());
+	cGameInteractionEvent(eGameInteractionEventType aType, const std::wstring& asChatAuthor,
+		const std::wstring& asChatMessage);
 	eGameInteractionEventType GetType() const { return mType; }
 	const std::string& GetData() const { return msData; }
+	const std::wstring& GetChatAuthor() const { return msChatAuthor; }
+	const std::wstring& GetChatMessage() const { return msChatMessage; }
 
 private:
 	eGameInteractionEventType mType;
 	std::string msData;
+	std::wstring msChatAuthor;
+	std::wstring msChatMessage;
 };
 
 enum eGameInteractionCommandType
@@ -30,7 +39,8 @@ enum eGameInteractionCommandType
 	eGameInteractionCommand_GetRotation,
 	eGameInteractionCommand_GetPositionRotation,
 	eGameInteractionCommand_GetMap,
-	eGameInteractionCommand_ExecuteScript
+	eGameInteractionCommand_ExecuteScript,
+	eGameInteractionCommand_Chat
 };
 
 enum eGameInteractionCommandClassification
@@ -44,13 +54,19 @@ class cGameInteractionCommand
 public:
 	explicit cGameInteractionCommand(eGameInteractionCommandType aType,
 		const std::string& asData = std::string());
+	cGameInteractionCommand(eGameInteractionCommandType aType, const std::wstring& asChatAuthor,
+		const std::wstring& asChatMessage);
 	eGameInteractionCommandType GetType() const { return mType; }
 	eGameInteractionCommandClassification GetClassification() const;
 	const std::string& GetData() const { return msData; }
+	const std::wstring& GetChatAuthor() const { return msChatAuthor; }
+	const std::wstring& GetChatMessage() const { return msChatMessage; }
 
 private:
 	eGameInteractionCommandType mType;
 	std::string msData;
+	std::wstring msChatAuthor;
+	std::wstring msChatMessage;
 };
 
 enum eGameInteractionResponseType
@@ -60,13 +76,17 @@ enum eGameInteractionResponseType
 	eGameInteractionResponse_Rotation,
 	eGameInteractionResponse_PositionRotation,
 	eGameInteractionResponse_Map,
-	eGameInteractionResponse_ScriptExecuted
+	eGameInteractionResponse_ScriptExecuted,
+	eGameInteractionResponse_ChatDisplayed
 };
 
 enum eGameInteractionCommandOutcome
 {
 	eGameInteractionCommandOutcome_Success,
-	eGameInteractionCommandOutcome_MapNotLoaded
+	eGameInteractionCommandOutcome_MapNotLoaded,
+	eGameInteractionCommandOutcome_InvalidAuthor,
+	eGameInteractionCommandOutcome_InvalidMessage,
+	eGameInteractionCommandOutcome_Unavailable
 };
 
 struct cGameInteractionPosition
@@ -95,6 +115,7 @@ public:
 	virtual cGameInteractionRotation GetRotation() const = 0;
 	virtual std::string GetMapFile() const = 0;
 	virtual void RunScript(const std::string& asScript) = 0;
+	virtual bool DisplayChatEntry(const cChatEntry& aEntry) = 0;
 };
 
 class cGameInteractionResponse

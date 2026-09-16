@@ -401,6 +401,7 @@ enum eLuxAction
 	eLuxAction_QuestLog,
 	eLuxAction_RecentText,
 	eLuxAction_CrosshairToggle,
+	eLuxAction_Chat,
 
 	eLuxAction_Forward,
 	eLuxAction_Backward,

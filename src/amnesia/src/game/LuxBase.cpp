@@ -20,6 +20,7 @@
 #include "LuxBase.h"
 
 #include "LuxInputHandler.h"
+#include "LuxChatHandler.h"
 
 #include "LuxMapHandler.h"
 #include "LuxMapHelper.h"
@@ -1363,6 +1364,7 @@ bool cLuxBase::InitGame()
 
 	//Main Menu
 	mpMainMenu = CreateModule( cLuxMainMenu, "MainMenu");
+	mpChatHandler = (cLuxChatHandler*)AddGlobalModule(hplNew(cLuxChatHandler, ()));
 
 	//Inventory
 	mpInventory = CreateModule( cLuxInventory, "Inventory");

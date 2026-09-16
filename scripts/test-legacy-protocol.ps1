@@ -29,6 +29,7 @@ $executable = Join-Path $outputDirectory 'LegacyProtocolContractTests.exe'
 	(Join-Path $sourceDirectory 'GameInteractionGateway.cpp') `
 	(Join-Path $sourceDirectory 'GameInteractionTransport.cpp') `
     (Join-Path $sourceDirectory 'LegacyGameInteractionProtocol.cpp') `
+	(Join-Path $sourceDirectory 'ChatModel.cpp') `
     /Fo:"$outputDirectory\" `
     /Fe:$executable /link ws2_32.lib
 if ($LASTEXITCODE -ne 0) {

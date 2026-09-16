@@ -31,6 +31,7 @@
 class cLuxMapHandler;
 class cLuxMapHelper;
 class cLuxInputHandler;
+class cLuxChatHandler;
 
 class cLuxEffectHandler;
 
@@ -244,6 +245,7 @@ public:
 
 	cLuxConfigHandler *mpConfigHandler;
 	cLuxInputHandler *mpInputHandler;
+	cLuxChatHandler *mpChatHandler;
 	cLuxEffectHandler *mpEffectHandler;
 	cLuxMapHandler *mpMapHandler;
 	cLuxMapHelper *mpMapHelper;

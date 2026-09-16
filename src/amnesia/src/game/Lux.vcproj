@@ -635,6 +635,12 @@
 				RelativePath=".\LuxInputHandler.cpp">
 			</File>
 			<File
+				RelativePath=".\LuxChatHandler.cpp">
+			</File>
+			<File
+				RelativePath=".\LuxChatHandler.h">
+			</File>
+			<File
 				RelativePath=".\LuxInputHandler.h">
 			</File>
 			<File

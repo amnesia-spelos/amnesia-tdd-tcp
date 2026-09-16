@@ -111,6 +111,9 @@ public:
 	void OnPostRender(float afFrameTime);
 
 	cGuiSet* GetSet() { return mpGuiSet; }
+	cViewport* GetViewport() { return mpViewport; }
+	bool IsTransitioning() const { return mbExiting; }
+	bool HasConflictingChatInputOwner() const;
 
 	void SetWindowActive(eLuxMainMenuWindow aWindow);
 	void SetTopMenuAlpha(float afX) { mfTopMenuAlpha = afX; }

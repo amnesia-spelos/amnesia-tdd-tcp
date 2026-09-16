@@ -7,6 +7,10 @@
 #include <iostream>
 #include <string>
 
+#ifdef GetMessage
+#undef GetMessage
+#endif
+
 namespace
 {
 	void Expect(bool abCondition, const char* apDescription)
@@ -21,19 +25,32 @@ namespace
 	public:
 		cFakeGameAdapter()
 			: mbMapLoaded(true), mPosition(1.25f, -2.5f, 3.75f),
-			mRotation(1.570796325f, -0.7853981625f), msMapFile("maps/main/level01.map") {}
+			mRotation(1.570796325f, -0.7853981625f), msMapFile("maps/main/level01.map"),
+			mbChatAvailable(true), mlDisplayedChatEntries(0) {}
 
 		virtual bool IsMapLoaded() const { return mbMapLoaded; }
 		virtual cGameInteractionPosition GetPosition() const { return mPosition; }
 		virtual cGameInteractionRotation GetRotation() const { return mRotation; }
 		virtual std::string GetMapFile() const { return msMapFile; }
 		virtual void RunScript(const std::string& asScript) { msExecutedScript = asScript; }
+		virtual bool DisplayChatEntry(const cChatEntry& aEntry)
+		{
+			if (!mbChatAvailable) return false;
+			++mlDisplayedChatEntries;
+			msDisplayedAuthor = aEntry.GetAuthor();
+			msDisplayedMessage = aEntry.GetMessage();
+			return true;
+		}
 
 		bool mbMapLoaded;
 		cGameInteractionPosition mPosition;
 		cGameInteractionRotation mRotation;
 		std::string msMapFile;
 		std::string msExecutedScript;
+		bool mbChatAvailable;
+		int mlDisplayedChatEntries;
+		std::wstring msDisplayedAuthor;
+		std::wstring msDisplayedMessage;
 	};
 
 	SOCKET Connect(cGameInteractionGateway& aGateway, cFakeGameAdapter& aAdapter)
@@ -75,6 +92,15 @@ namespace
 
 int main()
 {
+	cGameInteractionCommand typedChat(eGameInteractionCommand_Chat, L"Alice", L"hello: world");
+	Expect(typedChat.GetClassification() == eGameInteractionCommandClassification_StateChanging,
+		"typed chat Command is state-changing");
+	Expect(typedChat.GetChatAuthor() == L"Alice" && typedChat.GetChatMessage() == L"hello: world",
+		"typed chat Command keeps Chat Author and message separate");
+	cGameInteractionEvent typedSubmission(eGameInteractionEvent_LocalChatSubmitted, L"Daniel", L"hello");
+	Expect(typedSubmission.GetChatAuthor() == L"Daniel" && typedSubmission.GetChatMessage() == L"hello",
+		"typed local-submission Event keeps Chat Author and message separate");
+
 	cFakeGameAdapter adapter;
 	cGameInteractionGateway gateway;
 	Expect(gateway.Listen("127.0.0.1", 0), "gateway listens without exposing transport details");
@@ -93,6 +119,22 @@ int main()
 	Expect(adapter.msExecutedScript == "SetLocalVarInt(\"lever\", 1):with:colons",
 		"state-changing Command crosses the game adapter");
 
+	SendCommands(peer, gateway, adapter, "chat:Alice:hello: from elsewhere\n");
+	Expect(Receive(peer) == "RESPONSE:chat:message displayed\n",
+		"valid chat Command receives the success Response");
+	Expect(adapter.mlDisplayedChatEntries == 1 && adapter.msDisplayedAuthor == L"Alice" &&
+		adapter.msDisplayedMessage == L"hello: from elsewhere",
+		"valid chat Command displays exactly one whole Chat Entry");
+	SendCommands(peer, gateway, adapter, "chat: :hello\nchat:Alice: \n");
+	Expect(Receive(peer) == "RESPONSE:chat:invalid author\nRESPONSE:chat:invalid message\n",
+		"invalid chat fields receive stable outcomes");
+	Expect(adapter.mlDisplayedChatEntries == 1, "invalid chat Commands do not display partial entries");
+	adapter.mbChatAvailable = false;
+	SendCommands(peer, gateway, adapter, "chat:Alice:hello\n");
+	Expect(Receive(peer) == "RESPONSE:chat:unavailable\n", "unavailable chat UI receives a stable outcome");
+	Expect(adapter.mlDisplayedChatEntries == 1, "unavailable chat UI displays no entry");
+	adapter.mbChatAvailable = true;
+
 	Expect(send(peer, "get", 3, 0) == 3, "Peer sends a fragmented Command prefix");
 	gateway.Update(adapter);
 	SendCommands(peer, gateway, adapter, "map\nunknown\n");
@@ -101,8 +143,9 @@ int main()
 
 	gateway.Report(cGameInteractionEvent(eGameInteractionEvent_MapChanged, "maps/main/level02.map"));
 	gateway.Report(cGameInteractionEvent(eGameInteractionEvent_ScriptCallObserved, "OnEnter()"));
+	gateway.Report(cGameInteractionEvent(eGameInteractionEvent_LocalChatSubmitted, L"Daniel", L"hi: all"));
 	gateway.Update(adapter);
-	Expect(Receive(peer) == "EVENT:MapChanged:maps/main/level02.map\nSCRIPT_CALL:OnEnter()\n",
+	Expect(Receive(peer) == "EVENT:MapChanged:maps/main/level02.map\nSCRIPT_CALL:OnEnter()\nEVENT:CHAT:Daniel:hi: all\n",
 		"typed Events pass through the gateway");
 
 	closesocket(peer);

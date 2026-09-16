@@ -57,6 +57,7 @@ namespace hpl {
 		bool GetCanEdit(){return mbCanEdit;}
 
 		void SetShowButtons(bool abX) { mbShowButtons = abX; }
+		void SetDrawFrame(bool abX) { mbDrawFrame = abX; }
 
 		void SetNumericAdd(float afX) { mfNumericAdd = afX; }
 		float GetNumericAdd() { return mfNumericAdd; }
@@ -161,6 +162,7 @@ namespace hpl {
 
 		eWidgetTextBoxInputType mInputType;
 		bool mbShowButtons;
+		bool mbDrawFrame;
 		float mfNumericAdd;
 		float mfNumericValue;
 		bool mbNumericValueUpdated;

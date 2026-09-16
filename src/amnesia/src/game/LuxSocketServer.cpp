@@ -2,6 +2,7 @@
 #include "LuxMap.h"
 #include "LuxMapHandler.h"
 #include "LuxPlayer.h"
+#include "LuxChatHandler.h"
 
 namespace
 {
@@ -35,6 +36,11 @@ namespace
 		{
 			gpBase->mpMapHandler->GetCurrentMap()->RunScript(asScript);
 		}
+
+		virtual bool DisplayChatEntry(const cChatEntry& aEntry)
+		{
+			return gpBase->mpChatHandler && gpBase->mpChatHandler->DisplayChatEntry(aEntry);
+		}
 	};
 }
 
@@ -43,6 +49,7 @@ cLuxSocketServer::cLuxSocketServer()
 {
 	mHost = "127.0.0.1";
 	mPort = 5150;
+	if (gpBase->mpChatHandler) gpBase->mpChatHandler->SetSubmissionSink(this);
 
 	InitSocket();
     Log("cLuxSocketServer created!\n");
@@ -70,6 +77,12 @@ void cLuxSocketServer::PublishEvent(const cGameInteractionEvent& aEvent)
 {
 	mGateway.Report(aEvent);
 	LogNewGatewayDiagnostic();
+}
+
+void cLuxSocketServer::ReportLocalChatEntry(const cChatEntry& aEntry)
+{
+	PublishEvent(cGameInteractionEvent(eGameInteractionEvent_LocalChatSubmitted,
+		aEntry.GetAuthor(), aEntry.GetMessage()));
 }
 
 void cLuxSocketServer::LogNewGatewayDiagnostic()

@@ -51,6 +51,7 @@ namespace hpl {
 		mvButtons[1] = NULL;
 		mInputType = aType;
 		mbShowButtons = false;
+		mbDrawFrame = true;
 		
 		LoadGraphics();
 
@@ -632,8 +633,9 @@ namespace hpl {
 		
 		////////////////////////////////
 		// Background and Borders
-		DrawBordersAndCorners(	mpGfxBackground, mvGfxBorders, mvGfxCorners, 
-								GetGlobalPosition(), mvSize);
+		if(mbDrawFrame)
+			DrawBordersAndCorners(	mpGfxBackground, mvGfxBorders, mvGfxCorners,
+									GetGlobalPosition(), mvSize);
 	}
 
 	//-----------------------------------------------------------------------
