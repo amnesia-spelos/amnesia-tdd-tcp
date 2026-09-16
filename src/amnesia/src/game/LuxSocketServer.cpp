@@ -122,6 +122,7 @@ void cLuxSocketServer::Update(float afTimeStep)
         {
             Log("Client connected!\n");
             mClientSocket = clientSocket;
+			mInboundLines.Clear();
 
             SendMessage(cLegacyGameInteractionProtocol::Greeting());
         }
@@ -131,24 +132,26 @@ void cLuxSocketServer::Update(float afTimeStep)
     if (mClientSocket != INVALID_SOCKET)
     {
         char buffer[8192];
-        int bytesReceived = recv(mClientSocket, buffer, sizeof(buffer) - 1, 0);
+        int bytesReceived = recv(mClientSocket, buffer, sizeof(buffer), 0);
 
         if (bytesReceived > 0)
         {
-			buffer[bytesReceived] = '\0';
-			const std::string command = cLegacyGameInteractionProtocol::FirstCommandFromReceive(buffer);
-
-			Log("Client says: %s\n", command.c_str());
-
+			mInboundLines.Append(buffer, bytesReceived);
 			cLuxLegacyGameAdapter gameAdapter;
 			cLegacyGameInteractionProtocol protocol(gameAdapter);
-			SendMessage(protocol.HandleCommand(command));
+			std::string command;
+			while (mInboundLines.TryPopLine(command))
+			{
+				Log("Client says: %s\n", command.c_str());
+				SendMessage(protocol.HandleCommand(command));
+			}
         }
         else if (bytesReceived == 0 || (bytesReceived == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK))
         {
             Log("Client disconnected.\n");
             closesocket(mClientSocket);
             mClientSocket = INVALID_SOCKET;
+			mInboundLines.Clear();
         }
     }
 }

@@ -2,6 +2,39 @@
 
 #include <cstdio>
 
+cGameInteractionLineBuffer::cGameInteractionLineBuffer()
+	: mSearchStart(0)
+{
+}
+
+void cGameInteractionLineBuffer::Append(const char* apBytes, std::string::size_type aLength)
+{
+	msPendingBytes.append(apBytes, aLength);
+}
+
+bool cGameInteractionLineBuffer::TryPopLine(std::string& asLine)
+{
+	const std::string::size_type delimiter = msPendingBytes.find('\n', mSearchStart);
+	if (delimiter == std::string::npos)
+	{
+		mSearchStart = msPendingBytes.length();
+		return false;
+	}
+
+	asLine = msPendingBytes.substr(0, delimiter);
+	if (!asLine.empty() && asLine[asLine.length() - 1] == '\r')
+		asLine.erase(asLine.length() - 1);
+	msPendingBytes.erase(0, delimiter + 1);
+	mSearchStart = 0;
+	return true;
+}
+
+void cGameInteractionLineBuffer::Clear()
+{
+	msPendingBytes.clear();
+	mSearchStart = 0;
+}
+
 namespace
 {
 	const float kRadiansToDegrees = 180.0f / 3.14159265f;

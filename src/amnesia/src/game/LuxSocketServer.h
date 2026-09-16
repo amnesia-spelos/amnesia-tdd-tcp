@@ -3,6 +3,7 @@
 
 #include "LuxBase.h"
 #include "LuxWinSocketInit.h"
+#include "LegacyGameInteractionProtocol.h"
 
 class cLuxSocketServer : public iLuxUpdateable
 {
@@ -18,6 +19,7 @@ public:
 private:
 	SOCKET mListenSocket;
 	SOCKET mClientSocket;
+	cGameInteractionLineBuffer mInboundLines;
 	
 	tString mHost;
 	int mPort;

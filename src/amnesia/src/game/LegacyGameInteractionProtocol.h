@@ -3,6 +3,19 @@
 
 #include <string>
 
+class cGameInteractionLineBuffer
+{
+public:
+	cGameInteractionLineBuffer();
+	void Append(const char* apBytes, std::string::size_type aLength);
+	bool TryPopLine(std::string& asLine);
+	void Clear();
+
+private:
+	std::string msPendingBytes;
+	std::string::size_type mSearchStart;
+};
+
 struct cLegacyPeerState
 {
 	bool mbMapLoaded;
