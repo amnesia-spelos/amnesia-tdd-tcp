@@ -13,7 +13,7 @@ public:
     ~cLuxSocketServer();
 
     void Update(float afTimeStep);
-	void SendMessage(const tString& message);
+	void PublishEvent(const cGameInteractionEvent& aEvent);
 	void SetConnectionSettings(const tString& host, int port);
 	const tString& GetHost() const { return mHost; }
 	int GetPort() const { return mPort; }
@@ -26,6 +26,7 @@ private:
 	int mPort;
 
 	bool InitSocket();
+	void SendMessage(const tString& message);
 };
 
 #endif

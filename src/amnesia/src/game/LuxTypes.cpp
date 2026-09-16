@@ -179,7 +179,8 @@ void iLuxCollideCallbackContainer::CheckCollisionCallback(const tString& asName,
 				tString sCommand = pCallback->msCallbackFunc+"(\"" + asName + "\", \""+ pEntity->GetName()+"\", "+cString::ToString(lState)+")" ;
 				apMap->RunScript(sCommand);
 			
-				gpBase->mpSocketServer->SendMessage("SCRIPT_CALL:" + sCommand);
+				gpBase->mpSocketServer->PublishEvent(cGameInteractionEvent(
+					eGameInteractionEvent_ScriptCallObserved, sCommand));
 
 				///////////////////////
 				// Auto remove

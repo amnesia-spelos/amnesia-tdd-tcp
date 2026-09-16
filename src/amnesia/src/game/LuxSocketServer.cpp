@@ -95,6 +95,15 @@ void cLuxSocketServer::Update(float afTimeStep)
 		Log("Peer says: %s\n", command->c_str());
 		SendMessage(protocol.HandleCommand(*command));
 	}
+
+	cGameInteractionEvent publishedEvent;
+	while (mGateway.TryTakePublishedEvent(publishedEvent))
+		SendMessage(cLegacyGameInteractionProtocol::SerializeEvent(publishedEvent));
+}
+
+void cLuxSocketServer::PublishEvent(const cGameInteractionEvent& aEvent)
+{
+	mGateway.Publish(aEvent);
 }
 
 void cLuxSocketServer::SendMessage(const tString& message)

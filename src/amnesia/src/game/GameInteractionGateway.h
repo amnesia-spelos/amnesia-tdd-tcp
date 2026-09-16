@@ -2,6 +2,26 @@
 #define GAME_INTERACTION_GATEWAY_H
 
 #include <string>
+#include <deque>
+
+enum eGameInteractionEventType
+{
+	eGameInteractionEvent_MapChanged,
+	eGameInteractionEvent_ScriptCallObserved
+};
+
+class cGameInteractionEvent
+{
+public:
+	cGameInteractionEvent(eGameInteractionEventType aType = eGameInteractionEvent_MapChanged,
+		const std::string& asData = std::string());
+	eGameInteractionEventType GetType() const { return mType; }
+	const std::string& GetData() const { return msData; }
+
+private:
+	eGameInteractionEventType mType;
+	std::string msData;
+};
 
 enum eGameInteractionCommandType
 {
@@ -107,12 +127,15 @@ public:
 	cGameInteractionGateway();
 	void BeginLegacySession();
 	void EndSession();
+	void Publish(const cGameInteractionEvent& aEvent);
+	bool TryTakePublishedEvent(cGameInteractionEvent& aEvent);
 	bool CanStartQueuedCommand() const { return mbSessionActive; }
 	cGameInteractionResponse Handle(const cGameInteractionCommand& aCommand,
 		iGameInteractionGameAdapter& aGameAdapter) const;
 
 private:
 	bool mbSessionActive;
+	std::deque<cGameInteractionEvent> mPublishedEvents;
 };
 
 #endif

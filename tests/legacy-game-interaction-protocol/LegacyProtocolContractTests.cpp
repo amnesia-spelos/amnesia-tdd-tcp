@@ -106,8 +106,10 @@ int main(int argc, char** argv)
 		if (kind == "greeting") message = cLegacyGameInteractionProtocol::Greeting();
 		else if (kind == "command") message = protocol.HandleCommand(
 			cLegacyGameInteractionProtocol::FirstCommandFromReceive(ReadString(line, "request_wire")));
-		else if (kind == "map_changed_event") message = cLegacyGameInteractionProtocol::MapChangedEvent(adapter.msMapFile);
-		else if (kind == "script_call_observation") message = cLegacyGameInteractionProtocol::ScriptCallObservation(ReadString(line, "script_call"));
+		else if (kind == "map_changed_event") message = cLegacyGameInteractionProtocol::SerializeEvent(
+			cGameInteractionEvent(eGameInteractionEvent_MapChanged, adapter.msMapFile));
+		else if (kind == "script_call_observation") message = cLegacyGameInteractionProtocol::SerializeEvent(
+			cGameInteractionEvent(eGameInteractionEvent_ScriptCallObserved, ReadString(line, "script_call")));
 		else
 		{
 			std::cerr << "unknown fixture kind in case " << cases << "\n";

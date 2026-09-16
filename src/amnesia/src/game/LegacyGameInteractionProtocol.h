@@ -24,8 +24,7 @@ public:
 	cLegacyGameInteractionProtocol(cGameInteractionGateway& aGateway, iGameInteractionGameAdapter& aGameAdapter);
 
 	static const char* Greeting();
-	static std::string MapChangedEvent(const std::string& asMapFile);
-	static std::string ScriptCallObservation(const std::string& asScriptCall);
+	static std::string SerializeEvent(const cGameInteractionEvent& aEvent);
 	static std::string ToWireLine(const std::string& asMessage);
 	static std::string FirstCommandFromReceive(const std::string& asReceivedBytes);
 

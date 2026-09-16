@@ -1,5 +1,11 @@
 #include "GameInteractionGateway.h"
 
+cGameInteractionEvent::cGameInteractionEvent(eGameInteractionEventType aType,
+	const std::string& asData)
+	: mType(aType), msData(asData)
+{
+}
+
 cGameInteractionGateway::cGameInteractionGateway()
 	: mbSessionActive(false)
 {
@@ -13,6 +19,20 @@ void cGameInteractionGateway::BeginLegacySession()
 void cGameInteractionGateway::EndSession()
 {
 	mbSessionActive = false;
+	mPublishedEvents.clear();
+}
+
+void cGameInteractionGateway::Publish(const cGameInteractionEvent& aEvent)
+{
+	if (mbSessionActive) mPublishedEvents.push_back(aEvent);
+}
+
+bool cGameInteractionGateway::TryTakePublishedEvent(cGameInteractionEvent& aEvent)
+{
+	if (mPublishedEvents.empty()) return false;
+	aEvent = mPublishedEvents.front();
+	mPublishedEvents.pop_front();
+	return true;
 }
 
 cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,

@@ -49,6 +49,28 @@ int main()
 	cFakeGameAdapter adapter;
 	cGameInteractionGateway gateway;
 
+	gateway.BeginLegacySession();
+	gateway.Publish(cGameInteractionEvent(eGameInteractionEvent_MapChanged,
+		"maps/main/level02.map"));
+	cGameInteractionEvent publishedEvent;
+	Expect(gateway.TryTakePublishedEvent(publishedEvent), "active Session receives a published Event");
+	Expect(publishedEvent.GetType() == eGameInteractionEvent_MapChanged,
+		"published Event retains its typed meaning");
+	Expect(publishedEvent.GetData() == "maps/main/level02.map",
+		"published map-change Event retains its map file");
+	Expect(!gateway.TryTakePublishedEvent(publishedEvent), "published Event is delivered once");
+	gateway.Publish(cGameInteractionEvent(eGameInteractionEvent_ScriptCallObserved,
+		"OnCollide(\"Player\", \"Door\", 1)"));
+	Expect(gateway.TryTakePublishedEvent(publishedEvent), "script-call observation is published");
+	Expect(publishedEvent.GetType() == eGameInteractionEvent_ScriptCallObserved,
+		"script-call observation retains its distinct typed meaning");
+	Expect(publishedEvent.GetData() == "OnCollide(\"Player\", \"Door\", 1)",
+		"script-call observation retains its script call");
+	gateway.EndSession();
+	gateway.Publish(cGameInteractionEvent(eGameInteractionEvent_MapChanged, "not-delivered.map"));
+	Expect(!gateway.TryTakePublishedEvent(publishedEvent), "Event without an active Session is discarded");
+	gateway.BeginLegacySession();
+
 	const cGameInteractionResponse ping = gateway.Handle(cGameInteractionCommand(eGameInteractionCommand_Ping), adapter);
 	ExpectSuccess(ping, eGameInteractionCommand_Ping, eGameInteractionResponse_Pong);
 

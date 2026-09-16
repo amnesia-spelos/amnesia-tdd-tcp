@@ -88,14 +88,16 @@ const char* cLegacyGameInteractionProtocol::Greeting()
 	return "Hello, from Amnesia: The Dark Descent!";
 }
 
-std::string cLegacyGameInteractionProtocol::MapChangedEvent(const std::string& asMapFile)
+std::string cLegacyGameInteractionProtocol::SerializeEvent(const cGameInteractionEvent& aEvent)
 {
-	return "EVENT:MapChanged:" + asMapFile;
-}
-
-std::string cLegacyGameInteractionProtocol::ScriptCallObservation(const std::string& asScriptCall)
-{
-	return "SCRIPT_CALL:" + asScriptCall;
+	switch (aEvent.GetType())
+	{
+	case eGameInteractionEvent_MapChanged:
+		return "EVENT:MapChanged:" + aEvent.GetData();
+	case eGameInteractionEvent_ScriptCallObserved:
+		return "SCRIPT_CALL:" + aEvent.GetData();
+	}
+	return std::string();
 }
 
 std::string cLegacyGameInteractionProtocol::ToWireLine(const std::string& asMessage)
