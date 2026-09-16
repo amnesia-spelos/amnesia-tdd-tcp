@@ -1,38 +1,13 @@
 #include "GameInteractionGateway.h"
+#include "GameInteractionTransport.h"
+#include "LegacyGameInteractionProtocol.h"
+
+#include <vector>
 
 cGameInteractionEvent::cGameInteractionEvent(eGameInteractionEventType aType,
 	const std::string& asData)
 	: mType(aType), msData(asData)
 {
-}
-
-cGameInteractionGateway::cGameInteractionGateway()
-	: mbSessionActive(false)
-{
-}
-
-void cGameInteractionGateway::BeginLegacySession()
-{
-	mbSessionActive = true;
-}
-
-void cGameInteractionGateway::EndSession()
-{
-	mbSessionActive = false;
-	mPublishedEvents.clear();
-}
-
-void cGameInteractionGateway::Publish(const cGameInteractionEvent& aEvent)
-{
-	if (mbSessionActive) mPublishedEvents.push_back(aEvent);
-}
-
-bool cGameInteractionGateway::TryTakePublishedEvent(cGameInteractionEvent& aEvent)
-{
-	if (mPublishedEvents.empty()) return false;
-	aEvent = mPublishedEvents.front();
-	mPublishedEvents.pop_front();
-	return true;
 }
 
 cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
@@ -54,58 +29,138 @@ cGameInteractionResponse::cGameInteractionResponse(eGameInteractionCommandType a
 {
 }
 
-cGameInteractionResponse cGameInteractionGateway::Handle(const cGameInteractionCommand& aCommand,
-	iGameInteractionGameAdapter& aGameAdapter) const
+namespace
 {
-	switch (aCommand.GetType())
+	cGameInteractionResponse ExecuteCommand(const cGameInteractionCommand& aCommand,
+		iGameInteractionGameAdapter& aGameAdapter)
 	{
-	case eGameInteractionCommand_GetPosition:
-	{
-		cGameInteractionResponse response(aCommand.GetType(), eGameInteractionResponse_Position,
-			aGameAdapter.IsMapLoaded() ? eGameInteractionCommandOutcome_Success :
-				eGameInteractionCommandOutcome_MapNotLoaded);
-		if (response.GetOutcome() == eGameInteractionCommandOutcome_Success)
+		switch (aCommand.GetType())
+		{
+		case eGameInteractionCommand_GetPosition:
+		{
+			cGameInteractionResponse response(aCommand.GetType(), eGameInteractionResponse_Position,
+				aGameAdapter.IsMapLoaded() ? eGameInteractionCommandOutcome_Success :
+					eGameInteractionCommandOutcome_MapNotLoaded);
+			if (response.GetOutcome() == eGameInteractionCommandOutcome_Success)
+				response.SetPosition(aGameAdapter.GetPosition());
+			return response;
+		}
+		case eGameInteractionCommand_GetRotation:
+		{
+			cGameInteractionResponse response(aCommand.GetType(), eGameInteractionResponse_Rotation,
+				aGameAdapter.IsMapLoaded() ? eGameInteractionCommandOutcome_Success :
+					eGameInteractionCommandOutcome_MapNotLoaded);
+			if (response.GetOutcome() == eGameInteractionCommandOutcome_Success)
+				response.SetRotation(aGameAdapter.GetRotation());
+			return response;
+		}
+		case eGameInteractionCommand_GetPositionRotation:
+		{
+			cGameInteractionResponse response(aCommand.GetType(), eGameInteractionResponse_PositionRotation,
+				aGameAdapter.IsMapLoaded() ? eGameInteractionCommandOutcome_Success :
+					eGameInteractionCommandOutcome_MapNotLoaded);
+			if (response.GetOutcome() != eGameInteractionCommandOutcome_Success) return response;
 			response.SetPosition(aGameAdapter.GetPosition());
-		return response;
-	}
-	case eGameInteractionCommand_GetRotation:
-	{
-		cGameInteractionResponse response(aCommand.GetType(), eGameInteractionResponse_Rotation,
-			aGameAdapter.IsMapLoaded() ? eGameInteractionCommandOutcome_Success :
-				eGameInteractionCommandOutcome_MapNotLoaded);
-		if (response.GetOutcome() == eGameInteractionCommandOutcome_Success)
 			response.SetRotation(aGameAdapter.GetRotation());
-		return response;
+			return response;
+		}
+		case eGameInteractionCommand_GetMap:
+		{
+			cGameInteractionResponse response(aCommand.GetType(), eGameInteractionResponse_Map,
+				aGameAdapter.IsMapLoaded() ? eGameInteractionCommandOutcome_Success :
+					eGameInteractionCommandOutcome_MapNotLoaded);
+			if (response.GetOutcome() == eGameInteractionCommandOutcome_Success)
+				response.SetMapFile(aGameAdapter.GetMapFile());
+			return response;
+		}
+		case eGameInteractionCommand_ExecuteScript:
+		{
+			cGameInteractionResponse response(aCommand.GetType(), eGameInteractionResponse_ScriptExecuted,
+				aGameAdapter.IsMapLoaded() ? eGameInteractionCommandOutcome_Success :
+					eGameInteractionCommandOutcome_MapNotLoaded);
+			if (response.GetOutcome() == eGameInteractionCommandOutcome_Success)
+				aGameAdapter.RunScript(aCommand.GetData());
+			return response;
+		}
+		default:
+			return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_Pong);
+		}
 	}
-	case eGameInteractionCommand_GetPositionRotation:
+}
+
+class cGameInteractionGateway::cImplementation
+{
+public:
+	cGameInteractionTransport mTransport;
+	cGameInteractionLineBuffer mInboundLines;
+};
+
+cGameInteractionGateway::cGameInteractionGateway()
+	: mpImplementation(new cImplementation)
+{
+}
+
+cGameInteractionGateway::~cGameInteractionGateway()
+{
+	delete mpImplementation;
+}
+
+bool cGameInteractionGateway::Listen(const std::string& asHost, int alPort)
+{
+	mpImplementation->mInboundLines.Clear();
+	return mpImplementation->mTransport.Listen(asHost, alPort);
+}
+
+void cGameInteractionGateway::Shutdown()
+{
+	mpImplementation->mInboundLines.Clear();
+	mpImplementation->mTransport.Shutdown();
+}
+
+void cGameInteractionGateway::Update(iGameInteractionGameAdapter& aGameAdapter)
+{
+	std::vector<std::string> receivedBytes;
+	const eGameInteractionTransportEvent event = mpImplementation->mTransport.Update(receivedBytes);
+	if (event == eGameInteractionTransportEvent_PeerConnected)
 	{
-		cGameInteractionResponse response(aCommand.GetType(), eGameInteractionResponse_PositionRotation,
-			aGameAdapter.IsMapLoaded() ? eGameInteractionCommandOutcome_Success :
-				eGameInteractionCommandOutcome_MapNotLoaded);
-		if (response.GetOutcome() != eGameInteractionCommandOutcome_Success) return response;
-		response.SetPosition(aGameAdapter.GetPosition());
-		response.SetRotation(aGameAdapter.GetRotation());
-		return response;
+		mpImplementation->mInboundLines.Clear();
+		mpImplementation->mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(
+			cLegacyGameInteractionProtocol::Greeting()));
 	}
-	case eGameInteractionCommand_GetMap:
+	else if (event == eGameInteractionTransportEvent_PeerDisconnected)
 	{
-		cGameInteractionResponse response(aCommand.GetType(), eGameInteractionResponse_Map,
-			aGameAdapter.IsMapLoaded() ? eGameInteractionCommandOutcome_Success :
-				eGameInteractionCommandOutcome_MapNotLoaded);
-		if (response.GetOutcome() == eGameInteractionCommandOutcome_Success)
-			response.SetMapFile(aGameAdapter.GetMapFile());
-		return response;
+		mpImplementation->mInboundLines.Clear();
+		return;
 	}
-	case eGameInteractionCommand_ExecuteScript:
+
+	for (std::vector<std::string>::const_iterator bytes = receivedBytes.begin();
+		bytes != receivedBytes.end(); ++bytes)
+		mpImplementation->mInboundLines.Append(bytes->data(), bytes->size());
+
+	std::string commandText;
+	while (mpImplementation->mTransport.HasPeer() &&
+		mpImplementation->mInboundLines.TryPopLine(commandText))
 	{
-		cGameInteractionResponse response(aCommand.GetType(), eGameInteractionResponse_ScriptExecuted,
-			aGameAdapter.IsMapLoaded() ? eGameInteractionCommandOutcome_Success :
-				eGameInteractionCommandOutcome_MapNotLoaded);
-		if (response.GetOutcome() == eGameInteractionCommandOutcome_Success)
-			aGameAdapter.RunScript(aCommand.GetData());
-		return response;
+		const cGameInteractionCommand command = cLegacyGameInteractionProtocol::ParseCommand(commandText);
+		const cGameInteractionResponse response = ExecuteCommand(command, aGameAdapter);
+		mpImplementation->mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(
+			cLegacyGameInteractionProtocol::SerializeResponse(response)));
 	}
-	default:
-		return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_Pong);
-	}
+}
+
+void cGameInteractionGateway::Report(const cGameInteractionEvent& aEvent)
+{
+	if (!mpImplementation->mTransport.HasPeer()) return;
+	mpImplementation->mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(
+		cLegacyGameInteractionProtocol::SerializeEvent(aEvent)));
+}
+
+int cGameInteractionGateway::GetPort() const
+{
+	return mpImplementation->mTransport.GetPort();
+}
+
+const std::string& cGameInteractionGateway::GetDiagnostic() const
+{
+	return mpImplementation->mTransport.GetDiagnostic();
 }

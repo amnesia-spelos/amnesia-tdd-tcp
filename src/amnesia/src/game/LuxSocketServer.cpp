@@ -1,5 +1,4 @@
 #include "LuxSocketServer.h"
-#include "LegacyGameInteractionProtocol.h"
 #include "LuxMap.h"
 #include "LuxMapHandler.h"
 #include "LuxPlayer.h"
@@ -51,9 +50,9 @@ cLuxSocketServer::cLuxSocketServer()
 
 bool cLuxSocketServer::InitSocket()
 {
-	if (!mTransport.Listen(mHost, mPort))
+	if (!mGateway.Listen(mHost, mPort))
 	{
-		Log("Game Interaction Protocol listener failed: %s\n", mTransport.GetDiagnostic().c_str());
+		Log("Game Interaction Protocol listener failed: %s\n", mGateway.GetDiagnostic().c_str());
 		return false;
 	}
 	Log("Socket listening on %s:%d\n", mHost.c_str(), mPort);
@@ -62,59 +61,23 @@ bool cLuxSocketServer::InitSocket()
 
 void cLuxSocketServer::Update(float afTimeStep)
 {
-	std::vector<std::string> receivedBytes;
-	const eGameInteractionTransportEvent event = mTransport.Update(receivedBytes);
-	if (event == eGameInteractionTransportEvent_PeerConnected)
-	{
-		Log("Peer connected!\n");
-		mInboundLines.Clear();
-		mGateway.BeginLegacySession();
-		SendMessage(cLegacyGameInteractionProtocol::Greeting());
-	}
-	else if (event == eGameInteractionTransportEvent_PeerDisconnected)
-	{
-		mInboundLines.Clear();
-		mGateway.EndSession();
-		Log("Peer disconnected: %s\n", mTransport.GetDiagnostic().c_str());
-		// ReceiveBytes may have queued complete Commands before observing the orderly
-		// disconnect. They still belong to the closed Session and must not execute.
-		return;
-	}
-
-	for (std::vector<std::string>::const_iterator bytes = receivedBytes.begin(); bytes != receivedBytes.end(); ++bytes)
-		mInboundLines.Append(bytes->data(), bytes->size());
-	std::vector<std::string> commands;
-	std::string command;
-	while (mInboundLines.TryPopLine(command)) commands.push_back(command);
-
 	cLuxGameInteractionGameAdapter gameAdapter;
-	cLegacyGameInteractionProtocol protocol(mGateway, gameAdapter);
-	for (std::vector<std::string>::const_iterator command = commands.begin();
-		command != commands.end() && mGateway.CanStartQueuedCommand(); ++command)
-	{
-		Log("Peer says: %s\n", command->c_str());
-		SendMessage(protocol.HandleCommand(*command));
-	}
-
-	cGameInteractionEvent publishedEvent;
-	while (mGateway.TryTakePublishedEvent(publishedEvent))
-		SendMessage(cLegacyGameInteractionProtocol::SerializeEvent(publishedEvent));
+	mGateway.Update(gameAdapter);
+	LogNewGatewayDiagnostic();
 }
 
 void cLuxSocketServer::PublishEvent(const cGameInteractionEvent& aEvent)
 {
-	mGateway.Publish(aEvent);
+	mGateway.Report(aEvent);
+	LogNewGatewayDiagnostic();
 }
 
-void cLuxSocketServer::SendMessage(const tString& message)
+void cLuxSocketServer::LogNewGatewayDiagnostic()
 {
-	const bool hadPeer = mTransport.HasPeer();
-	mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(message));
-	if (hadPeer && !mTransport.HasPeer())
-	{
-		mGateway.EndSession();
-		Log("Game Interaction Protocol delivery failed: %s\n", mTransport.GetDiagnostic().c_str());
-	}
+	const tString& diagnostic = mGateway.GetDiagnostic();
+	if (!diagnostic.empty() && diagnostic != mLastGatewayDiagnostic)
+		Log("Game Interaction Protocol: %s\n", diagnostic.c_str());
+	mLastGatewayDiagnostic = diagnostic;
 }
 
 void cLuxSocketServer::SetConnectionSettings(const tString& host, int port)
@@ -123,12 +86,13 @@ void cLuxSocketServer::SetConnectionSettings(const tString& host, int port)
     mPort = port;
 
 	Log("LuxSocketServer config changed: re-init\n");
-	mTransport.Shutdown();
+	mGateway.Shutdown();
+	mLastGatewayDiagnostic.clear();
     InitSocket();
 }
 
 cLuxSocketServer::~cLuxSocketServer()
 {
-	mTransport.Shutdown();
+	mGateway.Shutdown();
     Log("cLuxSocketServer destroyed!\n");
 }

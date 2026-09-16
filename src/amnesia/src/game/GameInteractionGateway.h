@@ -2,7 +2,6 @@
 #define GAME_INTERACTION_GATEWAY_H
 
 #include <string>
-#include <deque>
 
 enum eGameInteractionEventType
 {
@@ -25,6 +24,7 @@ private:
 
 enum eGameInteractionCommandType
 {
+	eGameInteractionCommand_Unknown,
 	eGameInteractionCommand_Ping,
 	eGameInteractionCommand_GetPosition,
 	eGameInteractionCommand_GetRotation,
@@ -125,17 +125,22 @@ class cGameInteractionGateway
 {
 public:
 	cGameInteractionGateway();
-	void BeginLegacySession();
-	void EndSession();
-	void Publish(const cGameInteractionEvent& aEvent);
-	bool TryTakePublishedEvent(cGameInteractionEvent& aEvent);
-	bool CanStartQueuedCommand() const { return mbSessionActive; }
-	cGameInteractionResponse Handle(const cGameInteractionCommand& aCommand,
-		iGameInteractionGameAdapter& aGameAdapter) const;
+	~cGameInteractionGateway();
+
+	bool Listen(const std::string& asHost, int alPort);
+	void Shutdown();
+	void Update(iGameInteractionGameAdapter& aGameAdapter);
+	void Report(const cGameInteractionEvent& aEvent);
+
+	int GetPort() const;
+	const std::string& GetDiagnostic() const;
 
 private:
-	bool mbSessionActive;
-	std::deque<cGameInteractionEvent> mPublishedEvents;
+	class cImplementation;
+	cImplementation* mpImplementation;
+
+	cGameInteractionGateway(const cGameInteractionGateway&);
+	cGameInteractionGateway& operator=(const cGameInteractionGateway&);
 };
 
 #endif

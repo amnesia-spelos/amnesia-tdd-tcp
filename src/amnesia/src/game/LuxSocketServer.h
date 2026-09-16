@@ -3,8 +3,6 @@
 
 #include "LuxBase.h"
 #include "GameInteractionGateway.h"
-#include "GameInteractionTransport.h"
-#include "LegacyGameInteractionProtocol.h"
 
 class cLuxSocketServer : public iLuxUpdateable
 {
@@ -19,14 +17,13 @@ public:
 	int GetPort() const { return mPort; }
 private:
 	cGameInteractionGateway mGateway;
-	cGameInteractionTransport mTransport;
-	cGameInteractionLineBuffer mInboundLines;
 	
 	tString mHost;
+	tString mLastGatewayDiagnostic;
 	int mPort;
 
 	bool InitSocket();
-	void SendMessage(const tString& message);
+	void LogNewGatewayDiagnostic();
 };
 
 #endif

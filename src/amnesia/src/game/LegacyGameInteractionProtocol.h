@@ -21,18 +21,11 @@ private:
 class cLegacyGameInteractionProtocol
 {
 public:
-	cLegacyGameInteractionProtocol(cGameInteractionGateway& aGateway, iGameInteractionGameAdapter& aGameAdapter);
-
 	static const char* Greeting();
 	static std::string SerializeEvent(const cGameInteractionEvent& aEvent);
+	static cGameInteractionCommand ParseCommand(const std::string& asCommand);
+	static std::string SerializeResponse(const cGameInteractionResponse& aResponse);
 	static std::string ToWireLine(const std::string& asMessage);
-	static std::string FirstCommandFromReceive(const std::string& asReceivedBytes);
-
-	std::string HandleCommand(const std::string& asCommand);
-
-private:
-	cGameInteractionGateway& mGateway;
-	iGameInteractionGameAdapter& mGameAdapter;
 };
 
 #endif

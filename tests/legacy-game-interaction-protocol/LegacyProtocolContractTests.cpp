@@ -1,4 +1,7 @@
-#include "LegacyGameInteractionProtocol.h"
+#include "GameInteractionGateway.h"
+
+#include <winsock2.h>
+#include <ws2tcpip.h>
 
 #include <cstdlib>
 #include <fstream>
@@ -66,6 +69,31 @@ namespace
 		virtual std::string GetMapFile() const { return msMapFile; }
 		virtual void RunScript(const std::string& asScript) { mExecutedScript = asScript; }
 	};
+
+	SOCKET Connect(cGameInteractionGateway& gateway, cFixtureGameAdapter& adapter)
+	{
+		SOCKET peer = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+		sockaddr_in address = {};
+		address.sin_family = AF_INET;
+		address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+		address.sin_port = htons(static_cast<u_short>(gateway.GetPort()));
+		if (connect(peer, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0) return INVALID_SOCKET;
+		gateway.Update(adapter);
+		gateway.Update(adapter);
+		return peer;
+	}
+
+	std::string Receive(SOCKET peer)
+	{
+		fd_set readable;
+		FD_ZERO(&readable);
+		FD_SET(peer, &readable);
+		timeval timeout = { 2, 0 };
+		if (select(0, &readable, NULL, NULL, &timeout) != 1) return std::string();
+		char buffer[2048];
+		const int count = recv(peer, buffer, sizeof(buffer), 0);
+		return count > 0 ? std::string(buffer, count) : std::string();
+	}
 }
 
 int main(int argc, char** argv)
@@ -100,16 +128,42 @@ int main(int argc, char** argv)
 		adapter.mRotation = cGameInteractionRotation(rotation[0], rotation[1]);
 
 		cGameInteractionGateway gateway;
-		cLegacyGameInteractionProtocol protocol(gateway, adapter);
+		if (!gateway.Listen("127.0.0.1", 0))
+		{
+			std::cerr << "could not listen for fixture " << cases << ": " << gateway.GetDiagnostic() << "\n";
+			return 2;
+		}
+		SOCKET peer = Connect(gateway, adapter);
+		if (peer == INVALID_SOCKET)
+		{
+			std::cerr << "could not connect fixture Peer " << cases << "\n";
+			return 2;
+		}
+		const std::string greeting = Receive(peer);
 		const std::string kind = ReadString(line, "kind");
-		std::string message;
-		if (kind == "greeting") message = cLegacyGameInteractionProtocol::Greeting();
-		else if (kind == "command") message = protocol.HandleCommand(
-			cLegacyGameInteractionProtocol::FirstCommandFromReceive(ReadString(line, "request_wire")));
-		else if (kind == "map_changed_event") message = cLegacyGameInteractionProtocol::SerializeEvent(
-			cGameInteractionEvent(eGameInteractionEvent_MapChanged, adapter.msMapFile));
-		else if (kind == "script_call_observation") message = cLegacyGameInteractionProtocol::SerializeEvent(
-			cGameInteractionEvent(eGameInteractionEvent_ScriptCallObserved, ReadString(line, "script_call")));
+		std::string actual;
+		if (kind == "greeting") actual = greeting;
+		else if (kind == "command")
+		{
+			const std::string request = ReadString(line, "request_wire");
+			send(peer, request.data(), static_cast<int>(request.size()), 0);
+			gateway.Update(adapter);
+			gateway.Update(adapter);
+			actual = Receive(peer);
+		}
+		else if (kind == "map_changed_event")
+		{
+			gateway.Report(cGameInteractionEvent(eGameInteractionEvent_MapChanged, adapter.msMapFile));
+			gateway.Update(adapter);
+			actual = Receive(peer);
+		}
+		else if (kind == "script_call_observation")
+		{
+			gateway.Report(cGameInteractionEvent(eGameInteractionEvent_ScriptCallObserved,
+				ReadString(line, "script_call")));
+			gateway.Update(adapter);
+			actual = Receive(peer);
+		}
 		else
 		{
 			std::cerr << "unknown fixture kind in case " << cases << "\n";
@@ -117,13 +171,14 @@ int main(int argc, char** argv)
 			continue;
 		}
 
-		const std::string actual = cLegacyGameInteractionProtocol::ToWireLine(message);
 		const std::string expected = ReadString(line, "expected_wire");
 		if (actual != expected)
 		{
 			std::cerr << "FAIL: " << ReadString(line, "name") << "\nexpected: " << expected << "actual: " << actual;
 			++failures;
 		}
+		closesocket(peer);
+		gateway.Shutdown();
 		const std::string expectedScript = ReadString(line, "expected_script");
 		if (!expectedScript.empty() && adapter.mExecutedScript != expectedScript)
 		{

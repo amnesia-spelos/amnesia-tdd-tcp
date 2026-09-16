@@ -27,6 +27,7 @@ $executable = Join-Path $outputDirectory 'GameInteractionFramingTests.exe'
 & cl /nologo /EHsc /W4 /WX /D_CRT_SECURE_NO_WARNINGS /I $sourceDirectory `
     (Join-Path $testDirectory 'GameInteractionFramingTests.cpp') `
 	(Join-Path $sourceDirectory 'GameInteractionGateway.cpp') `
+	(Join-Path $sourceDirectory 'GameInteractionTransport.cpp') `
     (Join-Path $sourceDirectory 'LegacyGameInteractionProtocol.cpp') `
     /Fo:"$outputDirectory\" `
     /Fe:$executable `

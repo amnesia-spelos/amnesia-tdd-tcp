@@ -27,9 +27,10 @@ $executable = Join-Path $outputDirectory 'LegacyProtocolContractTests.exe'
 & cl /nologo /EHsc /W4 /WX /D_CRT_SECURE_NO_WARNINGS /I $sourceDirectory `
     (Join-Path $testDirectory 'LegacyProtocolContractTests.cpp') `
 	(Join-Path $sourceDirectory 'GameInteractionGateway.cpp') `
+	(Join-Path $sourceDirectory 'GameInteractionTransport.cpp') `
     (Join-Path $sourceDirectory 'LegacyGameInteractionProtocol.cpp') `
     /Fo:"$outputDirectory\" `
-    /Fe:$executable
+    /Fe:$executable /link ws2_32.lib
 if ($LASTEXITCODE -ne 0) {
     throw "Legacy protocol harness compilation failed with exit code $LASTEXITCODE."
 }

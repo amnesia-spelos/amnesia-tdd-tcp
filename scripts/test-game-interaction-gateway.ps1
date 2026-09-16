@@ -24,11 +24,13 @@ $outputDirectory = Join-Path $repositoryRoot 'artifacts\tests'
 New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
 $executable = Join-Path $outputDirectory 'GameInteractionGatewayTests.exe'
 
-& cl /nologo /EHsc /W4 /WX /I $sourceDirectory `
+& cl /nologo /EHsc /W4 /WX /D_CRT_SECURE_NO_WARNINGS /I $sourceDirectory `
     (Join-Path $testDirectory 'GameInteractionGatewayTests.cpp') `
     (Join-Path $sourceDirectory 'GameInteractionGateway.cpp') `
+	(Join-Path $sourceDirectory 'GameInteractionTransport.cpp') `
+	(Join-Path $sourceDirectory 'LegacyGameInteractionProtocol.cpp') `
     /Fo:"$outputDirectory\" `
-    /Fe:$executable
+    /Fe:$executable /link ws2_32.lib
 if ($LASTEXITCODE -ne 0) {
     throw "Game Interaction Protocol gateway harness compilation failed with exit code $LASTEXITCODE."
 }

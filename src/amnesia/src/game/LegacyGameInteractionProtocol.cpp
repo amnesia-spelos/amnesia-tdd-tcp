@@ -77,12 +77,6 @@ namespace
 	}
 }
 
-cLegacyGameInteractionProtocol::cLegacyGameInteractionProtocol(cGameInteractionGateway& aGateway,
-	iGameInteractionGameAdapter& aGameAdapter)
-	: mGateway(aGateway), mGameAdapter(aGameAdapter)
-{
-}
-
 const char* cLegacyGameInteractionProtocol::Greeting()
 {
 	return "Hello, from Amnesia: The Dark Descent!";
@@ -107,41 +101,37 @@ std::string cLegacyGameInteractionProtocol::ToWireLine(const std::string& asMess
 	return asMessage + "\n";
 }
 
-std::string cLegacyGameInteractionProtocol::FirstCommandFromReceive(const std::string& asReceivedBytes)
+cGameInteractionCommand cLegacyGameInteractionProtocol::ParseCommand(const std::string& asCommand)
 {
-	const std::string::size_type delimiter = asReceivedBytes.find_first_of("\r\n");
-	return asReceivedBytes.substr(0, delimiter);
-}
-
-std::string cLegacyGameInteractionProtocol::HandleCommand(const std::string& asCommand)
-{
+	if (asCommand.compare(0, 5, "exec:") == 0)
+		return cGameInteractionCommand(eGameInteractionCommand_ExecuteScript, asCommand.substr(5));
 	if (asCommand == "ping" || asCommand == "getpos" || asCommand == "getrot" ||
 		asCommand == "getposrot" || asCommand == "getmap")
-	{
-		const cGameInteractionCommand command(CommandTypeFor(asCommand));
-		const cGameInteractionResponse response = mGateway.Handle(command, mGameAdapter);
-		if (response.GetOutcome() == eGameInteractionCommandOutcome_MapNotLoaded)
-			return "RESPONSE:" + asCommand + ":no map loaded";
-		if (response.GetCommandType() == eGameInteractionCommand_Ping &&
-			response.GetType() == eGameInteractionResponse_Pong)
-			return "RESPONSE:ping:pong";
-		if (response.GetType() == eGameInteractionResponse_Position)
-			return FormatPosition("getpos", response.GetPosition());
-		if (response.GetType() == eGameInteractionResponse_Rotation)
-			return FormatRotation("getrot", response.GetRotation());
-		if (response.GetType() == eGameInteractionResponse_PositionRotation)
-			return FormatPosition("getposrot", response.GetPosition()) + ":" +
-				FormatRotationValues(response.GetRotation());
-		if (response.GetType() == eGameInteractionResponse_Map)
-			return "RESPONSE:getmap:" + response.GetMapFile();
-	}
-	if (asCommand.compare(0, 5, "exec:") == 0)
-	{
-		const cGameInteractionCommand command(eGameInteractionCommand_ExecuteScript, asCommand.substr(5));
-		const cGameInteractionResponse response = mGateway.Handle(command, mGameAdapter);
-		if (response.GetOutcome() == eGameInteractionCommandOutcome_MapNotLoaded)
-			return "RESPONSE:exec:no map loaded";
-		return "RESPONSE:exec:script executed";
-	}
-	return "WARNING:Unknown command";
+		return cGameInteractionCommand(CommandTypeFor(asCommand));
+	return cGameInteractionCommand(eGameInteractionCommand_Unknown, asCommand);
+}
+
+std::string cLegacyGameInteractionProtocol::SerializeResponse(const cGameInteractionResponse& aResponse)
+{
+	if (aResponse.GetCommandType() == eGameInteractionCommand_Unknown)
+		return "WARNING:Unknown command";
+	const char* command = "ping";
+	if (aResponse.GetCommandType() == eGameInteractionCommand_GetPosition) command = "getpos";
+	else if (aResponse.GetCommandType() == eGameInteractionCommand_GetRotation) command = "getrot";
+	else if (aResponse.GetCommandType() == eGameInteractionCommand_GetPositionRotation) command = "getposrot";
+	else if (aResponse.GetCommandType() == eGameInteractionCommand_GetMap) command = "getmap";
+	else if (aResponse.GetCommandType() == eGameInteractionCommand_ExecuteScript) command = "exec";
+	if (aResponse.GetOutcome() == eGameInteractionCommandOutcome_MapNotLoaded)
+		return std::string("RESPONSE:") + command + ":no map loaded";
+	if (aResponse.GetType() == eGameInteractionResponse_Pong) return "RESPONSE:ping:pong";
+	if (aResponse.GetType() == eGameInteractionResponse_Position)
+		return FormatPosition("getpos", aResponse.GetPosition());
+	if (aResponse.GetType() == eGameInteractionResponse_Rotation)
+		return FormatRotation("getrot", aResponse.GetRotation());
+	if (aResponse.GetType() == eGameInteractionResponse_PositionRotation)
+		return FormatPosition("getposrot", aResponse.GetPosition()) + ":" +
+			FormatRotationValues(aResponse.GetRotation());
+	if (aResponse.GetType() == eGameInteractionResponse_Map)
+		return "RESPONSE:getmap:" + aResponse.GetMapFile();
+	return "RESPONSE:exec:script executed";
 }
