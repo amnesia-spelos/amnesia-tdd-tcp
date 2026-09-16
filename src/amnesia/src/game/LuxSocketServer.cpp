@@ -79,7 +79,7 @@ void cLuxSocketServer::Update(float afTimeStep)
 	while (mInboundLines.TryPopLine(command)) commands.push_back(command);
 
 	cLuxLegacyGameAdapter gameAdapter;
-	cLegacyGameInteractionProtocol protocol(gameAdapter);
+	cLegacyGameInteractionProtocol protocol(mGateway, gameAdapter);
 	for (std::vector<std::string>::const_iterator command = commands.begin(); command != commands.end(); ++command)
 	{
 		Log("Peer says: %s\n", command->c_str());

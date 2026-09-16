@@ -58,8 +58,9 @@ namespace
 	}
 }
 
-cLegacyGameInteractionProtocol::cLegacyGameInteractionProtocol(iLegacyGameAdapter& aGameAdapter)
-	: mGameAdapter(aGameAdapter)
+cLegacyGameInteractionProtocol::cLegacyGameInteractionProtocol(cGameInteractionGateway& aGateway,
+	iLegacyGameAdapter& aGameAdapter)
+	: mGateway(aGateway), mGameAdapter(aGameAdapter)
 {
 }
 
@@ -94,7 +95,13 @@ std::string cLegacyGameInteractionProtocol::FirstCommandFromReceive(const std::s
 std::string cLegacyGameInteractionProtocol::HandleCommand(const std::string& asCommand)
 {
 	if (asCommand == "ping")
-		return "RESPONSE:ping:pong";
+	{
+		const cGameInteractionCommand command(eGameInteractionCommand_Ping);
+		const cGameInteractionResponse response = mGateway.Handle(command);
+		if (response.GetCommandType() == eGameInteractionCommand_Ping &&
+			response.GetType() == eGameInteractionResponse_Pong)
+			return "RESPONSE:ping:pong";
+	}
 
 	if (asCommand == "getpos")
 		return mGameAdapter.IsMapLoaded() ? FormatPosition("getpos", mGameAdapter.GetPeerState()) : "RESPONSE:getpos:no map loaded";

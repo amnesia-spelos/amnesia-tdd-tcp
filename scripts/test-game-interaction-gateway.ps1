@@ -18,24 +18,22 @@ $developerShell = Join-Path $visualStudio 'Common7\Tools\Microsoft.VisualStudio.
 Import-Module $developerShell
 Enter-VsDevShell -VsInstallPath $visualStudio -SkipAutomaticLocation -DevCmdArguments '-arch=x86 -host_arch=x64' | Out-Null
 
-$testDirectory = Join-Path $repositoryRoot 'tests\game-interaction-framing'
+$testDirectory = Join-Path $repositoryRoot 'tests\game-interaction-gateway'
 $sourceDirectory = Join-Path $repositoryRoot 'src\amnesia\src\game'
 $outputDirectory = Join-Path $repositoryRoot 'artifacts\tests'
 New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
-$executable = Join-Path $outputDirectory 'GameInteractionFramingTests.exe'
+$executable = Join-Path $outputDirectory 'GameInteractionGatewayTests.exe'
 
-& cl /nologo /EHsc /W4 /WX /D_CRT_SECURE_NO_WARNINGS /I $sourceDirectory `
-    (Join-Path $testDirectory 'GameInteractionFramingTests.cpp') `
-	(Join-Path $sourceDirectory 'GameInteractionGateway.cpp') `
-    (Join-Path $sourceDirectory 'LegacyGameInteractionProtocol.cpp') `
+& cl /nologo /EHsc /W4 /WX /I $sourceDirectory `
+    (Join-Path $testDirectory 'GameInteractionGatewayTests.cpp') `
+    (Join-Path $sourceDirectory 'GameInteractionGateway.cpp') `
     /Fo:"$outputDirectory\" `
-    /Fe:$executable `
-    /link ws2_32.lib
+    /Fe:$executable
 if ($LASTEXITCODE -ne 0) {
-    throw "Game Interaction Protocol framing harness compilation failed with exit code $LASTEXITCODE."
+    throw "Game Interaction Protocol gateway harness compilation failed with exit code $LASTEXITCODE."
 }
 
 & $executable
 if ($LASTEXITCODE -ne 0) {
-    throw "Game Interaction Protocol framing tests failed with exit code $LASTEXITCODE."
+    throw "Game Interaction Protocol gateway test failed with exit code $LASTEXITCODE."
 }

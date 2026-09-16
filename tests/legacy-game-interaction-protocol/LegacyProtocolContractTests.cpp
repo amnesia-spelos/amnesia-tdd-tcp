@@ -100,7 +100,8 @@ int main(int argc, char** argv)
 		adapter.mState.mfYawRadians = rotation[0];
 		adapter.mState.mfPitchRadians = rotation[1];
 
-		cLegacyGameInteractionProtocol protocol(adapter);
+		cGameInteractionGateway gateway;
+		cLegacyGameInteractionProtocol protocol(gateway, adapter);
 		const std::string kind = ReadString(line, "kind");
 		std::string message;
 		if (kind == "greeting") message = cLegacyGameInteractionProtocol::Greeting();

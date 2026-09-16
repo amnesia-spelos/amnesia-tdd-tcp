@@ -1,6 +1,8 @@
 #ifndef LEGACY_GAME_INTERACTION_PROTOCOL_H
 #define LEGACY_GAME_INTERACTION_PROTOCOL_H
 
+#include "GameInteractionGateway.h"
+
 #include <string>
 
 class cGameInteractionLineBuffer
@@ -40,7 +42,7 @@ public:
 class cLegacyGameInteractionProtocol
 {
 public:
-	explicit cLegacyGameInteractionProtocol(iLegacyGameAdapter& aGameAdapter);
+	cLegacyGameInteractionProtocol(cGameInteractionGateway& aGateway, iLegacyGameAdapter& aGameAdapter);
 
 	static const char* Greeting();
 	static std::string MapChangedEvent(const std::string& asMapFile);
@@ -51,6 +53,7 @@ public:
 	std::string HandleCommand(const std::string& asCommand);
 
 private:
+	cGameInteractionGateway& mGateway;
 	iLegacyGameAdapter& mGameAdapter;
 };
 

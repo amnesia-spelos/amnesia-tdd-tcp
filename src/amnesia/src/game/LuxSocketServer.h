@@ -2,6 +2,7 @@
 #define LUX_SOCKET_SERVER_H
 
 #include "LuxBase.h"
+#include "GameInteractionGateway.h"
 #include "GameInteractionTransport.h"
 #include "LegacyGameInteractionProtocol.h"
 
@@ -17,6 +18,7 @@ public:
 	const tString& GetHost() const { return mHost; }
 	int GetPort() const { return mPort; }
 private:
+	cGameInteractionGateway mGateway;
 	cGameInteractionTransport mTransport;
 	cGameInteractionLineBuffer mInboundLines;
 	
