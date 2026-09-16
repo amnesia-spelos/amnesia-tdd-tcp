@@ -496,6 +496,19 @@ void cLuxMainMenu::OnPostRender(float afFrameTime)
 	//mpViewport->GetRenderSettings()->mbLog->mbLog = true;
 }
 
+bool cLuxMainMenu::HasConflictingChatInputOwner() const
+{
+	if(mpGuiSet->PopUpIsActive()) return true;
+	if(dynamic_cast<cWidgetTextBox*>(mpGuiSet->GetFocusedWidget())) return true;
+	if(mCurrentWindow == eLuxMainMenuWindow_KeyConfig)
+	{
+		cLuxMainMenu_KeyConfig* pKeyConfig =
+			static_cast<cLuxMainMenu_KeyConfig*>(mvWindows[eLuxMainMenuWindow_KeyConfig]);
+		return pKeyConfig->GetWaitingInput() != NULL;
+	}
+	return false;
+}
+
 //-----------------------------------------------------------------------
 
 void cLuxMainMenu::SetWindowActive(eLuxMainMenuWindow aWindow)

@@ -142,6 +142,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="ChatModel.cpp" />
+    <ClCompile Include="LuxChatHandler.cpp" />
     <ClCompile Include="GameInteractionGateway.cpp" />
     <ClCompile Include="LegacyGameInteractionProtocol.cpp" />
     <ClCompile Include="GameInteractionTransport.cpp" />
@@ -257,6 +258,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ChatModel.h" />
+    <ClInclude Include="LuxChatHandler.h" />
     <ClInclude Include="GameInteractionGateway.h" />
     <ClInclude Include="LegacyGameInteractionProtocol.h" />
     <ClInclude Include="GameInteractionTransport.h" />

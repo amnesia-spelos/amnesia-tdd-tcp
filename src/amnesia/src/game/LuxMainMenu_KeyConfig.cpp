@@ -36,7 +36,9 @@ cLuxInputMenuEntry::cLuxInputMenuEntry(cLuxMainMenu_KeyConfig* apWindow, cLuxAct
 
 	mbChanged = false;
 
-	mpLAction = mpWindow->mpGuiSet->CreateWidgetLabel(avPos, -1, kTranslate("Actions", apAction->msName), apParent);
+	tWString sActionName = kTranslate("Actions", apAction->msName);
+	if(sActionName.empty() && apAction->msName == "Chat") sActionName = _W("Chat");
+	mpLAction = mpWindow->mpGuiSet->CreateWidgetLabel(avPos, -1, sActionName, apParent);
 	mpLAction->AddCallback(eGuiMessage_MouseEnter, this, kGuiCallback(InputEntryMouseEnter));
 	mpLAction->AddCallback(eGuiMessage_MouseLeave, this, kGuiCallback(InputEntryMouseLeave));
 	mpLAction->AddCallback(eGuiMessage_GetUINavFocus, this, kGuiCallback(InputEntryMouseEnter));

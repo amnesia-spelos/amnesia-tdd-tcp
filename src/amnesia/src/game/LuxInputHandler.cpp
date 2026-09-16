@@ -36,6 +36,7 @@
 #include "LuxEffectHandler.h"
 #include "LuxConfigHandler.h"
 #include "LuxLoadScreenHandler.h"
+#include "LuxChatHandler.h"
 
 #include "LuxDebugHandler.h"
 
@@ -85,6 +86,7 @@ static cLuxAction gvLuxActions[] =
 	cLuxAction("QuestLog",eLuxAction_QuestLog,		true, eLuxActionCategory_Misc),
 	cLuxAction("RecentText", eLuxAction_RecentText, true, eLuxActionCategory_Misc),
 	cLuxAction("CrosshairToggle", eLuxAction_CrosshairToggle, true, eLuxActionCategory_Misc),
+	cLuxAction("Chat", eLuxAction_Chat, true, eLuxActionCategory_Misc),
 	
 	cLuxAction("Forward",eLuxAction_Forward,	true, eLuxActionCategory_Movement),
 	cLuxAction("Backward",eLuxAction_Backward,	true, eLuxActionCategory_Movement),
@@ -194,6 +196,7 @@ static cLuxInput gvLuxInputs[] =
 	cLuxInput("Keyboard", eKey_M, eLuxAction_QuestLog),
 	cLuxInput("Keyboard", eKey_N, eLuxAction_RecentText),
 	cLuxInput("Keyboard", eKey_X, eLuxAction_CrosshairToggle),
+	cLuxInput("Keyboard", eKey_T, eLuxAction_Chat),
 
 	cLuxInput("Keyboard", eKey_W, eLuxAction_Forward),
 	cLuxInput("Keyboard", eKey_S, eLuxAction_Backward),
@@ -486,6 +489,7 @@ void cLuxInputHandler::Update(float afTimeStep)
 	///////////////////////////////////
 	// Update input for current state
 	UpdateGlobalInput();
+	if(gpBase->mpChatHandler && gpBase->mpChatHandler->HandleInput(mpInput)) return;
 
 	switch(mState)
 	{
@@ -1434,6 +1438,7 @@ void cLuxInputHandler::UpdateLoadScreenInput()
 
 bool cLuxInputHandler::CurrentStateSendsInputToGui()
 {
+	if(gpBase->mpChatHandler && gpBase->mpChatHandler->IsComposerOpen()) return true;
 	switch(mState)
 	{
 	case eLuxInputState_Inventory:
