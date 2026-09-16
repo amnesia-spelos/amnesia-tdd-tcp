@@ -34,6 +34,12 @@ cLuxChatHandler::~cLuxChatHandler()
 {
 }
 
+bool cLuxChatHandler::DisplayChatEntry(const cChatEntry& aEntry)
+{
+	return mModel.AddEntry(mModel.GetContext(), aEntry.GetAuthor(), aEntry.GetMessage()) ==
+		eChatEntryValidation_Valid;
+}
+
 void cLuxChatHandler::OnStart()
 {
 	cGui* pGui = gpBase->mpEngine->GetGui();

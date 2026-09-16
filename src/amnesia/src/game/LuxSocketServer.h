@@ -2,9 +2,10 @@
 #define LUX_SOCKET_SERVER_H
 
 #include "LuxBase.h"
+#include "LuxChatHandler.h"
 #include "GameInteractionGateway.h"
 
-class cLuxSocketServer : public iLuxUpdateable
+class cLuxSocketServer : public iLuxUpdateable, public iLuxChatSubmissionSink
 {
 public:
     cLuxSocketServer();
@@ -12,6 +13,7 @@ public:
 
     void Update(float afTimeStep);
 	void PublishEvent(const cGameInteractionEvent& aEvent);
+	virtual void ReportLocalChatEntry(const cChatEntry& aEntry);
 	void SetConnectionSettings(const tString& host, int port);
 	const tString& GetHost() const { return mHost; }
 	int GetPort() const { return mPort; }

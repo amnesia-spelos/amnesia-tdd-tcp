@@ -13,3 +13,19 @@
 {"name":"unknown Command","kind":"command","request_wire":"dance\n","map_loaded":true,"expected_wire":"WARNING:Unknown command\n"}
 {"name":"map-change Event","kind":"map_changed_event","map_file":"maps/main/level02.map","expected_wire":"EVENT:MapChanged:maps/main/level02.map\n"}
 {"name":"script-call observation is not an Event","kind":"script_call_observation","script_call":"OnCollide(\"Player\", \"Door\", 1)","expected_wire":"SCRIPT_CALL:OnCollide(\"Player\", \"Door\", 1)\n"}
+{"name":"chat Command keeps message delimiters","kind":"command","request_wire":"chat:Alice:hello: from elsewhere\n","expected_author":"Alice","expected_message":"hello: from elsewhere","expected_wire":"RESPONSE:chat:message displayed\n"}
+{"name":"first author delimiter wins","kind":"command","request_wire":"chat:A:lice:hello\n","expected_author":"A","expected_message":"lice:hello","expected_wire":"RESPONSE:chat:message displayed\n"}
+{"name":"chat Command accepts Unicode","kind":"command","request_wire":"chat:Žofie:ahoj 👋\n","expected_author":"Žofie","expected_message":"ahoj 👋","expected_wire":"RESPONSE:chat:message displayed\n"}
+{"name":"chat Command trims fields before display","kind":"command","request_wire":"chat: Alice : hello \n","expected_author":"Alice","expected_message":"hello","expected_wire":"RESPONSE:chat:message displayed\n"}
+{"name":"empty Chat Author is invalid","kind":"command","request_wire":"chat: :hello\n","expected_wire":"RESPONSE:chat:invalid author\n"}
+{"name":"Chat Author scalar limit is enforced","kind":"command","request_wire":"chat:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:hello\n","expected_wire":"RESPONSE:chat:invalid author\n"}
+{"name":"empty chat message is invalid","kind":"command","request_wire":"chat:Alice: \n","expected_wire":"RESPONSE:chat:invalid message\n"}
+{"name":"chat message scalar limit is enforced","kind":"command","request_wire":"chat:Alice:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n","expected_wire":"RESPONSE:chat:invalid message\n"}
+{"name":"malformed UTF-8 Chat Author is invalid","kind":"command","request_hex":"636861743ac3283a68656c6c6f0a","expected_wire":"RESPONSE:chat:invalid author\n"}
+{"name":"malformed UTF-8 chat message is invalid","kind":"command","request_hex":"636861743a416c6963653ac3280a","expected_wire":"RESPONSE:chat:invalid message\n"}
+{"name":"chat display is unavailable","kind":"command","request_wire":"chat:Alice:hello\n","chat_unavailable":true,"expected_wire":"RESPONSE:chat:unavailable\n"}
+{"name":"fragmented chat Command displays once","kind":"fragmented_command","request_wire_1":"chat:Alice:hel","request_wire_2":"lo\n","expected_author":"Alice","expected_message":"hello","expected_wire":"RESPONSE:chat:message displayed\n"}
+{"name":"coalesced chat Commands retain order","kind":"coalesced_commands","request_wire":"chat:Alice:first\nchat:Bob:second\n","expected_wire":"RESPONSE:chat:message displayed\nRESPONSE:chat:message displayed\n"}
+{"name":"local submission Event","kind":"local_chat_event","author":"Daniel","message":"ahoj: všichni 👋","expected_wire":"EVENT:CHAT:Daniel:ahoj: všichni 👋\n"}
+{"name":"local submission without Peer is not replayed","kind":"local_chat_event_without_peer","expected_wire":"Hello, from Amnesia: The Dark Descent!\n"}
+{"name":"disconnect discards partial Command and no-Peer Event","kind":"disconnect_regression","request_wire_1":"chat:Alice:discard","request_wire_2":"ed\n","expected_no_display":true,"expected_wire":"Hello, from Amnesia: The Dark Descent!\nWARNING:Unknown command\n"}

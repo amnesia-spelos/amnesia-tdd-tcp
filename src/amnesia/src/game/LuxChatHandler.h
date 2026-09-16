@@ -25,6 +25,7 @@ public:
 	bool HandleInput(cInput* apInput);
 	bool IsComposerOpen() const { return mModel.IsComposerOpen(); }
 	void SetSubmissionSink(iLuxChatSubmissionSink* apSink) { mpSubmissionSink = apSink; }
+	bool DisplayChatEntry(const cChatEntry& aEntry);
 
 private:
 	bool CanOpenComposer() const;

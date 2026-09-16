@@ -9,6 +9,10 @@
 #include <sstream>
 #include <string>
 
+#ifdef GetMessage
+#undef GetMessage
+#endif
+
 namespace
 {
 	std::string ReadString(const std::string& line, const std::string& key)
@@ -41,6 +45,31 @@ namespace
 		return line.find("\"" + key + "\":true") != std::string::npos;
 	}
 
+	std::wstring Utf8ToWide(const std::string& text)
+	{
+		if (text.empty()) return std::wstring();
+		const int count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(),
+			static_cast<int>(text.size()), NULL, 0);
+		std::wstring result(count, L'\0');
+		if (count > 0) MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(),
+			static_cast<int>(text.size()), &result[0], count);
+		return result;
+	}
+
+	std::string ReadHex(const std::string& line, const std::string& key)
+	{
+		const std::string hex = ReadString(line, key);
+		std::string bytes;
+		for (std::string::size_type index = 0; index + 1 < hex.size(); index += 2)
+		{
+			unsigned int value = 0;
+			std::stringstream pair(hex.substr(index, 2));
+			pair >> std::hex >> value;
+			bytes += static_cast<char>(value);
+		}
+		return bytes;
+	}
+
 	void ReadNumbers(const std::string& line, const std::string& key, float* values, int count)
 	{
 		const std::string marker = "\"" + key + "\":[";
@@ -62,12 +91,24 @@ namespace
 		cGameInteractionRotation mRotation;
 		std::string msMapFile;
 		std::string mExecutedScript;
+		bool mbChatAvailable;
+		int mlDisplayedCount;
+		std::wstring msDisplayedAuthor;
+		std::wstring msDisplayedMessage;
 
 		virtual bool IsMapLoaded() const { return mbMapLoaded; }
 		virtual cGameInteractionPosition GetPosition() const { return mPosition; }
 		virtual cGameInteractionRotation GetRotation() const { return mRotation; }
 		virtual std::string GetMapFile() const { return msMapFile; }
 		virtual void RunScript(const std::string& asScript) { mExecutedScript = asScript; }
+		virtual bool DisplayChatEntry(const cChatEntry& entry)
+		{
+			if (!mbChatAvailable) return false;
+			++mlDisplayedCount;
+			msDisplayedAuthor = entry.GetAuthor();
+			msDisplayedMessage = entry.GetMessage();
+			return true;
+		}
 	};
 
 	SOCKET Connect(cGameInteractionGateway& gateway, cFixtureGameAdapter& adapter)
@@ -119,6 +160,8 @@ int main(int argc, char** argv)
 		++cases;
 		cFixtureGameAdapter adapter;
 		adapter.mbMapLoaded = ReadBool(line, "map_loaded");
+		adapter.mbChatAvailable = !ReadBool(line, "chat_unavailable");
+		adapter.mlDisplayedCount = 0;
 		adapter.msMapFile = ReadString(line, "map_file");
 		float position[3] = { 0.0f, 0.0f, 0.0f };
 		float rotation[2] = { 0.0f, 0.0f };
@@ -143,13 +186,57 @@ int main(int argc, char** argv)
 		const std::string kind = ReadString(line, "kind");
 		std::string actual;
 		if (kind == "greeting") actual = greeting;
-		else if (kind == "command")
+		else if (kind == "command" || kind == "fragmented_command" || kind == "coalesced_commands")
 		{
-			const std::string request = ReadString(line, "request_wire");
+			std::string request = ReadString(line, "request_wire");
+			if (request.empty()) request = ReadHex(line, "request_hex");
+			const std::string first = ReadString(line, "request_wire_1");
+			const std::string second = ReadString(line, "request_wire_2");
+			if (!first.empty())
+			{
+				send(peer, first.data(), static_cast<int>(first.size()), 0);
+				gateway.Update(adapter);
+			}
+			if (!second.empty()) request = second;
 			send(peer, request.data(), static_cast<int>(request.size()), 0);
 			gateway.Update(adapter);
 			gateway.Update(adapter);
 			actual = Receive(peer);
+		}
+		else if (kind == "local_chat_event")
+		{
+			gateway.Report(cGameInteractionEvent(eGameInteractionEvent_LocalChatSubmitted,
+				Utf8ToWide(ReadString(line, "author")), Utf8ToWide(ReadString(line, "message"))));
+			gateway.Update(adapter);
+			actual = Receive(peer);
+		}
+		else if (kind == "local_chat_event_without_peer")
+		{
+			closesocket(peer);
+			gateway.Shutdown();
+			gateway.Report(cGameInteractionEvent(eGameInteractionEvent_LocalChatSubmitted,
+				L"Daniel", L"discard me"));
+			gateway.Listen("127.0.0.1", 0);
+			peer = Connect(gateway, adapter);
+			actual = Receive(peer);
+		}
+		else if (kind == "disconnect_regression")
+		{
+			const std::string partial = ReadString(line, "request_wire_1");
+			send(peer, partial.data(), static_cast<int>(partial.size()), 0);
+			gateway.Update(adapter);
+			closesocket(peer);
+			for (int update = 0; update < 50 && gateway.GetDiagnostic().empty(); ++update)
+				gateway.Update(adapter);
+			gateway.Report(cGameInteractionEvent(eGameInteractionEvent_LocalChatSubmitted,
+				L"Daniel", L"discard me"));
+			peer = Connect(gateway, adapter);
+			actual = Receive(peer);
+			const std::string suffix = ReadString(line, "request_wire_2");
+			send(peer, suffix.data(), static_cast<int>(suffix.size()), 0);
+			gateway.Update(adapter);
+			gateway.Update(adapter);
+			actual += Receive(peer);
 		}
 		else if (kind == "map_changed_event")
 		{
@@ -183,6 +270,20 @@ int main(int argc, char** argv)
 		if (!expectedScript.empty() && adapter.mExecutedScript != expectedScript)
 		{
 			std::cerr << "FAIL: " << ReadString(line, "name") << " did not execute expected script\n";
+			++failures;
+		}
+		const std::string expectedAuthor = ReadString(line, "expected_author");
+		const std::string expectedMessage = ReadString(line, "expected_message");
+		if ((!expectedAuthor.empty() || !expectedMessage.empty()) &&
+			(adapter.mlDisplayedCount != 1 || adapter.msDisplayedAuthor != Utf8ToWide(expectedAuthor) ||
+			 adapter.msDisplayedMessage != Utf8ToWide(expectedMessage)))
+		{
+			std::cerr << "FAIL: " << ReadString(line, "name") << " did not display expected Chat Entry\n";
+			++failures;
+		}
+		if (ReadBool(line, "expected_no_display") && adapter.mlDisplayedCount != 0)
+		{
+			std::cerr << "FAIL: " << ReadString(line, "name") << " displayed a partial Chat Entry\n";
 			++failures;
 		}
 	}

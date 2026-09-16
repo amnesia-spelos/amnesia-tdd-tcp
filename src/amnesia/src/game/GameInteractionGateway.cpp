@@ -10,15 +10,27 @@ cGameInteractionEvent::cGameInteractionEvent(eGameInteractionEventType aType,
 {
 }
 
+cGameInteractionEvent::cGameInteractionEvent(eGameInteractionEventType aType,
+	const std::wstring& asChatAuthor, const std::wstring& asChatMessage)
+	: mType(aType), msChatAuthor(asChatAuthor), msChatMessage(asChatMessage)
+{
+}
+
 cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
 	const std::string& asData)
 	: mType(aType), msData(asData)
 {
 }
 
+cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
+	const std::wstring& asChatAuthor, const std::wstring& asChatMessage)
+	: mType(aType), msChatAuthor(asChatAuthor), msChatMessage(asChatMessage)
+{
+}
+
 eGameInteractionCommandClassification cGameInteractionCommand::GetClassification() const
 {
-	return mType == eGameInteractionCommand_ExecuteScript ?
+	return mType == eGameInteractionCommand_ExecuteScript || mType == eGameInteractionCommand_Chat ?
 		eGameInteractionCommandClassification_StateChanging :
 		eGameInteractionCommandClassification_Observational;
 }
@@ -81,6 +93,21 @@ namespace
 			if (response.GetOutcome() == eGameInteractionCommandOutcome_Success)
 				aGameAdapter.RunScript(aCommand.GetData());
 			return response;
+		}
+		case eGameInteractionCommand_Chat:
+		{
+			cChatEntry entry;
+			const eChatEntryValidation validation = cChatModel::TryCreateEntry(
+				aCommand.GetChatAuthor(), aCommand.GetChatMessage(), entry);
+			if (validation == eChatEntryValidation_InvalidAuthor)
+				return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_ChatDisplayed,
+					eGameInteractionCommandOutcome_InvalidAuthor);
+			if (validation == eChatEntryValidation_InvalidMessage)
+				return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_ChatDisplayed,
+					eGameInteractionCommandOutcome_InvalidMessage);
+			return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_ChatDisplayed,
+				aGameAdapter.DisplayChatEntry(entry) ? eGameInteractionCommandOutcome_Success :
+					eGameInteractionCommandOutcome_Unavailable);
 		}
 		default:
 			return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_Pong);
