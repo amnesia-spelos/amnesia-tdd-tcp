@@ -14,13 +14,17 @@ namespace
 			return gpBase->mpMapHandler && gpBase->mpMapHandler->GetCurrentMap();
 		}
 
-		virtual cLegacyPeerState GetPeerState() const
+		virtual cGameInteractionPosition GetPosition() const
 		{
 			iCharacterBody* pCharBody = gpBase->mpPlayer->GetCharacterBody();
 			const cVector3f position = pCharBody->GetFeetPosition();
-			cLegacyPeerState state = { true, position.x, position.y, position.z,
-				pCharBody->GetYaw(), pCharBody->GetPitch(), "" };
-			return state;
+			return cGameInteractionPosition(position.x, position.y, position.z);
+		}
+
+		virtual cGameInteractionRotation GetRotation() const
+		{
+			iCharacterBody* pCharBody = gpBase->mpPlayer->GetCharacterBody();
+			return cGameInteractionRotation(pCharBody->GetYaw(), pCharBody->GetPitch());
 		}
 
 		virtual std::string GetMapFile() const

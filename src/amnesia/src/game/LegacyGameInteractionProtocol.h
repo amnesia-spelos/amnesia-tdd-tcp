@@ -18,24 +18,10 @@ private:
 	std::string::size_type mSearchStart;
 };
 
-struct cLegacyPeerState
-{
-	bool mbMapLoaded;
-	float mfPositionX;
-	float mfPositionY;
-	float mfPositionZ;
-	float mfYawRadians;
-	float mfPitchRadians;
-	std::string msMapFile;
-};
-
-class iLegacyGameAdapter
+class iLegacyGameAdapter : public iGameInteractionGameAdapter
 {
 public:
 	virtual ~iLegacyGameAdapter() {}
-	virtual bool IsMapLoaded() const = 0;
-	virtual cLegacyPeerState GetPeerState() const = 0;
-	virtual std::string GetMapFile() const = 0;
 	virtual void RunScript(const std::string& asScript) = 0;
 };
 

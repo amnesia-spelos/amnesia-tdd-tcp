@@ -54,12 +54,16 @@ namespace
 	class cFixtureGameAdapter : public iLegacyGameAdapter
 	{
 	public:
-		cLegacyPeerState mState;
+		bool mbMapLoaded;
+		cGameInteractionPosition mPosition;
+		cGameInteractionRotation mRotation;
+		std::string msMapFile;
 		std::string mExecutedScript;
 
-		virtual bool IsMapLoaded() const { return mState.mbMapLoaded; }
-		virtual cLegacyPeerState GetPeerState() const { return mState; }
-		virtual std::string GetMapFile() const { return mState.msMapFile; }
+		virtual bool IsMapLoaded() const { return mbMapLoaded; }
+		virtual cGameInteractionPosition GetPosition() const { return mPosition; }
+		virtual cGameInteractionRotation GetRotation() const { return mRotation; }
+		virtual std::string GetMapFile() const { return msMapFile; }
 		virtual void RunScript(const std::string& asScript) { mExecutedScript = asScript; }
 	};
 }
@@ -86,19 +90,14 @@ int main(int argc, char** argv)
 	{
 		++cases;
 		cFixtureGameAdapter adapter;
-		adapter.mState.mbMapLoaded = ReadBool(line, "map_loaded");
-		adapter.mState.mfPositionX = adapter.mState.mfPositionY = adapter.mState.mfPositionZ = 0.0f;
-		adapter.mState.mfYawRadians = adapter.mState.mfPitchRadians = 0.0f;
-		adapter.mState.msMapFile = ReadString(line, "map_file");
+		adapter.mbMapLoaded = ReadBool(line, "map_loaded");
+		adapter.msMapFile = ReadString(line, "map_file");
 		float position[3] = { 0.0f, 0.0f, 0.0f };
 		float rotation[2] = { 0.0f, 0.0f };
 		ReadNumbers(line, "position", position, 3);
 		ReadNumbers(line, "rotation_radians", rotation, 2);
-		adapter.mState.mfPositionX = position[0];
-		adapter.mState.mfPositionY = position[1];
-		adapter.mState.mfPositionZ = position[2];
-		adapter.mState.mfYawRadians = rotation[0];
-		adapter.mState.mfPitchRadians = rotation[1];
+		adapter.mPosition = cGameInteractionPosition(position[0], position[1], position[2]);
+		adapter.mRotation = cGameInteractionRotation(rotation[0], rotation[1]);
 
 		cGameInteractionGateway gateway;
 		cLegacyGameInteractionProtocol protocol(gateway, adapter);
@@ -107,7 +106,7 @@ int main(int argc, char** argv)
 		if (kind == "greeting") message = cLegacyGameInteractionProtocol::Greeting();
 		else if (kind == "command") message = protocol.HandleCommand(
 			cLegacyGameInteractionProtocol::FirstCommandFromReceive(ReadString(line, "request_wire")));
-		else if (kind == "map_changed_event") message = cLegacyGameInteractionProtocol::MapChangedEvent(adapter.mState.msMapFile);
+		else if (kind == "map_changed_event") message = cLegacyGameInteractionProtocol::MapChangedEvent(adapter.msMapFile);
 		else if (kind == "script_call_observation") message = cLegacyGameInteractionProtocol::ScriptCallObservation(ReadString(line, "script_call"));
 		else
 		{

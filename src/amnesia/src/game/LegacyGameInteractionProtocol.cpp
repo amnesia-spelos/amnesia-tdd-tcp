@@ -39,22 +39,41 @@ namespace
 {
 	const float kRadiansToDegrees = 180.0f / 3.14159265f;
 
-	std::string FormatPosition(const char* apCommand, const cLegacyPeerState& aState)
+	std::string FormatPosition(const char* apCommand, const cGameInteractionPosition& aPosition)
 	{
 		char response[128];
 		sprintf(response, "RESPONSE:%s:%.2f, %.2f, %.2f", apCommand,
-			aState.mfPositionX, aState.mfPositionY, aState.mfPositionZ);
+			aPosition.mfX, aPosition.mfY, aPosition.mfZ);
 		return response;
 	}
 
-	std::string FormatRotation(const char* apCommand, const cLegacyPeerState& aState)
+	std::string FormatRotation(const char* apCommand, const cGameInteractionRotation& aRotation)
 	{
 		char response[128];
 		sprintf(response, "RESPONSE:%s:%.2f, %.2f, %.2f", apCommand,
-			aState.mfYawRadians * kRadiansToDegrees,
-			aState.mfPitchRadians * kRadiansToDegrees,
+			aRotation.mfYawRadians * kRadiansToDegrees,
+			aRotation.mfPitchRadians * kRadiansToDegrees,
 			0.0f);
 		return response;
+	}
+
+	std::string FormatRotationValues(const cGameInteractionRotation& aRotation)
+	{
+		char response[96];
+		sprintf(response, "%.2f, %.2f, %.2f",
+			aRotation.mfYawRadians * kRadiansToDegrees,
+			aRotation.mfPitchRadians * kRadiansToDegrees,
+			0.0f);
+		return response;
+	}
+
+	eGameInteractionCommandType CommandTypeFor(const std::string& asCommand)
+	{
+		if (asCommand == "getpos") return eGameInteractionCommand_GetPosition;
+		if (asCommand == "getrot") return eGameInteractionCommand_GetRotation;
+		if (asCommand == "getposrot") return eGameInteractionCommand_GetPositionRotation;
+		if (asCommand == "getmap") return eGameInteractionCommand_GetMap;
+		return eGameInteractionCommand_Ping;
 	}
 }
 
@@ -94,34 +113,26 @@ std::string cLegacyGameInteractionProtocol::FirstCommandFromReceive(const std::s
 
 std::string cLegacyGameInteractionProtocol::HandleCommand(const std::string& asCommand)
 {
-	if (asCommand == "ping")
+	if (asCommand == "ping" || asCommand == "getpos" || asCommand == "getrot" ||
+		asCommand == "getposrot" || asCommand == "getmap")
 	{
-		const cGameInteractionCommand command(eGameInteractionCommand_Ping);
-		const cGameInteractionResponse response = mGateway.Handle(command);
+		const cGameInteractionCommand command(CommandTypeFor(asCommand));
+		const cGameInteractionResponse response = mGateway.Handle(command, mGameAdapter);
+		if (response.GetOutcome() == eGameInteractionCommandOutcome_MapNotLoaded)
+			return "RESPONSE:" + asCommand + ":no map loaded";
 		if (response.GetCommandType() == eGameInteractionCommand_Ping &&
 			response.GetType() == eGameInteractionResponse_Pong)
 			return "RESPONSE:ping:pong";
+		if (response.GetType() == eGameInteractionResponse_Position)
+			return FormatPosition("getpos", response.GetPosition());
+		if (response.GetType() == eGameInteractionResponse_Rotation)
+			return FormatRotation("getrot", response.GetRotation());
+		if (response.GetType() == eGameInteractionResponse_PositionRotation)
+			return FormatPosition("getposrot", response.GetPosition()) + ":" +
+				FormatRotationValues(response.GetRotation());
+		if (response.GetType() == eGameInteractionResponse_Map)
+			return "RESPONSE:getmap:" + response.GetMapFile();
 	}
-
-	if (asCommand == "getpos")
-		return mGameAdapter.IsMapLoaded() ? FormatPosition("getpos", mGameAdapter.GetPeerState()) : "RESPONSE:getpos:no map loaded";
-	if (asCommand == "getrot")
-		return mGameAdapter.IsMapLoaded() ? FormatRotation("getrot", mGameAdapter.GetPeerState()) : "RESPONSE:getrot:no map loaded";
-	if (asCommand == "getposrot")
-	{
-		if (!mGameAdapter.IsMapLoaded())
-			return "RESPONSE:getposrot:no map loaded";
-		const cLegacyPeerState state = mGameAdapter.GetPeerState();
-		char response[160];
-		sprintf(response, "RESPONSE:getposrot:%.2f, %.2f, %.2f:%.2f, %.2f, %.2f",
-			state.mfPositionX, state.mfPositionY, state.mfPositionZ,
-			state.mfYawRadians * kRadiansToDegrees,
-			state.mfPitchRadians * kRadiansToDegrees,
-			0.0f);
-		return response;
-	}
-	if (asCommand == "getmap")
-		return mGameAdapter.IsMapLoaded() ? "RESPONSE:getmap:" + mGameAdapter.GetMapFile() : "RESPONSE:getmap:no map loaded";
 	if (asCommand.compare(0, 5, "exec:") == 0)
 	{
 		if (!mGameAdapter.IsMapLoaded())
