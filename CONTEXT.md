@@ -71,3 +71,19 @@ _Avoid_: Initial state, full Event history
 **State Update**:
 A replaceable report of currently exposed game state, for which a newer value supersedes an undelivered older value.
 _Avoid_: Event, update event
+
+**Chat Author**:
+Display text attributing a Chat Entry, without asserting an authenticated player identity.
+_Avoid_: Username, user identity
+
+**Chat Entry**:
+An ephemeral Chat Author and message pair shown in the game's chat log.
+_Avoid_: Stored message, chat history
+
+**Chat Log**:
+The bounded, transient view of recent Chat Entries for the current menu or game context.
+_Avoid_: Chat history, message archive
+
+**Chat Composer**:
+The temporary input mode in which the local player writes a Chat Entry while ordinary game controls are suppressed without pausing the game.
+_Avoid_: Chat box, console
