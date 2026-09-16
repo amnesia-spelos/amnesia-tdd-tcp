@@ -40,8 +40,6 @@ cLuxSocketServer::cLuxSocketServer()
 {
 	mHost = "127.0.0.1";
 	mPort = 5150;
-	mListenSocket = INVALID_SOCKET;
-    mClientSocket = INVALID_SOCKET;
 
 	InitSocket();
     Log("cLuxSocketServer created!\n");
@@ -49,121 +47,52 @@ cLuxSocketServer::cLuxSocketServer()
 
 bool cLuxSocketServer::InitSocket()
 {
-    WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
-    {
-        Log("WSAStartup failed\n");
-        return false;
-    }
-
-    mListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (mListenSocket == INVALID_SOCKET)
-    {
-        Log("Socket creation failed\n");
-        WSACleanup();
-        return false;
-    }
-
-    u_long nonBlocking = 1;
-    ioctlsocket(mListenSocket, FIONBIO, &nonBlocking);
-
-    sockaddr_in service;
-    service.sin_family = AF_INET;
-	service.sin_addr.s_addr = inet_addr(mHost.c_str());
-	service.sin_port = htons(mPort);
-
-    if (bind(mListenSocket, (SOCKADDR*)&service, sizeof(service)) == SOCKET_ERROR)
-    {
-        Log("Bind failed\n");
-        closesocket(mListenSocket);
-        WSACleanup();
-        return false;
-    }
-
-    if (listen(mListenSocket, SOMAXCONN) == SOCKET_ERROR)
-    {
-        Log("Listen failed\n");
-        closesocket(mListenSocket);
-        WSACleanup();
-        return false;
-    }
-
-    Log("Socket listening on %s:%d\n", mHost.c_str(), mPort);
-    return true;
-}
-
-void cLuxSocketServer::ShutdownSocket()
-{
-    if (mClientSocket != INVALID_SOCKET)
-    {
-        closesocket(mClientSocket);
-        mClientSocket = INVALID_SOCKET;
-    }
-
-    if (mListenSocket != INVALID_SOCKET)
-    {
-        closesocket(mListenSocket);
-        mListenSocket = INVALID_SOCKET;
-    }
-
-    WSACleanup();
+	if (!mTransport.Listen(mHost, mPort))
+	{
+		Log("Game Interaction Protocol listener failed: %s\n", mTransport.GetDiagnostic().c_str());
+		return false;
+	}
+	Log("Socket listening on %s:%d\n", mHost.c_str(), mPort);
+	return true;
 }
 
 void cLuxSocketServer::Update(float afTimeStep)
 {
-	// Accept client if not already connected
-    if (mClientSocket == INVALID_SOCKET)
-    {
-        sockaddr_in clientAddr;
-        int addrLen = sizeof(clientAddr);
-        SOCKET clientSocket = accept(mListenSocket, (SOCKADDR*)&clientAddr, &addrLen);
+	std::vector<std::string> receivedBytes;
+	const eGameInteractionTransportEvent event = mTransport.Update(receivedBytes);
+	if (event == eGameInteractionTransportEvent_PeerConnected)
+	{
+		Log("Peer connected!\n");
+		mInboundLines.Clear();
+		SendMessage(cLegacyGameInteractionProtocol::Greeting());
+	}
+	else if (event == eGameInteractionTransportEvent_PeerDisconnected)
+	{
+		mInboundLines.Clear();
+		Log("Peer disconnected: %s\n", mTransport.GetDiagnostic().c_str());
+	}
 
-        if (clientSocket != INVALID_SOCKET)
-        {
-            Log("Client connected!\n");
-            mClientSocket = clientSocket;
-			mInboundLines.Clear();
+	for (std::vector<std::string>::const_iterator bytes = receivedBytes.begin(); bytes != receivedBytes.end(); ++bytes)
+		mInboundLines.Append(bytes->data(), bytes->size());
+	std::vector<std::string> commands;
+	std::string command;
+	while (mInboundLines.TryPopLine(command)) commands.push_back(command);
 
-            SendMessage(cLegacyGameInteractionProtocol::Greeting());
-        }
-    }
-
-    // Handle incoming data
-    if (mClientSocket != INVALID_SOCKET)
-    {
-        char buffer[8192];
-        int bytesReceived = recv(mClientSocket, buffer, sizeof(buffer), 0);
-
-        if (bytesReceived > 0)
-        {
-			mInboundLines.Append(buffer, bytesReceived);
-			cLuxLegacyGameAdapter gameAdapter;
-			cLegacyGameInteractionProtocol protocol(gameAdapter);
-			std::string command;
-			while (mInboundLines.TryPopLine(command))
-			{
-				Log("Client says: %s\n", command.c_str());
-				SendMessage(protocol.HandleCommand(command));
-			}
-        }
-        else if (bytesReceived == 0 || (bytesReceived == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK))
-        {
-            Log("Client disconnected.\n");
-            closesocket(mClientSocket);
-            mClientSocket = INVALID_SOCKET;
-			mInboundLines.Clear();
-        }
-    }
+	cLuxLegacyGameAdapter gameAdapter;
+	cLegacyGameInteractionProtocol protocol(gameAdapter);
+	for (std::vector<std::string>::const_iterator command = commands.begin(); command != commands.end(); ++command)
+	{
+		Log("Peer says: %s\n", command->c_str());
+		SendMessage(protocol.HandleCommand(*command));
+	}
 }
 
 void cLuxSocketServer::SendMessage(const tString& message)
 {
-    if (mClientSocket != INVALID_SOCKET)
-    {
-        tString safeMessage = cLegacyGameInteractionProtocol::ToWireLine(message);
-
-        send(mClientSocket, safeMessage.c_str(), (int)safeMessage.length(), 0);
-    }
+	const bool hadPeer = mTransport.HasPeer();
+	mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(message));
+	if (hadPeer && !mTransport.HasPeer())
+		Log("Game Interaction Protocol delivery failed: %s\n", mTransport.GetDiagnostic().c_str());
 }
 
 void cLuxSocketServer::SetConnectionSettings(const tString& host, int port)
@@ -172,12 +101,12 @@ void cLuxSocketServer::SetConnectionSettings(const tString& host, int port)
     mPort = port;
 
 	Log("LuxSocketServer config changed: re-init\n");
-	ShutdownSocket();
+	mTransport.Shutdown();
     InitSocket();
 }
 
 cLuxSocketServer::~cLuxSocketServer()
 {
-	ShutdownSocket();
+	mTransport.Shutdown();
     Log("cLuxSocketServer destroyed!\n");
 }

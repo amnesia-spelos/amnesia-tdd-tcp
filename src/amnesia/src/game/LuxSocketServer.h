@@ -2,7 +2,7 @@
 #define LUX_SOCKET_SERVER_H
 
 #include "LuxBase.h"
-#include "LuxWinSocketInit.h"
+#include "GameInteractionTransport.h"
 #include "LegacyGameInteractionProtocol.h"
 
 class cLuxSocketServer : public iLuxUpdateable
@@ -17,15 +17,13 @@ public:
 	const tString& GetHost() const { return mHost; }
 	int GetPort() const { return mPort; }
 private:
-	SOCKET mListenSocket;
-	SOCKET mClientSocket;
+	cGameInteractionTransport mTransport;
 	cGameInteractionLineBuffer mInboundLines;
 	
 	tString mHost;
 	int mPort;
 
 	bool InitSocket();
-	void ShutdownSocket();
 };
 
 #endif
