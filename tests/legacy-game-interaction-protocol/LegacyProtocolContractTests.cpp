@@ -8,6 +8,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #ifdef GetMessage
 #undef GetMessage
@@ -15,12 +16,8 @@
 
 namespace
 {
-	std::string ReadString(const std::string& line, const std::string& key)
+	std::string ReadQuoted(const std::string& line, std::string::size_type& position)
 	{
-		const std::string marker = "\"" + key + "\":\"";
-		std::string::size_type position = line.find(marker);
-		if (position == std::string::npos) return "";
-		position += marker.length();
 		std::string value;
 		bool escaped = false;
 		for (; position < line.length(); ++position)
@@ -30,6 +27,7 @@ namespace
 			{
 				if (character == 'n') value += '\n';
 				else if (character == 'r') value += '\r';
+				else if (character == 't') value += '\t';
 				else value += character;
 				escaped = false;
 			}
@@ -38,6 +36,32 @@ namespace
 			else value += character;
 		}
 		return value;
+	}
+
+	std::string ReadString(const std::string& line, const std::string& key)
+	{
+		const std::string marker = "\"" + key + "\":\"";
+		std::string::size_type position = line.find(marker);
+		if (position == std::string::npos) return "";
+		position += marker.length();
+		return ReadQuoted(line, position);
+	}
+
+	std::vector<std::string> ReadStrings(const std::string& line, const std::string& key)
+	{
+		std::vector<std::string> values;
+		const std::string marker = "\"" + key + "\":[";
+		std::string::size_type position = line.find(marker);
+		if (position == std::string::npos) return values;
+		position += marker.length();
+		while (position < line.length() && line[position] == '"')
+		{
+			++position;
+			values.push_back(ReadQuoted(line, position));
+			++position;
+			if (position < line.length() && line[position] == ',') ++position;
+		}
+		return values;
 	}
 
 	bool ReadBool(const std::string& line, const std::string& key)
@@ -95,6 +119,10 @@ namespace
 		int mlDisplayedCount;
 		std::wstring msDisplayedAuthor;
 		std::wstring msDisplayedMessage;
+		std::vector<cGameInteractionCustomStory> mvCustomStories;
+		bool mbInMainMenu;
+		std::wstring msInvalidCustomStory;
+		std::vector<std::wstring> mvStartedCustomStories;
 
 		virtual bool IsMapLoaded() const { return mbMapLoaded; }
 		virtual cGameInteractionPosition GetPosition() const { return mPosition; }
@@ -109,6 +137,17 @@ namespace
 			msDisplayedMessage = entry.GetMessage();
 			return true;
 		}
+		virtual std::vector<cGameInteractionCustomStory> GetCustomStories() const { return mvCustomStories; }
+		virtual eGameInteractionCustomStoryAvailability GetCustomStoryAvailability(const std::wstring& identifier) const
+		{
+			if (!mbInMainMenu) return eGameInteractionCustomStoryAvailability_NotInMainMenu;
+			if (identifier == msInvalidCustomStory) return eGameInteractionCustomStoryAvailability_Invalid;
+			for (std::vector<cGameInteractionCustomStory>::size_type index = 0; index < mvCustomStories.size(); ++index)
+				if (mvCustomStories[index].GetIdentifier() == identifier)
+					return eGameInteractionCustomStoryAvailability_Available;
+			return eGameInteractionCustomStoryAvailability_NotFound;
+		}
+		virtual void StartCustomStory(const std::wstring& identifier) { mvStartedCustomStories.push_back(identifier); }
 	};
 
 	SOCKET Connect(cGameInteractionGateway& gateway, cFixtureGameAdapter& adapter)
@@ -169,6 +208,13 @@ int main(int argc, char** argv)
 		ReadNumbers(line, "rotation_radians", rotation, 2);
 		adapter.mPosition = cGameInteractionPosition(position[0], position[1], position[2]);
 		adapter.mRotation = cGameInteractionRotation(rotation[0], rotation[1]);
+		adapter.mbInMainMenu = ReadBool(line, "in_main_menu");
+		adapter.msInvalidCustomStory = Utf8ToWide(ReadString(line, "invalid_custom_story"));
+		const std::vector<std::string> storyIds = ReadStrings(line, "custom_story_ids");
+		const std::vector<std::string> storyNames = ReadStrings(line, "custom_story_names");
+		for (std::vector<std::string>::size_type index = 0; index < storyIds.size() && index < storyNames.size(); ++index)
+			adapter.mvCustomStories.push_back(cGameInteractionCustomStory(
+				Utf8ToWide(storyIds[index]), Utf8ToWide(storyNames[index])));
 
 		cGameInteractionGateway gateway;
 		if (!gateway.Listen("127.0.0.1", 0))
@@ -244,6 +290,13 @@ int main(int argc, char** argv)
 			gateway.Update(adapter);
 			actual = Receive(peer);
 		}
+		else if (kind == "custom_story_started_event")
+		{
+			gateway.Report(cGameInteractionEvent(eGameInteractionEvent_CustomStoryStarted,
+				Utf8ToWide(ReadString(line, "custom_story_id"))));
+			gateway.Update(adapter);
+			actual = Receive(peer);
+		}
 		else if (kind == "script_call_observation")
 		{
 			gateway.Report(cGameInteractionEvent(eGameInteractionEvent_ScriptCallObserved,
@@ -279,6 +332,18 @@ int main(int argc, char** argv)
 			 adapter.msDisplayedMessage != Utf8ToWide(expectedMessage)))
 		{
 			std::cerr << "FAIL: " << ReadString(line, "name") << " did not display expected Chat Entry\n";
+			++failures;
+		}
+		const std::string expectedStart = ReadString(line, "expected_started_custom_story");
+		if (!expectedStart.empty() && (adapter.mvStartedCustomStories.size() != 1 ||
+			adapter.mvStartedCustomStories[0] != Utf8ToWide(expectedStart)))
+		{
+			std::cerr << "FAIL: " << ReadString(line, "name") << " did not start the expected Custom Story once\n";
+			++failures;
+		}
+		if (ReadBool(line, "expected_no_start") && !adapter.mvStartedCustomStories.empty())
+		{
+			std::cerr << "FAIL: " << ReadString(line, "name") << " started a Custom Story\n";
 			++failures;
 		}
 		if (ReadBool(line, "expected_no_display") && adapter.mlDisplayedCount != 0)

@@ -4,12 +4,14 @@
 #include "ChatModel.h"
 
 #include <string>
+#include <vector>
 
 enum eGameInteractionEventType
 {
 	eGameInteractionEvent_MapChanged,
 	eGameInteractionEvent_ScriptCallObserved,
-	eGameInteractionEvent_LocalChatSubmitted
+	eGameInteractionEvent_LocalChatSubmitted,
+	eGameInteractionEvent_CustomStoryStarted
 };
 
 class cGameInteractionEvent
@@ -19,16 +21,19 @@ public:
 		const std::string& asData = std::string());
 	cGameInteractionEvent(eGameInteractionEventType aType, const std::wstring& asChatAuthor,
 		const std::wstring& asChatMessage);
+	cGameInteractionEvent(eGameInteractionEventType aType, const std::wstring& asCustomStoryIdentifier);
 	eGameInteractionEventType GetType() const { return mType; }
 	const std::string& GetData() const { return msData; }
 	const std::wstring& GetChatAuthor() const { return msChatAuthor; }
 	const std::wstring& GetChatMessage() const { return msChatMessage; }
+	const std::wstring& GetCustomStoryIdentifier() const { return msCustomStoryIdentifier; }
 
 private:
 	eGameInteractionEventType mType;
 	std::string msData;
 	std::wstring msChatAuthor;
 	std::wstring msChatMessage;
+	std::wstring msCustomStoryIdentifier;
 };
 
 enum eGameInteractionCommandType
@@ -40,7 +45,9 @@ enum eGameInteractionCommandType
 	eGameInteractionCommand_GetPositionRotation,
 	eGameInteractionCommand_GetMap,
 	eGameInteractionCommand_ExecuteScript,
-	eGameInteractionCommand_Chat
+	eGameInteractionCommand_Chat,
+	eGameInteractionCommand_GetCustomStories,
+	eGameInteractionCommand_StartCustomStory
 };
 
 enum eGameInteractionCommandClassification
@@ -56,17 +63,20 @@ public:
 		const std::string& asData = std::string());
 	cGameInteractionCommand(eGameInteractionCommandType aType, const std::wstring& asChatAuthor,
 		const std::wstring& asChatMessage);
+	cGameInteractionCommand(eGameInteractionCommandType aType, const std::wstring& asCustomStoryIdentifier);
 	eGameInteractionCommandType GetType() const { return mType; }
 	eGameInteractionCommandClassification GetClassification() const;
 	const std::string& GetData() const { return msData; }
 	const std::wstring& GetChatAuthor() const { return msChatAuthor; }
 	const std::wstring& GetChatMessage() const { return msChatMessage; }
+	const std::wstring& GetCustomStoryIdentifier() const { return msCustomStoryIdentifier; }
 
 private:
 	eGameInteractionCommandType mType;
 	std::string msData;
 	std::wstring msChatAuthor;
 	std::wstring msChatMessage;
+	std::wstring msCustomStoryIdentifier;
 };
 
 enum eGameInteractionResponseType
@@ -77,7 +87,9 @@ enum eGameInteractionResponseType
 	eGameInteractionResponse_PositionRotation,
 	eGameInteractionResponse_Map,
 	eGameInteractionResponse_ScriptExecuted,
-	eGameInteractionResponse_ChatDisplayed
+	eGameInteractionResponse_ChatDisplayed,
+	eGameInteractionResponse_CustomStories,
+	eGameInteractionResponse_CustomStoryStarting
 };
 
 enum eGameInteractionCommandOutcome
@@ -86,7 +98,18 @@ enum eGameInteractionCommandOutcome
 	eGameInteractionCommandOutcome_MapNotLoaded,
 	eGameInteractionCommandOutcome_InvalidAuthor,
 	eGameInteractionCommandOutcome_InvalidMessage,
-	eGameInteractionCommandOutcome_Unavailable
+	eGameInteractionCommandOutcome_Unavailable,
+	eGameInteractionCommandOutcome_NotInMainMenu,
+	eGameInteractionCommandOutcome_CustomStoryNotFound,
+	eGameInteractionCommandOutcome_CustomStoryInvalid
+};
+
+enum eGameInteractionCustomStoryAvailability
+{
+	eGameInteractionCustomStoryAvailability_Available,
+	eGameInteractionCustomStoryAvailability_NotInMainMenu,
+	eGameInteractionCustomStoryAvailability_NotFound,
+	eGameInteractionCustomStoryAvailability_Invalid
 };
 
 struct cGameInteractionPosition
@@ -106,6 +129,19 @@ struct cGameInteractionRotation
 	float mfPitchRadians;
 };
 
+class cGameInteractionCustomStory
+{
+public:
+	cGameInteractionCustomStory(const std::wstring& asIdentifier, const std::wstring& asName)
+		: msIdentifier(asIdentifier), msName(asName) {}
+	const std::wstring& GetIdentifier() const { return msIdentifier; }
+	const std::wstring& GetName() const { return msName; }
+
+private:
+	std::wstring msIdentifier;
+	std::wstring msName;
+};
+
 class iGameInteractionGameAdapter
 {
 public:
@@ -116,6 +152,10 @@ public:
 	virtual std::string GetMapFile() const = 0;
 	virtual void RunScript(const std::string& asScript) = 0;
 	virtual bool DisplayChatEntry(const cChatEntry& aEntry) = 0;
+	virtual std::vector<cGameInteractionCustomStory> GetCustomStories() const = 0;
+	virtual eGameInteractionCustomStoryAvailability GetCustomStoryAvailability(
+		const std::wstring& asIdentifier) const = 0;
+	virtual void StartCustomStory(const std::wstring& asIdentifier) = 0;
 };
 
 class cGameInteractionResponse
@@ -129,9 +169,14 @@ public:
 	const cGameInteractionPosition& GetPosition() const { return mPosition; }
 	const cGameInteractionRotation& GetRotation() const { return mRotation; }
 	const std::string& GetMapFile() const { return msMapFile; }
+	const std::vector<cGameInteractionCustomStory>& GetCustomStories() const { return mvCustomStories; }
 	void SetPosition(const cGameInteractionPosition& aPosition) { mPosition = aPosition; }
 	void SetRotation(const cGameInteractionRotation& aRotation) { mRotation = aRotation; }
 	void SetMapFile(const std::string& asMapFile) { msMapFile = asMapFile; }
+	void SetCustomStories(const std::vector<cGameInteractionCustomStory>& avCustomStories)
+	{
+		mvCustomStories = avCustomStories;
+	}
 
 private:
 	eGameInteractionCommandType mCommandType;
@@ -140,6 +185,7 @@ private:
 	cGameInteractionPosition mPosition;
 	cGameInteractionRotation mRotation;
 	std::string msMapFile;
+	std::vector<cGameInteractionCustomStory> mvCustomStories;
 };
 
 class cGameInteractionGateway

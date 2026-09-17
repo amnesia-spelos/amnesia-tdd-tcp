@@ -3,6 +3,10 @@
 #include "LuxMapHandler.h"
 #include "LuxPlayer.h"
 #include "LuxChatHandler.h"
+#include "LuxInputHandler.h"
+#include "LuxMainMenu.h"
+
+#include <set>
 
 namespace
 {
@@ -40,6 +44,81 @@ namespace
 		virtual bool DisplayChatEntry(const cChatEntry& aEntry)
 		{
 			return gpBase->mpChatHandler && gpBase->mpChatHandler->DisplayChatEntry(aEntry);
+		}
+
+		virtual std::vector<cGameInteractionCustomStory> GetCustomStories() const
+		{
+			std::vector<cGameInteractionCustomStory> vStories;
+			std::set<tWString> setIdentifiers;
+			tWStringList lstStoryFolders;
+			cLuxCustomStorySettings::FindInstalledStoryFolders(lstStoryFolders);
+			for(tWStringListIt it = lstStoryFolders.begin(); it != lstStoryFolders.end(); ++it)
+			{
+				// Like starting, the menu's earlier location wins when an identifier is installed twice.
+				const tWString sIdentifier = cString::GetFileNameW(*it);
+				if(!setIdentifiers.insert(sIdentifier).second) continue;
+
+				cLuxCustomStorySettings story;
+				if(story.CreateFromPath(*it))
+					vStories.push_back(cGameInteractionCustomStory(sIdentifier, story.msName));
+			}
+			return vStories;
+		}
+
+		virtual eGameInteractionCustomStoryAvailability GetCustomStoryAvailability(
+			const std::wstring& asIdentifier) const
+		{
+			cLuxCustomStorySettings story;
+			return FindCustomStory(asIdentifier, story);
+		}
+
+		virtual void StartCustomStory(const std::wstring& asIdentifier)
+		{
+			// The game may have left the main menu since the Command was accepted.
+			cLuxCustomStorySettings story;
+			if(FindCustomStory(asIdentifier, story) != eGameInteractionCustomStoryAvailability_Available)
+				return;
+
+			if(gpBase->mpUserConfig==NULL)
+			{
+				gpBase->CreateProfile(gpBase->msDefaultProfileName);
+				gpBase->SetProfile(gpBase->msDefaultProfileName);
+				gpBase->InitUserConfig();
+			}
+
+			story.SetActive();
+			gpBase->StartCustomStory();
+		}
+
+	private:
+		static bool IsInMainMenu()
+		{
+			return gpBase->mpInputHandler->GetState() == eLuxInputState_MainMenu &&
+				!gpBase->mpMapHandler->MapIsLoaded() && !gpBase->mpMainMenu->IsTransitioning();
+		}
+
+		static eGameInteractionCustomStoryAvailability FindCustomStory(const tWString& asIdentifier,
+			cLuxCustomStorySettings& aStory)
+		{
+			if(!IsInMainMenu())
+			{
+				Log("Game Interaction Protocol: cannot start custom story '%ls': not in main menu\n",
+					asIdentifier.c_str());
+				return eGameInteractionCustomStoryAvailability_NotInMainMenu;
+			}
+
+			tWStringList lstStoryFolders;
+			cLuxCustomStorySettings::FindInstalledStoryFolders(lstStoryFolders);
+			for(tWStringListIt it = lstStoryFolders.begin(); it != lstStoryFolders.end(); ++it)
+			{
+				if(cString::GetFileNameW(*it) != asIdentifier) continue;
+				// CreateFromPath logs why an installed story is invalid.
+				return aStory.CreateFromPath(*it) ? eGameInteractionCustomStoryAvailability_Available :
+					eGameInteractionCustomStoryAvailability_Invalid;
+			}
+
+			Log("Game Interaction Protocol: cannot start custom story '%ls': not found\n", asIdentifier.c_str());
+			return eGameInteractionCustomStoryAvailability_NotFound;
 		}
 	};
 }

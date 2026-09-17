@@ -271,17 +271,6 @@ kGuiCallbackDeclaredFuncEnd(cLuxMainMenu_CustomStory, PressContinue);
 
 bool cLuxMainMenu_CustomStory::PressStart(iWidget* apWidget, const cGuiMessageData& aData)
 {
-	//////////////////////////////////////////////////////
-	// Create save folder if not already present
-	tWString sProfileCustomSaveFolder = gpBase->msMainProfileSavePath + _W("custom");
-	if(cPlatform::FolderExists(sProfileCustomSaveFolder)==false)
-		cPlatform::CreateFolder(sProfileCustomSaveFolder);
-	else
-	{
-		if(cPlatform::FolderExists(gpBase->msProfileSavePath)==false)
-			cPlatform::CreateFolder(gpBase->msProfileSavePath);
-	}
-
 	gpBase->StartCustomStory();
 
 	return true;
@@ -405,25 +394,18 @@ void cLuxMainMenu_CustomStoryList::PopulateStoryList()
 	// Clear list
 	ClearStoryList();
 
-#ifdef USERDIR_RESOURCES
-	PopulateUserDirStoryList();
-#endif
-
-	tWString sPath = cString::AddSlashAtEndW(cString::To16Char(gpBase->msCustomStoryPath));
-
 	tWStringList lstStoryDirs;
-	cPlatform::FindFoldersInDir(lstStoryDirs, sPath, false);
+	cLuxCustomStorySettings::FindInstalledStoryFolders(lstStoryDirs);
 
 	//////////////////////////////////////////////////////////////////////
-	// Try to create a story using every dir under the custom story dir
+	// Try to create a story using every installed story dir
 	// the CreateFromPath method will take care of checking it is a valid entry
 	tWStringListIt it = lstStoryDirs.begin();
 	for(;it!=lstStoryDirs.end();++it)
 	{
-		const tWString& sStoryPath = sPath + *it;
 		cLuxCustomStorySettings* pStory = hplNew(cLuxCustomStorySettings,());
 
-		if(pStory->CreateFromPath(sStoryPath))
+		if(pStory->CreateFromPath(*it))
 		{
 			cWidgetItem* pItem = mpLBStories->AddItem(pStory->msName);
 			pItem->SetUserData(pStory);
@@ -432,37 +414,6 @@ void cLuxMainMenu_CustomStoryList::PopulateStoryList()
 			hplDelete(pStory);
 	}
 }
-
-//-----------------------------------------------------------------------
-
-#ifdef USERDIR_RESOURCES
-void cLuxMainMenu_CustomStoryList::PopulateUserDirStoryList()
-{
-	tWString sPath = cString::AddSlashAtEndW(gpBase->msUserResourceDir + cString::To16Char(gpBase->msCustomStoryPath));
-
-	tWStringList lstStoryDirs;
-	cPlatform::FindFoldersInDir(lstStoryDirs, sPath, false);
-
-	//////////////////////////////////////////////////////////////////////
-	// Try to create a story using every dir under the custom story dir
-	// the CreateFromPath method will take care of checking it is a valid entry
-	tWStringListIt it = lstStoryDirs.begin();
-	for(;it!=lstStoryDirs.end();++it)
-	{
-		const tWString& sStoryPath = sPath + *it;
-		cLuxCustomStorySettings* pStory = hplNew(cLuxCustomStorySettings,());
-
-		if(pStory->CreateFromPath(sStoryPath))
-		{
-			cWidgetItem* pItem = mpLBStories->AddItem(pStory->msName);
-			pItem->SetUserData(pStory);
-		}
-		else
-			hplDelete(pStory);
-
-	}
-}
-#endif
 
 
 //-----------------------------------------------------------------------

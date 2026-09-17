@@ -8,6 +8,10 @@ Chat Commands use the grammar `chat:<author>:<message>`. The first colon after `
 
 Chat Responses are exactly `RESPONSE:chat:message displayed`, `RESPONSE:chat:invalid author`, `RESPONSE:chat:invalid message`, or `RESPONSE:chat:unavailable`. A local submission is serialized as `EVENT:CHAT:<author>:<message>`. This Event is best-effort: it is sent once to a currently connected Peer and is discarded when no Peer is present, with no later replay.
 
+`getcustomstories` responds with `RESPONSE:getcustomstories:<id>|<name>` entries separated by tabs, or an empty payload when no valid Custom Story is installed. The identifier is the Custom Story Identifier (the installed folder name) and ends at the first `|`; the display name is UTF-8 with tabs, CR, and LF replaced by spaces.
+
+`startcustomstory:<id>` responds with exactly `RESPONSE:startcustomstory:starting`, `RESPONSE:startcustomstory:not found`, `RESPONSE:startcustomstory:invalid`, or `RESPONSE:startcustomstory:not in main menu`. An accepted start is performed on a later game update, after its Response, so a second start while one is pending is `not in main menu`. Every fresh Custom Story start, whether from this Command or the menu's Start button, is serialized as `EVENT:CustomStoryStarted:<id>` before the start map's `EVENT:MapChanged`.
+
 Run the game-side harness without starting the game:
 
 ```powershell

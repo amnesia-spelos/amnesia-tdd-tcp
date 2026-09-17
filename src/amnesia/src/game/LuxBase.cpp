@@ -291,7 +291,42 @@ bool cLuxCustomStorySettings::StartGame()
 
 	gpBase->mpProgressLogHandler->CreateAndResetLogFile();
 
+	if(gpBase->mpSocketServer)
+		gpBase->mpSocketServer->PublishEvent(cGameInteractionEvent(
+			eGameInteractionEvent_CustomStoryStarted, GetIdentifier()));
+
 	return gpBase->StartGame(msStartMap, msMapsFolder, msStartPos);
+}
+
+//-----------------------------------------------------------------------
+
+tWString cLuxCustomStorySettings::GetIdentifier() const
+{
+	tWString sFolder = msStoryRootFolder;
+	while(sFolder.empty()==false && (sFolder[sFolder.size()-1]==_W('/') || sFolder[sFolder.size()-1]==_W('\\')))
+		sFolder.erase(sFolder.size()-1);
+
+	return cString::GetFileNameW(sFolder);
+}
+
+//-----------------------------------------------------------------------
+
+void cLuxCustomStorySettings::FindInstalledStoryFolders(tWStringList& alstFolders)
+{
+	tWStringVec vStoryDirs;
+#ifdef USERDIR_RESOURCES
+	vStoryDirs.push_back(cString::AddSlashAtEndW(gpBase->msUserResourceDir + cString::To16Char(gpBase->msCustomStoryPath)));
+#endif
+	vStoryDirs.push_back(cString::AddSlashAtEndW(cString::To16Char(gpBase->msCustomStoryPath)));
+
+	for(size_t i=0; i<vStoryDirs.size(); ++i)
+	{
+		tWStringList lstStoryFolderNames;
+		cPlatform::FindFoldersInDir(lstStoryFolderNames, vStoryDirs[i], false);
+
+		for(tWStringListIt it = lstStoryFolderNames.begin(); it!=lstStoryFolderNames.end(); ++it)
+			alstFolders.push_back(vStoryDirs[i] + *it);
+	}
 }
 
 
@@ -673,10 +708,21 @@ bool cLuxBase::StartGame(const tString& asFile, const tString& asFolder, const t
 
 bool cLuxBase::StartCustomStory()
 {
-	if(mpCustomStory)
-		return mpCustomStory->StartGame();
+	if(mpCustomStory==NULL)
+		return false;
 
-	return false;
+	//////////////////////////////////////////////////////
+	// Create save folder if not already present
+	tWString sProfileCustomSaveFolder = msMainProfileSavePath + _W("custom");
+	if(cPlatform::FolderExists(sProfileCustomSaveFolder)==false)
+		cPlatform::CreateFolder(sProfileCustomSaveFolder);
+	else
+	{
+		if(cPlatform::FolderExists(msProfileSavePath)==false)
+			cPlatform::CreateFolder(msProfileSavePath);
+	}
+
+	return mpCustomStory->StartGame();
 }
 
 //-----------------------------------------------------------------------
@@ -1564,13 +1610,8 @@ void cLuxBase::SetCustomStory(cLuxCustomStorySettings* apCustomStory)
 
 	if(mpCustomStory)
 	{
-		tWStringVec vStoryFolders;
-		tWString sSep = _W("/");
-		cString::GetStringVecW(mpCustomStory->msStoryRootFolder, vStoryFolders, &sSep);
-		tWString sStoryFolder = vStoryFolders[vStoryFolders.size()-1];
-
 		msProfileSavePath = cString::AddSlashAtEndW(msMainProfileSavePath + _W("custom")) +
-								cString::AddSlashAtEndW(sStoryFolder);
+								cString::AddSlashAtEndW(mpCustomStory->GetIdentifier());
 
 		mpEngine->GetResources()->AddResourceDir(mpCustomStory->msStoryRootFolder, true);
 	}

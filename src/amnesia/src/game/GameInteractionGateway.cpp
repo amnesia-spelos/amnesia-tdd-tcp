@@ -16,6 +16,12 @@ cGameInteractionEvent::cGameInteractionEvent(eGameInteractionEventType aType,
 {
 }
 
+cGameInteractionEvent::cGameInteractionEvent(eGameInteractionEventType aType,
+	const std::wstring& asCustomStoryIdentifier)
+	: mType(aType), msCustomStoryIdentifier(asCustomStoryIdentifier)
+{
+}
+
 cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
 	const std::string& asData)
 	: mType(aType), msData(asData)
@@ -28,9 +34,16 @@ cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aTy
 {
 }
 
+cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
+	const std::wstring& asCustomStoryIdentifier)
+	: mType(aType), msCustomStoryIdentifier(asCustomStoryIdentifier)
+{
+}
+
 eGameInteractionCommandClassification cGameInteractionCommand::GetClassification() const
 {
-	return mType == eGameInteractionCommand_ExecuteScript || mType == eGameInteractionCommand_Chat ?
+	return mType == eGameInteractionCommand_ExecuteScript || mType == eGameInteractionCommand_Chat ||
+		mType == eGameInteractionCommand_StartCustomStory ?
 		eGameInteractionCommandClassification_StateChanging :
 		eGameInteractionCommandClassification_Observational;
 }
@@ -43,8 +56,26 @@ cGameInteractionResponse::cGameInteractionResponse(eGameInteractionCommandType a
 
 namespace
 {
+	struct cPendingCustomStoryStart
+	{
+		cPendingCustomStoryStart() : mbPending(false) {}
+		bool mbPending;
+		std::wstring msIdentifier;
+	};
+
+	eGameInteractionCommandOutcome OutcomeFor(eGameInteractionCustomStoryAvailability aAvailability)
+	{
+		switch (aAvailability)
+		{
+		case eGameInteractionCustomStoryAvailability_Available: return eGameInteractionCommandOutcome_Success;
+		case eGameInteractionCustomStoryAvailability_NotFound: return eGameInteractionCommandOutcome_CustomStoryNotFound;
+		case eGameInteractionCustomStoryAvailability_Invalid: return eGameInteractionCommandOutcome_CustomStoryInvalid;
+		default: return eGameInteractionCommandOutcome_NotInMainMenu;
+		}
+	}
+
 	cGameInteractionResponse ExecuteCommand(const cGameInteractionCommand& aCommand,
-		iGameInteractionGameAdapter& aGameAdapter)
+		iGameInteractionGameAdapter& aGameAdapter, cPendingCustomStoryStart& aPendingStart)
 	{
 		switch (aCommand.GetType())
 		{
@@ -109,6 +140,25 @@ namespace
 				aGameAdapter.DisplayChatEntry(entry) ? eGameInteractionCommandOutcome_Success :
 					eGameInteractionCommandOutcome_Unavailable);
 		}
+		case eGameInteractionCommand_GetCustomStories:
+		{
+			cGameInteractionResponse response(aCommand.GetType(), eGameInteractionResponse_CustomStories);
+			response.SetCustomStories(aGameAdapter.GetCustomStories());
+			return response;
+		}
+		case eGameInteractionCommand_StartCustomStory:
+		{
+			// A pending start will leave the main menu, so a second start cannot be accepted.
+			const eGameInteractionCommandOutcome outcome = aPendingStart.mbPending ?
+				eGameInteractionCommandOutcome_NotInMainMenu :
+				OutcomeFor(aGameAdapter.GetCustomStoryAvailability(aCommand.GetCustomStoryIdentifier()));
+			if (outcome == eGameInteractionCommandOutcome_Success)
+			{
+				aPendingStart.mbPending = true;
+				aPendingStart.msIdentifier = aCommand.GetCustomStoryIdentifier();
+			}
+			return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_CustomStoryStarting, outcome);
+		}
 		default:
 			return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_Pong);
 		}
@@ -120,6 +170,17 @@ class cGameInteractionGateway::cImplementation
 public:
 	cGameInteractionTransport mTransport;
 	cGameInteractionLineBuffer mInboundLines;
+	cPendingCustomStoryStart mPendingCustomStoryStart;
+
+	// Runs after the transport has flushed the accepting Response and outside Command processing,
+	// because starting a Custom Story blocks while its start map loads.
+	void PerformPendingCustomStoryStart(iGameInteractionGameAdapter& aGameAdapter)
+	{
+		if (!mPendingCustomStoryStart.mbPending) return;
+		const std::wstring identifier = mPendingCustomStoryStart.msIdentifier;
+		mPendingCustomStoryStart = cPendingCustomStoryStart();
+		aGameAdapter.StartCustomStory(identifier);
+	}
 };
 
 cGameInteractionGateway::cGameInteractionGateway()
@@ -157,8 +218,10 @@ void cGameInteractionGateway::Update(iGameInteractionGameAdapter& aGameAdapter)
 	else if (event == eGameInteractionTransportEvent_PeerDisconnected)
 	{
 		mpImplementation->mInboundLines.Clear();
-		return;
 	}
+
+	mpImplementation->PerformPendingCustomStoryStart(aGameAdapter);
+	if (event == eGameInteractionTransportEvent_PeerDisconnected) return;
 
 	for (std::vector<std::string>::const_iterator bytes = receivedBytes.begin();
 		bytes != receivedBytes.end(); ++bytes)
@@ -169,7 +232,8 @@ void cGameInteractionGateway::Update(iGameInteractionGameAdapter& aGameAdapter)
 		mpImplementation->mInboundLines.TryPopLine(commandText))
 	{
 		const cGameInteractionCommand command = cLegacyGameInteractionProtocol::ParseCommand(commandText);
-		const cGameInteractionResponse response = ExecuteCommand(command, aGameAdapter);
+		const cGameInteractionResponse response = ExecuteCommand(command, aGameAdapter,
+			mpImplementation->mPendingCustomStoryStart);
 		mpImplementation->mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(
 			cLegacyGameInteractionProtocol::SerializeResponse(response)));
 	}

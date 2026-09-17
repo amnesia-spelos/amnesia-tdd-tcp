@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <vector>
 
 #ifdef GetMessage
 #undef GetMessage
@@ -26,7 +27,8 @@ namespace
 		cFakeGameAdapter()
 			: mbMapLoaded(true), mPosition(1.25f, -2.5f, 3.75f),
 			mRotation(1.570796325f, -0.7853981625f), msMapFile("maps/main/level01.map"),
-			mbChatAvailable(true), mlDisplayedChatEntries(0) {}
+			mbChatAvailable(true), mlDisplayedChatEntries(0), mbInMainMenu(true),
+			mPeer(INVALID_SOCKET), mbResponseDeliveredBeforeStart(false) {}
 
 		virtual bool IsMapLoaded() const { return mbMapLoaded; }
 		virtual cGameInteractionPosition GetPosition() const { return mPosition; }
@@ -41,6 +43,26 @@ namespace
 			msDisplayedMessage = aEntry.GetMessage();
 			return true;
 		}
+		virtual std::vector<cGameInteractionCustomStory> GetCustomStories() const { return mvCustomStories; }
+		virtual eGameInteractionCustomStoryAvailability GetCustomStoryAvailability(
+			const std::wstring& asIdentifier) const
+		{
+			if (!mbInMainMenu) return eGameInteractionCustomStoryAvailability_NotInMainMenu;
+			for (size_t index = 0; index < mvCustomStories.size(); ++index)
+				if (mvCustomStories[index].GetIdentifier() == asIdentifier)
+					return eGameInteractionCustomStoryAvailability_Available;
+			return asIdentifier == msInvalidCustomStory ? eGameInteractionCustomStoryAvailability_Invalid :
+				eGameInteractionCustomStoryAvailability_NotFound;
+		}
+		virtual void StartCustomStory(const std::wstring& asIdentifier)
+		{
+			fd_set readable;
+			FD_ZERO(&readable);
+			FD_SET(mPeer, &readable);
+			timeval noWait = { 0, 0 };
+			mbResponseDeliveredBeforeStart = select(0, &readable, NULL, NULL, &noWait) == 1;
+			mvStartedCustomStories.push_back(asIdentifier);
+		}
 
 		bool mbMapLoaded;
 		cGameInteractionPosition mPosition;
@@ -51,6 +73,12 @@ namespace
 		int mlDisplayedChatEntries;
 		std::wstring msDisplayedAuthor;
 		std::wstring msDisplayedMessage;
+		bool mbInMainMenu;
+		std::vector<cGameInteractionCustomStory> mvCustomStories;
+		std::wstring msInvalidCustomStory;
+		std::vector<std::wstring> mvStartedCustomStories;
+		SOCKET mPeer;
+		bool mbResponseDeliveredBeforeStart;
 	};
 
 	SOCKET Connect(cGameInteractionGateway& aGateway, cFakeGameAdapter& aAdapter)
@@ -101,6 +129,11 @@ int main()
 	Expect(typedSubmission.GetChatAuthor() == L"Daniel" && typedSubmission.GetChatMessage() == L"hello",
 		"typed local-submission Event keeps Chat Author and message separate");
 
+	Expect(cGameInteractionCommand(eGameInteractionCommand_GetCustomStories).GetClassification() ==
+		eGameInteractionCommandClassification_Observational, "Custom Story listing is observational");
+	Expect(cGameInteractionCommand(eGameInteractionCommand_StartCustomStory, L"mp-test-cs").GetClassification() ==
+		eGameInteractionCommandClassification_StateChanging, "Custom Story start is state-changing");
+
 	cFakeGameAdapter adapter;
 	cGameInteractionGateway gateway;
 	Expect(gateway.Listen("127.0.0.1", 0), "gateway listens without exposing transport details");
@@ -135,6 +168,38 @@ int main()
 	Expect(adapter.mlDisplayedChatEntries == 1, "unavailable chat UI displays no entry");
 	adapter.mbChatAvailable = true;
 
+	adapter.mvCustomStories.push_back(cGameInteractionCustomStory(L"mp-test-cs", L"Amnesia Multiplayer Test"));
+	adapter.mvCustomStories.push_back(cGameInteractionCustomStory(L"other", L"Other"));
+	SendCommands(peer, gateway, adapter, "getcustomstories\n");
+	Expect(Receive(peer) == "RESPONSE:getcustomstories:mp-test-cs|Amnesia Multiplayer Test\tother|Other\n",
+		"Custom Story listing reports every installed Custom Story");
+
+	adapter.mPeer = peer;
+	adapter.msInvalidCustomStory = L"broken";
+	SendCommands(peer, gateway, adapter, "startcustomstory:missing\nstartcustomstory:broken\n");
+	Expect(Receive(peer) == "RESPONSE:startcustomstory:not found\nRESPONSE:startcustomstory:invalid\n",
+		"unknown and invalid Custom Stories receive stable outcomes");
+	adapter.mbInMainMenu = false;
+	SendCommands(peer, gateway, adapter, "startcustomstory:mp-test-cs\n");
+	Expect(Receive(peer) == "RESPONSE:startcustomstory:not in main menu\n",
+		"Custom Story start outside the main menu is rejected");
+	Expect(adapter.mvStartedCustomStories.empty(), "rejected Custom Story starts change no game state");
+	adapter.mbInMainMenu = true;
+
+	const std::string starts = "startcustomstory:mp-test-cs\nstartcustomstory:other\n";
+	Expect(send(peer, starts.data(), static_cast<int>(starts.size()), 0) ==
+		static_cast<int>(starts.size()), "Peer sends Custom Story starts");
+	gateway.Update(adapter);
+	Expect(adapter.mvStartedCustomStories.empty(), "accepted Custom Story start is deferred past Command processing");
+	gateway.Update(adapter);
+	Expect(adapter.mvStartedCustomStories.size() == 1 && adapter.mvStartedCustomStories[0] == L"mp-test-cs",
+		"accepted Custom Story start is performed once on a later update");
+	Expect(adapter.mbResponseDeliveredBeforeStart, "starting Response is delivered before the start is performed");
+	Expect(Receive(peer) == "RESPONSE:startcustomstory:starting\nRESPONSE:startcustomstory:not in main menu\n",
+		"a second start while one is pending is rejected");
+	gateway.Update(adapter);
+	Expect(adapter.mvStartedCustomStories.size() == 1, "rejected pending start is never performed");
+
 	Expect(send(peer, "get", 3, 0) == 3, "Peer sends a fragmented Command prefix");
 	gateway.Update(adapter);
 	SendCommands(peer, gateway, adapter, "map\nunknown\n");
@@ -144,8 +209,10 @@ int main()
 	gateway.Report(cGameInteractionEvent(eGameInteractionEvent_MapChanged, "maps/main/level02.map"));
 	gateway.Report(cGameInteractionEvent(eGameInteractionEvent_ScriptCallObserved, "OnEnter()"));
 	gateway.Report(cGameInteractionEvent(eGameInteractionEvent_LocalChatSubmitted, L"Daniel", L"hi: all"));
+	gateway.Report(cGameInteractionEvent(eGameInteractionEvent_CustomStoryStarted, L"mp-test-cs"));
 	gateway.Update(adapter);
-	Expect(Receive(peer) == "EVENT:MapChanged:maps/main/level02.map\nSCRIPT_CALL:OnEnter()\nEVENT:CHAT:Daniel:hi: all\n",
+	Expect(Receive(peer) == "EVENT:MapChanged:maps/main/level02.map\nSCRIPT_CALL:OnEnter()\nEVENT:CHAT:Daniel:hi: all\n"
+		"EVENT:CustomStoryStarted:mp-test-cs\n",
 		"typed Events pass through the gateway");
 
 	closesocket(peer);

@@ -149,6 +149,21 @@ namespace
 		}
 		return encoded;
 	}
+
+	std::string FormatCustomStories(const std::vector<cGameInteractionCustomStory>& avCustomStories)
+	{
+		std::string formatted;
+		for (std::vector<cGameInteractionCustomStory>::const_iterator story = avCustomStories.begin();
+			story != avCustomStories.end(); ++story)
+		{
+			if (story != avCustomStories.begin()) formatted += '\t';
+			std::wstring name = story->GetName();
+			for (std::wstring::size_type index = 0; index < name.size(); ++index)
+				if (name[index] == L'\t' || name[index] == L'\r' || name[index] == L'\n') name[index] = L' ';
+			formatted += EncodeUtf8(story->GetIdentifier()) + "|" + EncodeUtf8(name);
+		}
+		return formatted;
+	}
 }
 
 const char* cLegacyGameInteractionProtocol::Greeting()
@@ -167,6 +182,8 @@ std::string cLegacyGameInteractionProtocol::SerializeEvent(const cGameInteractio
 	case eGameInteractionEvent_LocalChatSubmitted:
 		return "EVENT:CHAT:" + EncodeUtf8(aEvent.GetChatAuthor()) + ":" +
 			EncodeUtf8(aEvent.GetChatMessage());
+	case eGameInteractionEvent_CustomStoryStarted:
+		return "EVENT:CustomStoryStarted:" + EncodeUtf8(aEvent.GetCustomStoryIdentifier());
 	}
 	return std::string();
 }
@@ -195,6 +212,15 @@ cGameInteractionCommand cLegacyGameInteractionProtocol::ParseCommand(const std::
 		if (!DecodeUtf8(messageBytes, message)) message.assign(1, static_cast<wchar_t>(1));
 		return cGameInteractionCommand(eGameInteractionCommand_Chat, author, message);
 	}
+	if (asCommand.compare(0, 17, "startcustomstory:") == 0)
+	{
+		std::wstring identifier;
+		// Malformed UTF-8 cannot name an installed folder, so it resolves to "not found".
+		if (!DecodeUtf8(asCommand.substr(17), identifier)) identifier.assign(1, static_cast<wchar_t>(1));
+		return cGameInteractionCommand(eGameInteractionCommand_StartCustomStory, identifier);
+	}
+	if (asCommand == "getcustomstories")
+		return cGameInteractionCommand(eGameInteractionCommand_GetCustomStories);
 	if (asCommand == "ping" || asCommand == "getpos" || asCommand == "getrot" ||
 		asCommand == "getposrot" || asCommand == "getmap")
 		return cGameInteractionCommand(CommandTypeFor(asCommand));
@@ -205,6 +231,16 @@ std::string cLegacyGameInteractionProtocol::SerializeResponse(const cGameInterac
 {
 	if (aResponse.GetCommandType() == eGameInteractionCommand_Unknown)
 		return "WARNING:Unknown command";
+	if (aResponse.GetCommandType() == eGameInteractionCommand_StartCustomStory)
+	{
+		switch (aResponse.GetOutcome())
+		{
+		case eGameInteractionCommandOutcome_Success: return "RESPONSE:startcustomstory:starting";
+		case eGameInteractionCommandOutcome_CustomStoryNotFound: return "RESPONSE:startcustomstory:not found";
+		case eGameInteractionCommandOutcome_CustomStoryInvalid: return "RESPONSE:startcustomstory:invalid";
+		default: return "RESPONSE:startcustomstory:not in main menu";
+		}
+	}
 	const char* command = "ping";
 	if (aResponse.GetCommandType() == eGameInteractionCommand_GetPosition) command = "getpos";
 	else if (aResponse.GetCommandType() == eGameInteractionCommand_GetRotation) command = "getrot";
@@ -230,6 +266,8 @@ std::string cLegacyGameInteractionProtocol::SerializeResponse(const cGameInterac
 			FormatRotationValues(aResponse.GetRotation());
 	if (aResponse.GetType() == eGameInteractionResponse_Map)
 		return "RESPONSE:getmap:" + aResponse.GetMapFile();
+	if (aResponse.GetType() == eGameInteractionResponse_CustomStories)
+		return "RESPONSE:getcustomstories:" + FormatCustomStories(aResponse.GetCustomStories());
 	if (aResponse.GetType() == eGameInteractionResponse_ChatDisplayed)
 		return "RESPONSE:chat:message displayed";
 	return "RESPONSE:exec:script executed";

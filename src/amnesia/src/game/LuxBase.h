@@ -137,6 +137,17 @@ public:
 	 */
 	bool StartGame();
 
+	/**
+	 * The Custom Story Identifier: the name of the installed story folder.
+	 */
+	tWString GetIdentifier() const;
+
+	/**
+	 * Adds the full path of every installed story folder, in Custom Stories menu order.
+	 * Folders are not validated; use CreateFromPath for that.
+	 */
+	static void FindInstalledStoryFolders(tWStringList& alstFolders);
+
 	tWString msName;
 	tWString msAuthor;
 	tString msImgFile;

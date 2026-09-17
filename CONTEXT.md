@@ -72,6 +72,14 @@ _Avoid_: Initial state, full Event history
 A replaceable report of currently exposed game state, for which a newer value supersedes an undelivered older value.
 _Avoid_: Event, update event
 
+**Custom Story**:
+A player-installed story with its own maps and start position, started from the beginning rather than resumed from a save.
+_Avoid_: Mod, campaign
+
+**Custom Story Identifier**:
+The installed folder name that uniquely identifies a Custom Story, as opposed to its possibly duplicated display name.
+_Avoid_: Story name, story title
+
 **Chat Author**:
 Display text attributing a Chat Entry, without asserting an authenticated player identity.
 _Avoid_: Username, user identity
