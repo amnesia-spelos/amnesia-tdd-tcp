@@ -59,7 +59,8 @@ namespace
 				if(!setIdentifiers.insert(sIdentifier).second) continue;
 
 				cLuxCustomStorySettings story;
-				if(story.CreateFromPath(*it))
+				// Peers may poll the listing, so broken stories are only logged when started.
+				if(story.CreateFromPath(*it, false))
 					vStories.push_back(cGameInteractionCustomStory(sIdentifier, story.msName));
 			}
 			return vStories;

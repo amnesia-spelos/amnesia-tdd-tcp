@@ -209,7 +209,7 @@ cLuxCustomStorySettings::~cLuxCustomStorySettings()
 
 //-----------------------------------------------------------------------
 
-bool cLuxCustomStorySettings::CreateFromPath(const tWString& asPath)
+bool cLuxCustomStorySettings::CreateFromPath(const tWString& asPath, bool abLogErrors)
 {
 	/////////////////////////////////////////////////////////////////
 	// We must make sure this is a valid custom story: 
@@ -261,7 +261,7 @@ bool cLuxCustomStorySettings::CreateFromPath(const tWString& asPath)
 		sErrorMsg = "could not find custom_story_settings.cfg file or it was invalid";
 	}
 
-	if(bValid==false)
+	if(bValid==false && abLogErrors)
 		Log("Error creating custom story from path \"%ls\" : %s.\n", asPath.c_str(), sErrorMsg.c_str());
 
 	hplDelete(pCustomStoryCfg);

@@ -123,7 +123,7 @@ public:
 	cLuxCustomStorySettings(cLuxCustomStorySettings* apStory);
 	~cLuxCustomStorySettings();
 
-	bool CreateFromPath(const tWString& asPath);
+	bool CreateFromPath(const tWString& asPath, bool abLogErrors=true);
 
 	/**
 	 * Creates a copy of the current object and "feeds" it to cLuxBase
