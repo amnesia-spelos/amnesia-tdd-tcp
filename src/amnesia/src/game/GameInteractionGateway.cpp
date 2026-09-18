@@ -3,6 +3,8 @@
 #include "GameInteractionProtocolVersion2.h"
 #include "LegacyGameInteractionProtocol.h"
 
+#include <algorithm>
+#include <set>
 #include <vector>
 
 cGameInteractionEvent::cGameInteractionEvent(eGameInteractionEventType aType,
@@ -58,6 +60,13 @@ cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aTy
 {
 }
 
+cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
+	const cGameInteractionAvatarRequest& aAvatarRequest)
+	: mType(aType), mlProtocolVersion(0), mlCapabilities(0),
+	  mLocalPoseRequest(eGameInteractionLocalPoseRequest_Invalid), mlLocalPoseRate(0), mAvatarRequest(aAvatarRequest)
+{
+}
+
 eGameInteractionCommandClassification cGameInteractionCommand::GetClassification() const
 {
 	return mType == eGameInteractionCommand_ExecuteScript || mType == eGameInteractionCommand_Chat ||
@@ -105,6 +114,26 @@ namespace
 		std::string msLastSampledPose;
 	};
 
+	const char* const kDefaultAvatarEntityFile = "entities/multiplayer/skeleton_spelos/TheSkeletonSpelos.ent";
+	const size_t kMaximumAvatarCount = 16;
+
+	struct cSessionAvatars
+	{
+		cSessionAvatars() : mbUnidentifiedPoseFailing(false) {}
+		// In creation order, so the game removes them in a predictable order.
+		std::vector<std::string> mvIdentifiers;
+		// Avatar Identifiers whose avatarpose failure streak was already reported. A successful Pose
+		// ends its Avatar's streak.
+		std::set<std::string> msetFailingPoses;
+		// The one streak shared by avatarpose lines without a valid Avatar Identifier.
+		bool mbUnidentifiedPoseFailing;
+
+		bool Contains(const std::string& asIdentifier) const
+		{
+			return std::find(mvIdentifiers.begin(), mvIdentifiers.end(), asIdentifier) != mvIdentifiers.end();
+		}
+	};
+
 	struct cSessionProtocol
 	{
 		cSessionProtocol()
@@ -114,6 +143,7 @@ namespace
 		bool mbCommandProcessed;
 		unsigned int mlGrantedCapabilities;
 		cLocalPoseSubscription mLocalPoseSubscription;
+		cSessionAvatars mAvatars;
 	};
 
 	eGameInteractionCommandOutcome NegotiationOutcomeFor(const cGameInteractionCommand& aCommand,
@@ -181,7 +211,7 @@ namespace
 			return;
 		}
 
-		cGameInteractionLocalPose pose = aGameAdapter.GetLocalPose();
+		cGameInteractionPose pose = aGameAdapter.GetLocalPose();
 		const double now = static_cast<double>(pose.mlTimeMs);
 		if (aSubscription.mbScheduled && now < aSubscription.mfNextSampleTimeMs) return;
 		const std::string stateUpdate = cGameInteractionProtocolVersion2::SerializeLocalPose(pose);
@@ -199,6 +229,71 @@ namespace
 		aSubscription.mfNextSampleTimeMs = next;
 		aSubscription.msUndeliveredStateUpdate = stateUpdate;
 		aSubscription.msLastSampledPose = timelessPose;
+	}
+
+	cGameInteractionResponse AvatarResponse(eGameInteractionCommandType aType, eGameInteractionCommandOutcome aOutcome,
+		const std::string& asIdentifier)
+	{
+		cGameInteractionResponse response(aType, eGameInteractionResponse_Avatar, aOutcome);
+		response.SetAvatarIdentifier(asIdentifier);
+		return response;
+	}
+
+	cGameInteractionResponse CreateAvatar(const cGameInteractionCommand& aCommand,
+		iGameInteractionGameAdapter& aGameAdapter, cSessionAvatars& aAvatars)
+	{
+		const cGameInteractionAvatarRequest& request = aCommand.GetAvatarRequest();
+		if (!request.mbValid)
+			return AvatarResponse(aCommand.GetType(), eGameInteractionCommandOutcome_Invalid, std::string());
+		if (aAvatars.Contains(request.msIdentifier))
+			return AvatarResponse(aCommand.GetType(), eGameInteractionCommandOutcome_AvatarExists, request.msIdentifier);
+		if (aAvatars.mvIdentifiers.size() >= kMaximumAvatarCount)
+			return AvatarResponse(aCommand.GetType(), eGameInteractionCommandOutcome_AvatarLimitReached,
+				request.msIdentifier);
+		const std::string entityFile = request.msEntityFile.empty() ? kDefaultAvatarEntityFile : request.msEntityFile;
+		if (!aGameAdapter.CreateAvatar(request.msIdentifier, entityFile))
+			return AvatarResponse(aCommand.GetType(), eGameInteractionCommandOutcome_AvatarModelNotFound,
+				request.msIdentifier);
+		aAvatars.mvIdentifiers.push_back(request.msIdentifier);
+		return AvatarResponse(aCommand.GetType(), eGameInteractionCommandOutcome_Success, request.msIdentifier);
+	}
+
+	cGameInteractionResponse RemoveAvatar(const cGameInteractionCommand& aCommand,
+		iGameInteractionGameAdapter& aGameAdapter, cSessionAvatars& aAvatars)
+	{
+		const cGameInteractionAvatarRequest& request = aCommand.GetAvatarRequest();
+		if (!request.mbValid)
+			return AvatarResponse(aCommand.GetType(), eGameInteractionCommandOutcome_Invalid, std::string());
+		std::vector<std::string>::iterator avatar =
+			std::find(aAvatars.mvIdentifiers.begin(), aAvatars.mvIdentifiers.end(), request.msIdentifier);
+		if (avatar == aAvatars.mvIdentifiers.end())
+			return AvatarResponse(aCommand.GetType(), eGameInteractionCommandOutcome_AvatarNotFound, request.msIdentifier);
+		aAvatars.mvIdentifiers.erase(avatar);
+		aGameAdapter.RemoveAvatar(request.msIdentifier);
+		return AvatarResponse(aCommand.GetType(), eGameInteractionCommandOutcome_Success, request.msIdentifier);
+	}
+
+	// Poses stream at network rate, so a success is not answered and a failure is answered only
+	// when it starts its Avatar's failure streak.
+	cGameInteractionResponse PoseAvatar(const cGameInteractionCommand& aCommand,
+		iGameInteractionGameAdapter& aGameAdapter, cSessionAvatars& aAvatars)
+	{
+		const cGameInteractionAvatarRequest& request = aCommand.GetAvatarRequest();
+		const eGameInteractionCommandOutcome outcome = !request.mbValid ? eGameInteractionCommandOutcome_Invalid :
+			!aAvatars.Contains(request.msIdentifier) ? eGameInteractionCommandOutcome_AvatarNotFound :
+			eGameInteractionCommandOutcome_Success;
+		if (outcome == eGameInteractionCommandOutcome_Success)
+		{
+			aAvatars.msetFailingPoses.erase(request.msIdentifier);
+			aGameAdapter.PoseAvatar(request.msIdentifier, request.mPose);
+			return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_None);
+		}
+
+		const bool streakStarts = request.msIdentifier.empty() ?
+			!aAvatars.mbUnidentifiedPoseFailing : aAvatars.msetFailingPoses.insert(request.msIdentifier).second;
+		if (request.msIdentifier.empty()) aAvatars.mbUnidentifiedPoseFailing = true;
+		if (!streakStarts) return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_None, outcome);
+		return AvatarResponse(aCommand.GetType(), outcome, request.msIdentifier);
 	}
 
 	unsigned int RequiredCapability(eGameInteractionCommandType aType)
@@ -244,10 +339,13 @@ namespace
 		case eGameInteractionCommand_LocalPose:
 			return ChangeLocalPoseSubscription(aCommand, aSession.mLocalPoseSubscription);
 		case eGameInteractionCommand_AvatarCreate:
+			return CreateAvatar(aCommand, aGameAdapter, aSession.mAvatars);
 		case eGameInteractionCommand_AvatarRemove:
-		case eGameInteractionCommand_AvatarCollision:
+			return RemoveAvatar(aCommand, aGameAdapter, aSession.mAvatars);
 		case eGameInteractionCommand_AvatarPose:
-			// The avatars Capability gains its behavior in #31; until then its Commands are unknown.
+			return PoseAvatar(aCommand, aGameAdapter, aSession.mAvatars);
+		case eGameInteractionCommand_AvatarCollision:
+			// avatarcollision gains its behavior in #33; until then it is unknown.
 			return cGameInteractionResponse(eGameInteractionCommand_Unknown, eGameInteractionResponse_Rejected);
 		case eGameInteractionCommand_GetPosition:
 		{
@@ -342,6 +440,24 @@ public:
 	cGameInteractionLineBuffer mInboundLines;
 	cPendingCustomStoryStart mPendingCustomStoryStart;
 	cSessionProtocol mSession;
+	// Avatars of ended Sessions that the game has not removed yet. A Session can end without a game
+	// adapter at hand, such as on Shutdown, so they are removed on the next update.
+	std::vector<std::string> mvEndedSessionAvatars;
+
+	void EndSession()
+	{
+		const std::vector<std::string>& avatars = mSession.mAvatars.mvIdentifiers;
+		mvEndedSessionAvatars.insert(mvEndedSessionAvatars.end(), avatars.begin(), avatars.end());
+		mSession = cSessionProtocol();
+	}
+
+	void RemoveEndedSessionAvatars(iGameInteractionGameAdapter& aGameAdapter)
+	{
+		std::vector<std::string> avatars;
+		avatars.swap(mvEndedSessionAvatars);
+		for (std::vector<std::string>::const_iterator avatar = avatars.begin(); avatar != avatars.end(); ++avatar)
+			aGameAdapter.RemoveAvatar(*avatar);
+	}
 
 	// The legacy adapter serves a Session until it negotiates; its negotiation Command is the only
 	// Protocol Version 2 line a legacy Session understands.
@@ -401,6 +517,7 @@ void cGameInteractionGateway::Shutdown()
 {
 	mpImplementation->mInboundLines.Clear();
 	mpImplementation->mTransport.Shutdown();
+	mpImplementation->EndSession();
 }
 
 void cGameInteractionGateway::Update(iGameInteractionGameAdapter& aGameAdapter)
@@ -410,16 +527,17 @@ void cGameInteractionGateway::Update(iGameInteractionGameAdapter& aGameAdapter)
 	if (event == eGameInteractionTransportEvent_PeerConnected)
 	{
 		mpImplementation->mInboundLines.Clear();
-		mpImplementation->mSession = cSessionProtocol();
+		mpImplementation->EndSession();
 		mpImplementation->mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(
 			cLegacyGameInteractionProtocol::Greeting()));
 	}
 	else if (event == eGameInteractionTransportEvent_PeerDisconnected)
 	{
 		mpImplementation->mInboundLines.Clear();
-		mpImplementation->mSession = cSessionProtocol();
+		mpImplementation->EndSession();
 	}
 
+	mpImplementation->RemoveEndedSessionAvatars(aGameAdapter);
 	mpImplementation->PerformPendingCustomStoryStart(aGameAdapter);
 	if (event == eGameInteractionTransportEvent_PeerDisconnected) return;
 
@@ -434,6 +552,7 @@ void cGameInteractionGateway::Update(iGameInteractionGameAdapter& aGameAdapter)
 		const cGameInteractionCommand command = mpImplementation->ParseCommand(commandText);
 		const cGameInteractionResponse response = ExecuteCommand(command, aGameAdapter,
 			mpImplementation->mSession, mpImplementation->mPendingCustomStoryStart);
+		if (response.GetType() == eGameInteractionResponse_None) continue;
 		mpImplementation->mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(
 			mpImplementation->SerializeResponse(response)));
 	}
@@ -446,7 +565,8 @@ void cGameInteractionGateway::Update(iGameInteractionGameAdapter& aGameAdapter)
 	{
 		mpImplementation->mTransport.DisconnectPeer("Peer exceeded the inbound line length limit");
 		mpImplementation->mInboundLines.Clear();
-		mpImplementation->mSession = cSessionProtocol();
+		mpImplementation->EndSession();
+		mpImplementation->RemoveEndedSessionAvatars(aGameAdapter);
 	}
 }
 

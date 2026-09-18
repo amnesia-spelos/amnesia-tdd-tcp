@@ -16,6 +16,8 @@ namespace
 	const std::string kNegotiationPrefix = std::string(kNegotiationKeyword) + " ";
 	const unsigned long long kMaximumProtocolVersion = 0xFFFFFFFFu;
 	const unsigned long long kLargestParsedLocalPoseRate = 0xFFFFFFFFu;
+	const unsigned long long kMaximumTimeMs = 0xFFFFFFFFFFFFFFFFull;
+	const unsigned long long kMaximumTeleportCounter = 0xFFFFFFFFu;
 
 	struct cCapabilityName
 	{
@@ -76,6 +78,10 @@ namespace
 		case eGameInteractionCommandOutcome_AlreadyNegotiated: return "already-negotiated";
 		case eGameInteractionCommandOutcome_NegotiationTooLate: return "too-late";
 		case eGameInteractionCommandOutcome_CapabilityNotGranted: return "not-granted";
+		case eGameInteractionCommandOutcome_AvatarExists: return "exists";
+		case eGameInteractionCommandOutcome_AvatarLimitReached: return "limit";
+		case eGameInteractionCommandOutcome_AvatarModelNotFound: return "model-not-found";
+		case eGameInteractionCommandOutcome_AvatarNotFound: return "not-found";
 		default: return "invalid";
 		}
 	}
@@ -133,6 +139,68 @@ namespace
 			return cGameInteractionCommand(eGameInteractionCommand_LocalPose,
 				eGameInteractionLocalPoseRequest_Subscribe, rate);
 		return cGameInteractionCommand(eGameInteractionCommand_LocalPose, eGameInteractionLocalPoseRequest_Invalid, 0);
+	}
+
+	// Keeps the Avatar Identifier on the request whenever its field is valid.
+	bool TryReadAvatarIdentifier(cGameInteractionFieldReader& aReader, cGameInteractionAvatarRequest& aRequest)
+	{
+		std::string identifier;
+		if (!aReader.TryReadField(identifier) || !cGameInteractionProtocolVersion2::IsValidAvatarIdentifier(identifier))
+			return false;
+		aRequest.msIdentifier = identifier;
+		return true;
+	}
+
+	bool TryReadNumber(cGameInteractionFieldReader& aReader, float& afValue)
+	{
+		std::string field;
+		double value = 0.0;
+		if (!aReader.TryReadField(field) || !cGameInteractionProtocolVersion2::TryParseNumber(field, value)) return false;
+		afValue = static_cast<float>(value);
+		return true;
+	}
+
+	bool TryReadUnsignedInteger(cGameInteractionFieldReader& aReader, unsigned long long alMaximum,
+		unsigned long long& alValue)
+	{
+		std::string field;
+		return aReader.TryReadField(field) &&
+			cGameInteractionProtocolVersion2::TryParseUnsignedInteger(field, alMaximum, alValue);
+	}
+
+	bool TryReadFlag(cGameInteractionFieldReader& aReader, bool& abValue)
+	{
+		std::string field;
+		if (!aReader.TryReadField(field) || (field != "0" && field != "1")) return false;
+		abValue = field == "1";
+		return true;
+	}
+
+	// avatarcreate <id> [<entityFile>], avatarremove <id>, and
+	// avatarpose <id> <timeMs> <teleportCounter> <x> <y> <z> <yaw> <pitch> <crouch> <map>.
+	cGameInteractionCommand ParseAvatarCommand(eGameInteractionCommandType aType, const std::string& asLine)
+	{
+		cGameInteractionFieldReader reader(asLine);
+		std::string keyword;
+		reader.TryReadField(keyword);
+		cGameInteractionAvatarRequest request;
+		bool valid = TryReadAvatarIdentifier(reader, request);
+		if (valid && aType == eGameInteractionCommand_AvatarCreate && !reader.IsAtEnd())
+			valid = reader.TryReadRest(request.msEntityFile);
+		else if (valid && aType == eGameInteractionCommand_AvatarPose)
+		{
+			cGameInteractionPose& pose = request.mPose;
+			unsigned long long teleportCounter = 0;
+			valid = TryReadUnsignedInteger(reader, kMaximumTimeMs, pose.mlTimeMs) &&
+				TryReadUnsignedInteger(reader, kMaximumTeleportCounter, teleportCounter) &&
+				TryReadNumber(reader, pose.mFeetPosition.mfX) && TryReadNumber(reader, pose.mFeetPosition.mfY) &&
+				TryReadNumber(reader, pose.mFeetPosition.mfZ) && TryReadNumber(reader, pose.mfBodyYawDegrees) &&
+				TryReadNumber(reader, pose.mfCameraPitchDegrees) && TryReadFlag(reader, pose.mbCrouching) &&
+				reader.TryReadRest(pose.msMapFile);
+			pose.mlTeleportCounter = static_cast<unsigned int>(teleportCounter);
+		}
+		request.mbValid = valid && reader.IsAtEnd();
+		return cGameInteractionCommand(aType, request);
 	}
 }
 
@@ -250,6 +318,9 @@ cGameInteractionCommand cGameInteractionProtocolVersion2::ParseCommand(const std
 		eGameInteractionCommand_Unknown;
 	if (type == eGameInteractionCommand_Unknown) return cLegacyGameInteractionProtocol::ParseCommand(asLine);
 	if (type == eGameInteractionCommand_LocalPose) return ParseLocalPose(asLine);
+	if (type == eGameInteractionCommand_AvatarCreate || type == eGameInteractionCommand_AvatarRemove ||
+		type == eGameInteractionCommand_AvatarPose)
+		return ParseAvatarCommand(type, asLine);
 	std::string fields;
 	reader.TryReadRest(fields);
 	return cGameInteractionCommand(type, fields);
@@ -261,6 +332,8 @@ std::string cGameInteractionProtocolVersion2::SerializeResponse(const cGameInter
 	if (!keyword) return cLegacyGameInteractionProtocol::SerializeResponse(aResponse);
 
 	std::string response = std::string("RESPONSE ") + keyword + " " + OutcomeToken(aResponse.GetOutcome());
+	if (aResponse.GetType() == eGameInteractionResponse_Avatar)
+		return aResponse.GetAvatarIdentifier().empty() ? response : response + " " + aResponse.GetAvatarIdentifier();
 	if (aResponse.GetOutcome() != eGameInteractionCommandOutcome_Success) return response;
 	if (aResponse.GetType() == eGameInteractionResponse_ProtocolNegotiated)
 	{
@@ -280,7 +353,7 @@ std::string cGameInteractionProtocolVersion2::SerializeResponse(const cGameInter
 	return response;
 }
 
-std::string cGameInteractionProtocolVersion2::SerializeLocalPose(const cGameInteractionLocalPose& aPose)
+std::string cGameInteractionProtocolVersion2::SerializeLocalPose(const cGameInteractionPose& aPose)
 {
 	char clockFields[64];
 	sprintf(clockFields, "STATE localpose %llu %u ", aPose.mlTimeMs, aPose.mlTeleportCounter);

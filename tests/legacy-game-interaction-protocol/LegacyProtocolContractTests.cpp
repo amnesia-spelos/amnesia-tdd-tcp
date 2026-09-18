@@ -152,7 +152,10 @@ namespace
 		{
 			return eGameInteractionLocalPoseAvailability_Unavailable;
 		}
-		virtual cGameInteractionLocalPose GetLocalPose() const { return cGameInteractionLocalPose(); }
+		virtual cGameInteractionPose GetLocalPose() const { return cGameInteractionPose(); }
+		virtual bool CreateAvatar(const std::string&, const std::string&) { return true; }
+		virtual void RemoveAvatar(const std::string&) {}
+		virtual void PoseAvatar(const std::string&, const cGameInteractionPose&) {}
 	};
 
 	SOCKET Connect(cGameInteractionGateway& gateway, cFixtureGameAdapter& adapter)

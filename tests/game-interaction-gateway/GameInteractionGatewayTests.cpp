@@ -3,6 +3,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
+#include <cstdio>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -74,7 +75,19 @@ namespace
 		{
 			return mLocalPoseAvailability;
 		}
-		virtual cGameInteractionLocalPose GetLocalPose() const { return mLocalPose; }
+		virtual cGameInteractionPose GetLocalPose() const { return mLocalPose; }
+		virtual bool CreateAvatar(const std::string& asIdentifier, const std::string& asEntityFile)
+		{
+			if (asEntityFile == msMissingAvatarModel) return false;
+			mvCreatedAvatars.push_back(asIdentifier + " " + asEntityFile);
+			return true;
+		}
+		virtual void RemoveAvatar(const std::string& asIdentifier) { mvRemovedAvatars.push_back(asIdentifier); }
+		virtual void PoseAvatar(const std::string& asIdentifier, const cGameInteractionPose& aPose)
+		{
+			mvPosedAvatars.push_back(asIdentifier);
+			mLastAvatarPose = aPose;
+		}
 
 		bool mbMapLoaded;
 		cGameInteractionPosition mPosition;
@@ -92,7 +105,12 @@ namespace
 		SOCKET mPeer;
 		bool mbResponseDeliveredBeforeStart;
 		eGameInteractionLocalPoseAvailability mLocalPoseAvailability;
-		cGameInteractionLocalPose mLocalPose;
+		cGameInteractionPose mLocalPose;
+		std::string msMissingAvatarModel;
+		std::vector<std::string> mvCreatedAvatars;
+		std::vector<std::string> mvRemovedAvatars;
+		std::vector<std::string> mvPosedAvatars;
+		cGameInteractionPose mLastAvatarPose;
 	};
 
 	SOCKET Connect(cGameInteractionGateway& aGateway, cFakeGameAdapter& aAdapter)
@@ -394,6 +412,155 @@ namespace
 		gateway.Shutdown();
 	}
 
+	const char* const kDefaultAvatarModel = "entities/multiplayer/skeleton_spelos/TheSkeletonSpelos.ent";
+
+	SOCKET OpenAvatarSession(cGameInteractionGateway& aGateway, cFakeGameAdapter& aAdapter)
+	{
+		SOCKET peer = OpenSession(aGateway, aAdapter);
+		Expect(Exchange(peer, aGateway, aAdapter, "protocol 2 avatars\n") == "RESPONSE protocol ok 2 avatars\n",
+			"Session negotiates the avatars Capability");
+		return peer;
+	}
+
+	void AvatarsAreCreatedPosedAndRemovedThroughTheGameAdapter()
+	{
+		cFakeGameAdapter adapter;
+		adapter.msMissingAvatarModel = "entities/missing.ent";
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenAvatarSession(gateway, adapter);
+
+		Expect(Exchange(peer, gateway, adapter, "avatarcreate a1\navatarcreate b2 custom_stories/My Story: 2/ghost one.ent\n") ==
+			"RESPONSE avatarcreate ok a1\nRESPONSE avatarcreate ok b2\n", "creating Avatars is answered with their identifiers");
+		Expect(adapter.mvCreatedAvatars.size() == 2 &&
+			adapter.mvCreatedAvatars[0] == std::string("a1 ") + kDefaultAvatarModel &&
+			adapter.mvCreatedAvatars[1] == "b2 custom_stories/My Story: 2/ghost one.ent",
+			"the game creates each Avatar from the named model or the default one");
+		Expect(Exchange(peer, gateway, adapter, "avatarcreate a1 entities/other.ent\n") == "RESPONSE avatarcreate exists a1\n",
+			"an Avatar Identifier is created once per Session");
+		Expect(Exchange(peer, gateway, adapter, "avatarcreate c3 entities/missing.ent\n") ==
+			"RESPONSE avatarcreate model-not-found c3\n", "a missing model is reported");
+		Expect(adapter.mvCreatedAvatars.size() == 2, "rejected creations do not reach the game");
+
+		SendCommands(peer, gateway, adapter,
+			"avatarpose a1 5000 7 1.5000 -2.2500 3.0000 -90.5000 12.2500 1 custom_stories/My Story: 2/maps/cellar one.map\n");
+		Expect(ReceiveAvailable(peer, 50).empty(), "a successful Pose is not answered");
+		Expect(adapter.mvPosedAvatars.size() == 1 && adapter.mvPosedAvatars[0] == "a1", "the Pose reaches its Avatar");
+		const cGameInteractionPose& pose = adapter.mLastAvatarPose;
+		Expect(pose.mlTimeMs == 5000 && pose.mlTeleportCounter == 7 && pose.mFeetPosition.mfX == 1.5f &&
+			pose.mFeetPosition.mfY == -2.25f && pose.mFeetPosition.mfZ == 3.0f && pose.mfBodyYawDegrees == -90.5f &&
+			pose.mfCameraPitchDegrees == 12.25f && pose.mbCrouching &&
+			pose.msMapFile == "custom_stories/My Story: 2/maps/cellar one.map",
+			"every Pose field reaches the game");
+
+		Expect(Exchange(peer, gateway, adapter, "avatarremove a1\navatarremove a1\n") ==
+			"RESPONSE avatarremove ok a1\nRESPONSE avatarremove not-found a1\n",
+			"removing an Avatar is answered and a second removal finds nothing");
+		Expect(adapter.mvRemovedAvatars.size() == 1 && adapter.mvRemovedAvatars[0] == "a1",
+			"the game removes the Avatar once");
+		Expect(Exchange(peer, gateway, adapter, "avatarcreate a1\n") == "RESPONSE avatarcreate ok a1\n",
+			"a removed Avatar Identifier can be created again");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void SessionDrivesAtMostSixteenAvatars()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenAvatarSession(gateway, adapter);
+		std::string creates;
+		std::string expected;
+		for (int avatar = 1; avatar <= 16; ++avatar)
+		{
+			char identifier[8];
+			sprintf(identifier, "a%d", avatar);
+			creates += std::string("avatarcreate ") + identifier + "\n";
+			expected += std::string("RESPONSE avatarcreate ok ") + identifier + "\n";
+		}
+		SendCommands(peer, gateway, adapter, creates);
+		Expect(ReceiveLines(peer, 16) == expected, "a Session creates sixteen Avatars");
+		Expect(Exchange(peer, gateway, adapter, "avatarcreate a17\navatarcreate a16\n") ==
+			"RESPONSE avatarcreate limit a17\nRESPONSE avatarcreate exists a16\n",
+			"a seventeenth Avatar is over the limit, while an existing one still exists");
+		Expect(adapter.mvCreatedAvatars.size() == 16, "the game never creates an Avatar over the limit");
+		Expect(Exchange(peer, gateway, adapter, "avatarremove a3\navatarcreate a17\n") ==
+			"RESPONSE avatarremove ok a3\nRESPONSE avatarcreate ok a17\n", "removing an Avatar frees its place");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void AvatarPoseFailuresAreReportedOncePerStreak()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenAvatarSession(gateway, adapter);
+		const std::string poseFields = " 1000 0 1.0000 2.0000 3.0000 90.0000 0.0000 0 maps/main/level01.map\n";
+		Expect(Exchange(peer, gateway, adapter, "avatarpose ghost" + poseFields + "avatarpose ghost" + poseFields +
+			"avatarpose other" + poseFields) ==
+			"RESPONSE avatarpose not-found ghost\nRESPONSE avatarpose not-found other\n",
+			"an unknown Avatar is reported once per failure streak, separately per Avatar");
+
+		SendCommands(peer, gateway, adapter, "avatarcreate a1\navatarpose a1 bad\navatarpose a1 1000\n");
+		Expect(ReceiveLines(peer, 2) == "RESPONSE avatarcreate ok a1\nRESPONSE avatarpose invalid a1\n",
+			"a malformed Pose for a valid Avatar Identifier is reported once and echoes it");
+		SendCommands(peer, gateway, adapter, "avatarpose a1" + poseFields + "avatarpose a1 bad\n");
+		Expect(ReceiveLines(peer, 1) == "RESPONSE avatarpose invalid a1\n", "a successful Pose resets the streak");
+		Expect(adapter.mvPosedAvatars.size() == 1, "failed Poses do not reach the game");
+
+		Expect(Exchange(peer, gateway, adapter, "avatarpose a:b" + poseFields + "avatarpose\navatarpose bad:id x\n") ==
+			"RESPONSE avatarpose invalid\n", "lines without a valid Avatar Identifier share one streak");
+		SendCommands(peer, gateway, adapter, "avatarpose ghost" + poseFields);
+		Expect(ReceiveAvailable(peer, 50).empty(), "an unrelated failure does not reset another Avatar's streak");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void AvatarsAreRemovedWhenTheSessionEnds()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenAvatarSession(gateway, adapter);
+		Expect(Exchange(peer, gateway, adapter, "avatarcreate a1\navatarcreate b2\n") ==
+			"RESPONSE avatarcreate ok a1\nRESPONSE avatarcreate ok b2\n", "the Session creates two Avatars");
+		closesocket(peer);
+		for (int update = 0; update < 50 && adapter.mvRemovedAvatars.size() < 2; ++update)
+		{
+			Sleep(10);
+			gateway.Update(adapter);
+		}
+		Expect(adapter.mvRemovedAvatars.size() == 2 && adapter.mvRemovedAvatars[0] == "a1" &&
+			adapter.mvRemovedAvatars[1] == "b2", "a disconnect removes every Avatar of the Session");
+
+		SOCKET laterPeer = Connect(gateway, adapter);
+		Expect(Receive(laterPeer) == "Hello, from Amnesia: The Dark Descent!\n", "a new Session starts");
+		Expect(Exchange(laterPeer, gateway, adapter, "protocol 2 avatars\navatarremove a1\navatarcreate a1\n") ==
+			"RESPONSE protocol ok 2 avatars\nRESPONSE avatarremove not-found a1\nRESPONSE avatarcreate ok a1\n",
+			"a new Session does not inherit Avatars");
+		const std::string overlong = std::string(64 * 1024 + 1, 'x');
+		Expect(send(laterPeer, overlong.data(), static_cast<int>(overlong.size()), 0) ==
+			static_cast<int>(overlong.size()), "Peer sends an overlong line");
+		for (int update = 0; update < 50 && adapter.mvRemovedAvatars.size() < 3; ++update)
+		{
+			Sleep(10);
+			gateway.Update(adapter);
+		}
+		Expect(adapter.mvRemovedAvatars.size() == 3 && adapter.mvRemovedAvatars[2] == "a1",
+			"a line length disconnect removes the Session's Avatars");
+		closesocket(laterPeer);
+
+		SOCKET lastPeer = Connect(gateway, adapter);
+		Expect(Receive(lastPeer) == "Hello, from Amnesia: The Dark Descent!\n", "a third Session starts");
+		Expect(Exchange(lastPeer, gateway, adapter, "protocol 2 avatars\navatarcreate c3\n") ==
+			"RESPONSE protocol ok 2 avatars\nRESPONSE avatarcreate ok c3\n", "the third Session creates an Avatar");
+		gateway.Shutdown();
+		Expect(gateway.Listen("127.0.0.1", 0), "gateway listens again after a shutdown");
+		gateway.Update(adapter);
+		Expect(adapter.mvRemovedAvatars.size() == 4 && adapter.mvRemovedAvatars[3] == "c3",
+			"shutting the gateway down removes the Session's Avatars on the next update");
+		closesocket(lastPeer);
+		gateway.Shutdown();
+	}
+
 	void OverlongInboundLineDisconnectsThePeerWithAReason()
 	{
 		cFakeGameAdapter adapter;
@@ -560,6 +727,10 @@ int main()
 	SuspendedPlayEmitsTheLocalPoseOnlyWhenItChanged();
 	SlowPeerHoldsOnlyTheNewestLocalPose();
 	LocalPoseSubscriptionEndsWithTheSession();
+	AvatarsAreCreatedPosedAndRemovedThroughTheGameAdapter();
+	SessionDrivesAtMostSixteenAvatars();
+	AvatarPoseFailuresAreReportedOncePerStreak();
+	AvatarsAreRemovedWhenTheSessionEnds();
 	std::cout << "Game Interaction Protocol gateway loopback cases passed\n";
 	return 0;
 }

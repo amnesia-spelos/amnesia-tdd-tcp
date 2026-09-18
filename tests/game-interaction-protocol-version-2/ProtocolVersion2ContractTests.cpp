@@ -119,9 +119,9 @@ namespace
 		{
 			return eGameInteractionLocalPoseAvailability_Live;
 		}
-		virtual cGameInteractionLocalPose GetLocalPose() const
+		virtual cGameInteractionPose GetLocalPose() const
 		{
-			cGameInteractionLocalPose pose;
+			cGameInteractionPose pose;
 			pose.mlTimeMs = 123456;
 			pose.mlTeleportCounter = 3;
 			pose.mFeetPosition = cGameInteractionPosition(1.25f, -2.5f, 3.75f);
@@ -131,6 +131,12 @@ namespace
 			pose.msMapFile = "custom_stories/My Story: Part 2/maps/cellar one.map";
 			return pose;
 		}
+		virtual bool CreateAvatar(const std::string&, const std::string& asEntityFile)
+		{
+			return asEntityFile != "entities/missing.ent";
+		}
+		virtual void RemoveAvatar(const std::string&) {}
+		virtual void PoseAvatar(const std::string&, const cGameInteractionPose&) {}
 	};
 
 	std::string Receive(SOCKET peer, long microseconds)
@@ -264,7 +270,7 @@ int main(int argc, char** argv)
 		}
 		else if (kind == "local_pose")
 		{
-			cGameInteractionLocalPose pose;
+			cGameInteractionPose pose;
 			std::istringstream(ReadString(line, "time_ms")) >> pose.mlTimeMs;
 			std::istringstream(ReadString(line, "teleport_counter")) >> pose.mlTeleportCounter;
 			pose.mFeetPosition = cGameInteractionPosition(

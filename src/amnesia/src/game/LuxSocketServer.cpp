@@ -1,4 +1,5 @@
 #include "LuxSocketServer.h"
+#include "LuxAvatarHandler.h"
 #include "LuxMap.h"
 #include "LuxMapHandler.h"
 #include "LuxPlayer.h"
@@ -104,7 +105,7 @@ namespace
 			}
 		}
 
-		virtual cGameInteractionLocalPose GetLocalPose() const
+		virtual cGameInteractionPose GetLocalPose() const
 		{
 			cLuxPlayer *pPlayer = gpBase->mpPlayer;
 			iCharacterBody* pCharBody = pPlayer->GetCharacterBody();
@@ -112,7 +113,7 @@ namespace
 			cLuxMoveState_Normal *pMoveNormal =
 				static_cast<cLuxMoveState_Normal*>(pPlayer->GetMoveStateData(eLuxMoveState_Normal));
 
-			cGameInteractionLocalPose pose;
+			cGameInteractionPose pose;
 			pose.mlTimeMs = static_cast<unsigned long long>(gpBase->mpEngine->GetGameTime() * 1000.0);
 			pose.mlTeleportCounter = pPlayer->GetTeleportCounter();
 			pose.mFeetPosition = cGameInteractionPosition(vFeet.x, vFeet.y, vFeet.z);
@@ -121,6 +122,21 @@ namespace
 			pose.mbCrouching = pMoveNormal->IsCrouching();
 			pose.msMapFile = GetMapFile();
 			return pose;
+		}
+
+		virtual bool CreateAvatar(const std::string& asIdentifier, const std::string& asEntityFile)
+		{
+			return gpBase->mpAvatarHandler && gpBase->mpAvatarHandler->CreateAvatar(asIdentifier, asEntityFile);
+		}
+
+		virtual void RemoveAvatar(const std::string& asIdentifier)
+		{
+			if(gpBase->mpAvatarHandler) gpBase->mpAvatarHandler->RemoveAvatar(asIdentifier);
+		}
+
+		virtual void PoseAvatar(const std::string& asIdentifier, const cGameInteractionPose& aPose)
+		{
+			if(gpBase->mpAvatarHandler) gpBase->mpAvatarHandler->PoseAvatar(asIdentifier, aPose);
 		}
 
 	private:
