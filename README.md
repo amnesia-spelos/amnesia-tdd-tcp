@@ -43,6 +43,12 @@ You can check the negotiated [Protocol Version 2](tests/game-interaction-protoco
 .\scripts\test-protocol-version-2.ps1
 ```
 
+The check that an Avatar faces where its posing player looks links the engine's math, so it needs `build-windows.ps1` to have built HPL2 first:
+
+```powershell
+.\scripts\test-avatar-mesh-offset.ps1
+```
+
 You can also open `src/amnesia/src/game/Lux.sln` in Visual Studio, select `Release` and `Win32`, and build the solution after extracting `src/HPL2/dependencies.zip` into `src/HPL2`.
 
 ### Manual testing with the Controller

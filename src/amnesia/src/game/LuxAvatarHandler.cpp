@@ -1,5 +1,6 @@
 #include "LuxAvatarHandler.h"
 
+#include "AvatarMeshOffset.h"
 #include "LuxMap.h"
 #include "LuxMapHandler.h"
 #include "LuxPlayer.h"
@@ -146,9 +147,8 @@ void cLuxAvatarHandler::CreateWorldObjects(const tString& asIdentifier, cAvatar&
 
 	iCharacterBody *pBody = apMap->GetPhysicsWorld()->CreateCharacterBody(sName, gpBase->mpPlayer->GetBodySize());
 	pBody->SetGravityActive(false);
-	// The body carries the mesh with its feet at the body's feet, turned by yaw only.
 	pBody->SetEntity(aAvatar.mpMeshEntity);
-	pBody->SetEntityOffset(cMath::MatrixTranslate(cVector3f(0, -pBody->GetSize().y / 2, 0)));
+	pBody->SetEntityOffset(GetAvatarMeshOffset(pBody->GetSize().y));
 	aAvatar.mpBody = pBody;
 	// Waking places the new objects before they show.
 	SetAwake(aAvatar, false);
