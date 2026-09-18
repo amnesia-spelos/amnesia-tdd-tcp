@@ -2,6 +2,7 @@
 #define LUX_AVATAR_HANDLER_H
 
 #include "LuxBase.h"
+#include "AvatarPoseModel.h"
 #include "GameInteractionGateway.h"
 
 //----------------------------------------------
@@ -29,11 +30,9 @@ public:
 private:
 	struct cAvatar
 	{
-		cAvatar() : mbPosed(false), mbMeshBroken(false), mpMap(NULL), mpMeshEntity(NULL), mpBody(NULL) {}
+		cAvatar() : mbMeshBroken(false), mpMap(NULL), mpMeshEntity(NULL), mpBody(NULL) {}
 		tString msMeshFile;
-		// Poses are applied directly, latest wins, until interpolation replaces this (#32).
-		bool mbPosed;
-		cGameInteractionPose mPose;
+		cAvatarPoseModel mPoseModel;
 		// Set once the mesh fails to load, so it is not reloaded every update.
 		bool mbMeshBroken;
 		cLuxMap *mpMap;
@@ -46,7 +45,7 @@ private:
 	typedef tAvatarMap::iterator tAvatarMapIt;
 
 	bool FindMeshFile(const tString& asEntityFile, tString& asMeshFile);
-	bool IsAwake(const cAvatar& aAvatar, cLuxMap *apCurrentMap);
+	static double GetLocalTimeMs();
 	void CreateWorldObjects(const tString& asIdentifier, cAvatar& aAvatar, cLuxMap *apMap);
 	void DestroyWorldObjects(cAvatar& aAvatar);
 	void SetAwake(cAvatar& aAvatar, bool abAwake);

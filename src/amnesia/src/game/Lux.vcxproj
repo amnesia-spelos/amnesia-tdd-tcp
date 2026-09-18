@@ -141,6 +141,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="AvatarPoseModel.cpp" />
     <ClCompile Include="ChatModel.cpp" />
     <ClCompile Include="LuxChatHandler.cpp" />
     <ClCompile Include="GameInteractionGateway.cpp" />
@@ -260,6 +261,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AvatarMeshOffset.h" />
+    <ClInclude Include="AvatarPoseModel.h" />
     <ClInclude Include="ChatModel.h" />
     <ClInclude Include="LuxChatHandler.h" />
     <ClInclude Include="GameInteractionGateway.h" />

@@ -44,18 +44,29 @@ void cLuxAvatarHandler::PoseAvatar(const tString& asIdentifier, const cGameInter
 {
 	tAvatarMapIt it = m_mapAvatars.find(asIdentifier);
 	if(it == m_mapAvatars.end()) return;
-	it->second.mbPosed = true;
-	it->second.mPose = aPose;
+
+	cAvatarPoseSample sample;
+	sample.mfSenderTimeMs = static_cast<double>(aPose.mlTimeMs);
+	sample.mlTeleportCounter = aPose.mlTeleportCounter;
+	sample.mfX = aPose.mFeetPosition.mfX;
+	sample.mfY = aPose.mFeetPosition.mfY;
+	sample.mfZ = aPose.mFeetPosition.mfZ;
+	sample.mfYawDegrees = aPose.mfBodyYawDegrees;
+	sample.msMapFile = aPose.msMapFile;
+	it->second.mPoseModel.AddPose(sample, GetLocalTimeMs());
 }
 
 // The Pose is applied every update, so nothing that pushes the body moves the Avatar away from it.
 void cLuxAvatarHandler::Update(float afTimeStep)
 {
 	cLuxMap *pCurrentMap = gpBase->mpMapHandler->GetCurrentMap();
+	const tString sCurrentMapFile = pCurrentMap ? pCurrentMap->GetFileName() : "";
+	const double fLocalTimeMs = GetLocalTimeMs();
 	for(tAvatarMapIt it = m_mapAvatars.begin(); it != m_mapAvatars.end(); ++it)
 	{
 		cAvatar& avatar = it->second;
-		if(!IsAwake(avatar, pCurrentMap))
+		cAvatarRenderedPose pose;
+		if(!avatar.mPoseModel.Sample(fLocalTimeMs, sCurrentMapFile, pose))
 		{
 			SetAwake(avatar, false);
 			continue;
@@ -64,10 +75,8 @@ void cLuxAvatarHandler::Update(float afTimeStep)
 		if(avatar.mpBody == NULL) CreateWorldObjects(it->first, avatar, pCurrentMap);
 		if(avatar.mpBody == NULL) continue;
 
-		const cGameInteractionPose& pose = avatar.mPose;
-		avatar.mpBody->SetFeetPosition(cVector3f(pose.mFeetPosition.mfX, pose.mFeetPosition.mfY,
-			pose.mFeetPosition.mfZ));
-		avatar.mpBody->SetYaw(cMath::ToRad(pose.mfBodyYawDegrees));
+		avatar.mpBody->SetFeetPosition(cVector3f(pose.mfX, pose.mfY, pose.mfZ));
+		avatar.mpBody->SetYaw(cMath::ToRad(pose.mfYawDegrees));
 		if(!avatar.mpBody->IsActive())
 		{
 			// A dormant body is not updated, so its mesh is moved to the new Pose before it shows.
@@ -123,10 +132,10 @@ bool cLuxAvatarHandler::FindMeshFile(const tString& asEntityFile, tString& asMes
 	return true;
 }
 
-// Awake while its latest Pose names the current map; dormant otherwise, including with no map loaded.
-bool cLuxAvatarHandler::IsAwake(const cAvatar& aAvatar, cLuxMap *apCurrentMap)
+// The clock Poses arrive and are rendered by; the local Pose is stamped with the same one.
+double cLuxAvatarHandler::GetLocalTimeMs()
 {
-	return apCurrentMap && aAvatar.mbPosed && aAvatar.mPose.msMapFile == apCurrentMap->GetFileName();
+	return gpBase->mpEngine->GetGameTime() * 1000.0;
 }
 
 void cLuxAvatarHandler::CreateWorldObjects(const tString& asIdentifier, cAvatar& aAvatar, cLuxMap *apMap)
