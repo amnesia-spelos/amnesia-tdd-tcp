@@ -37,6 +37,12 @@ The legacy Game Interaction Protocol contract can be exercised without an intera
 .\scripts\test-legacy-protocol.ps1
 ```
 
+You can check the negotiated [Protocol Version 2](tests/game-interaction-protocol-version-2/README.md) contract the same way:
+
+```powershell
+.\scripts\test-protocol-version-2.ps1
+```
+
 You can also open `src/amnesia/src/game/Lux.sln` in Visual Studio, select `Release` and `Win32`, and build the solution after extracting `src/HPL2/dependencies.zip` into `src/HPL2`.
 
 > The bundled Autodesk FBX SDK 2012 library is tied to the Visual Studio 2010 C++ ABI. Modern Windows builds therefore omit the raw `.fbx` mesh importer. Runtime `.msh` and Collada loading, the game, and its TCP interaction remain in the build.

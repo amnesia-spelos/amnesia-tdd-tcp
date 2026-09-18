@@ -23,6 +23,8 @@ public:
 	void Shutdown();
 	eGameInteractionTransportEvent Update(std::vector<std::string>& avReceivedBytes);
 	void QueueBytes(const std::string& asBytes);
+	void Flush();
+	void DisconnectPeer(const char* apDiagnostic);
 
 	int GetPort() const { return mlPort; }
 	bool HasPeer() const { return mPeerSocket != INVALID_SOCKET; }
@@ -38,9 +40,7 @@ private:
 	std::string::size_type mlOutboundOffset;
 	std::string msDiagnostic;
 
-	void DisconnectPeer(const char* apDiagnostic);
 	void ReceiveBytes(std::vector<std::string>& avReceivedBytes);
-	void FlushOutbound();
 };
 
 #endif

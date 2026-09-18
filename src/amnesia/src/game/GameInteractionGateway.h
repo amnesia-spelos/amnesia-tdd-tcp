@@ -47,7 +47,20 @@ enum eGameInteractionCommandType
 	eGameInteractionCommand_ExecuteScript,
 	eGameInteractionCommand_Chat,
 	eGameInteractionCommand_GetCustomStories,
-	eGameInteractionCommand_StartCustomStory
+	eGameInteractionCommand_StartCustomStory,
+	eGameInteractionCommand_NegotiateProtocol,
+	eGameInteractionCommand_AvatarCreate,
+	eGameInteractionCommand_AvatarRemove,
+	eGameInteractionCommand_AvatarCollision,
+	eGameInteractionCommand_AvatarPose,
+	eGameInteractionCommand_LocalPose
+};
+
+enum eGameInteractionCapability
+{
+	eGameInteractionCapability_None = 0,
+	eGameInteractionCapability_Avatars = 1 << 0,
+	eGameInteractionCapability_LocalPose = 1 << 1
 };
 
 enum eGameInteractionCommandClassification
@@ -64,12 +77,18 @@ public:
 	cGameInteractionCommand(eGameInteractionCommandType aType, const std::wstring& asChatAuthor,
 		const std::wstring& asChatMessage);
 	cGameInteractionCommand(eGameInteractionCommandType aType, const std::wstring& asCustomStoryIdentifier);
+	// A negotiation Command. Protocol Version 0 means the requested version was malformed; the
+	// Capabilities are the recognized requested ones, as a set of eGameInteractionCapability flags.
+	cGameInteractionCommand(eGameInteractionCommandType aType, unsigned int alProtocolVersion,
+		unsigned int alCapabilities);
 	eGameInteractionCommandType GetType() const { return mType; }
 	eGameInteractionCommandClassification GetClassification() const;
 	const std::string& GetData() const { return msData; }
 	const std::wstring& GetChatAuthor() const { return msChatAuthor; }
 	const std::wstring& GetChatMessage() const { return msChatMessage; }
 	const std::wstring& GetCustomStoryIdentifier() const { return msCustomStoryIdentifier; }
+	unsigned int GetProtocolVersion() const { return mlProtocolVersion; }
+	unsigned int GetCapabilities() const { return mlCapabilities; }
 
 private:
 	eGameInteractionCommandType mType;
@@ -77,6 +96,8 @@ private:
 	std::wstring msChatAuthor;
 	std::wstring msChatMessage;
 	std::wstring msCustomStoryIdentifier;
+	unsigned int mlProtocolVersion;
+	unsigned int mlCapabilities;
 };
 
 enum eGameInteractionResponseType
@@ -89,7 +110,9 @@ enum eGameInteractionResponseType
 	eGameInteractionResponse_ScriptExecuted,
 	eGameInteractionResponse_ChatDisplayed,
 	eGameInteractionResponse_CustomStories,
-	eGameInteractionResponse_CustomStoryStarting
+	eGameInteractionResponse_CustomStoryStarting,
+	eGameInteractionResponse_ProtocolNegotiated,
+	eGameInteractionResponse_Rejected
 };
 
 enum eGameInteractionCommandOutcome
@@ -101,7 +124,12 @@ enum eGameInteractionCommandOutcome
 	eGameInteractionCommandOutcome_Unavailable,
 	eGameInteractionCommandOutcome_NotInMainMenu,
 	eGameInteractionCommandOutcome_CustomStoryNotFound,
-	eGameInteractionCommandOutcome_CustomStoryInvalid
+	eGameInteractionCommandOutcome_CustomStoryInvalid,
+	eGameInteractionCommandOutcome_Invalid,
+	eGameInteractionCommandOutcome_UnsupportedProtocolVersion,
+	eGameInteractionCommandOutcome_AlreadyNegotiated,
+	eGameInteractionCommandOutcome_NegotiationTooLate,
+	eGameInteractionCommandOutcome_CapabilityNotGranted
 };
 
 enum eGameInteractionCustomStoryAvailability
@@ -170,6 +198,7 @@ public:
 	const cGameInteractionRotation& GetRotation() const { return mRotation; }
 	const std::string& GetMapFile() const { return msMapFile; }
 	const std::vector<cGameInteractionCustomStory>& GetCustomStories() const { return mvCustomStories; }
+	unsigned int GetCapabilities() const { return mlCapabilities; }
 	void SetPosition(const cGameInteractionPosition& aPosition) { mPosition = aPosition; }
 	void SetRotation(const cGameInteractionRotation& aRotation) { mRotation = aRotation; }
 	void SetMapFile(const std::string& asMapFile) { msMapFile = asMapFile; }
@@ -177,6 +206,7 @@ public:
 	{
 		mvCustomStories = avCustomStories;
 	}
+	void SetCapabilities(unsigned int alCapabilities) { mlCapabilities = alCapabilities; }
 
 private:
 	eGameInteractionCommandType mCommandType;
@@ -186,6 +216,7 @@ private:
 	cGameInteractionRotation mRotation;
 	std::string msMapFile;
 	std::vector<cGameInteractionCustomStory> mvCustomStories;
+	unsigned int mlCapabilities;
 };
 
 class cGameInteractionGateway

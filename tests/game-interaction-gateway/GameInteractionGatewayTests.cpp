@@ -116,6 +116,80 @@ namespace
 		aGateway.Update(aAdapter);
 		aGateway.Update(aAdapter);
 	}
+
+	std::string Exchange(SOCKET aPeer, cGameInteractionGateway& aGateway,
+		cFakeGameAdapter& aAdapter, const std::string& asCommands)
+	{
+		SendCommands(aPeer, aGateway, aAdapter, asCommands);
+		return Receive(aPeer);
+	}
+
+	SOCKET OpenSession(cGameInteractionGateway& aGateway, cFakeGameAdapter& aAdapter)
+	{
+		Expect(aGateway.Listen("127.0.0.1", 0), "gateway listens for a new Session");
+		SOCKET peer = Connect(aGateway, aAdapter);
+		Expect(Receive(peer) == "Hello, from Amnesia: The Dark Descent!\n", "every Session opens with the greeting");
+		return peer;
+	}
+
+	void ProtocolVersion2NegotiationGrantsSupportedRequestedCapabilities()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenSession(gateway, adapter);
+		Expect(Exchange(peer, gateway, adapter, "protocol 2 localpose teleport avatars localpose\n") ==
+			"RESPONSE protocol ok 2 avatars localpose\n",
+			"negotiation grants the supported requested Capabilities once each in canonical order");
+		gateway.Report(cGameInteractionEvent(eGameInteractionEvent_MapChanged, "maps/main/level02.map"));
+		gateway.Report(cGameInteractionEvent(eGameInteractionEvent_LocalChatSubmitted, L"Daniel", L"hi: all"));
+		gateway.Update(adapter);
+		Expect(Receive(peer) == "EVENT:MapChanged:maps/main/level02.map\nEVENT:CHAT:Daniel:hi: all\n",
+			"legacy Events keep their wire form in a negotiated Session");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void OverlongInboundLineDisconnectsThePeerWithAReason()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenSession(gateway, adapter);
+		const std::string overlong = "ping\nexec:" + std::string(64 * 1024, 'x');
+		Expect(send(peer, overlong.data(), static_cast<int>(overlong.size()), 0) ==
+			static_cast<int>(overlong.size()), "Peer sends an overlong unterminated line");
+		for (int update = 0; update < 50 && gateway.GetDiagnostic().empty(); ++update)
+		{
+			Sleep(10);
+			gateway.Update(adapter);
+		}
+		Expect(gateway.GetDiagnostic().find("line length") != std::string::npos,
+			"overlong line leaves a diagnostic naming the line length limit");
+		Expect(Receive(peer) == "RESPONSE:ping:pong\n", "Commands before the overlong line are answered");
+		char buffer[16];
+		Expect(recv(peer, buffer, sizeof(buffer), 0) == 0, "overlong line disconnects the Peer");
+		closesocket(peer);
+
+		SOCKET laterPeer = Connect(gateway, adapter);
+		Expect(Receive(laterPeer) == "Hello, from Amnesia: The Dark Descent!\n",
+			"gateway accepts a new Session after the line length disconnect");
+		Expect(Exchange(laterPeer, gateway, adapter, "ping\n") == "RESPONSE:ping:pong\n",
+			"new Session does not inherit the overlong line");
+		closesocket(laterPeer);
+		gateway.Shutdown();
+	}
+
+	void ResponseIsDeliveredWithinTheUpdateThatProcessedItsCommand()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenSession(gateway, adapter);
+		Expect(send(peer, "ping\n", 5, 0) == 5, "Peer sends a Command");
+		Sleep(50);
+		gateway.Update(adapter);
+		Expect(Receive(peer) == "RESPONSE:ping:pong\n", "Response is flushed by the update that processed its Command");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
 }
 
 int main()
@@ -230,6 +304,10 @@ int main()
 	Expect(!blockedGateway.GetDiagnostic().empty(), "binding failure exposes a useful diagnostic");
 	blockedGateway.Update(adapter);
 	gateway.Shutdown();
+
+	ProtocolVersion2NegotiationGrantsSupportedRequestedCapabilities();
+	ResponseIsDeliveredWithinTheUpdateThatProcessedItsCommand();
+	OverlongInboundLineDisconnectsThePeerWithAReason();
 	std::cout << "Game Interaction Protocol gateway loopback cases passed\n";
 	return 0;
 }

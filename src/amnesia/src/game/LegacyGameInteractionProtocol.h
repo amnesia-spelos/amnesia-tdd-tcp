@@ -8,14 +8,21 @@
 class cGameInteractionLineBuffer
 {
 public:
-	cGameInteractionLineBuffer();
+	// Generous enough for long legacy exec: scripts while bounding what a Peer can make the game buffer.
+	static const std::string::size_type kDefaultMaximumLineLength = 64 * 1024;
+
+	explicit cGameInteractionLineBuffer(std::string::size_type aMaximumLineLength = kDefaultMaximumLineLength);
 	void Append(const char* apBytes, std::string::size_type aLength);
+	// Stops extracting once a line longer than the maximum is found, complete or not.
 	bool TryPopLine(std::string& asLine);
+	bool HasExceededLineLimit() const { return mbExceededLineLimit; }
 	void Clear();
 
 private:
 	std::string msPendingBytes;
 	std::string::size_type mSearchStart;
+	std::string::size_type mMaximumLineLength;
+	bool mbExceededLineLimit;
 };
 
 class cLegacyGameInteractionProtocol

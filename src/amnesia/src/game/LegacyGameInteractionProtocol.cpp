@@ -3,8 +3,8 @@
 #include <cstdio>
 #include <climits>
 
-cGameInteractionLineBuffer::cGameInteractionLineBuffer()
-	: mSearchStart(0)
+cGameInteractionLineBuffer::cGameInteractionLineBuffer(std::string::size_type aMaximumLineLength)
+	: mSearchStart(0), mMaximumLineLength(aMaximumLineLength), mbExceededLineLimit(false)
 {
 }
 
@@ -15,16 +15,26 @@ void cGameInteractionLineBuffer::Append(const char* apBytes, std::string::size_t
 
 bool cGameInteractionLineBuffer::TryPopLine(std::string& asLine)
 {
+	if (mbExceededLineLimit) return false;
 	const std::string::size_type delimiter = msPendingBytes.find('\n', mSearchStart);
 	if (delimiter == std::string::npos)
 	{
 		mSearchStart = msPendingBytes.length();
+		// One byte of slack keeps a CR whose LF has not arrived yet from counting against the line.
+		const std::string::size_type length = msPendingBytes.length();
+		mbExceededLineLimit = length > mMaximumLineLength + 1 ||
+			(length == mMaximumLineLength + 1 && msPendingBytes[length - 1] != '\r');
 		return false;
 	}
 
-	asLine = msPendingBytes.substr(0, delimiter);
-	if (!asLine.empty() && asLine[asLine.length() - 1] == '\r')
-		asLine.erase(asLine.length() - 1);
+	std::string::size_type lineLength = delimiter;
+	if (lineLength > 0 && msPendingBytes[lineLength - 1] == '\r') --lineLength;
+	if (lineLength > mMaximumLineLength)
+	{
+		mbExceededLineLimit = true;
+		return false;
+	}
+	asLine = msPendingBytes.substr(0, lineLength);
 	msPendingBytes.erase(0, delimiter + 1);
 	mSearchStart = 0;
 	return true;
@@ -34,6 +44,7 @@ void cGameInteractionLineBuffer::Clear()
 {
 	msPendingBytes.clear();
 	mSearchStart = 0;
+	mbExceededLineLimit = false;
 }
 
 namespace

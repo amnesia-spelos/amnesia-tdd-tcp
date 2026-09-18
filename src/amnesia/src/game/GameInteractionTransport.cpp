@@ -112,6 +112,11 @@ eGameInteractionTransportEvent cGameInteractionTransport::Update(std::vector<std
 				mPeerSocket = peer;
 				event = eGameInteractionTransportEvent_PeerConnected;
 				msDiagnostic.clear();
+				// Nagle would hold small Responses and State Updates back until the Peer acknowledges earlier ones.
+				const BOOL noDelay = TRUE;
+				if (setsockopt(peer, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&noDelay),
+					sizeof(noDelay)) == SOCKET_ERROR)
+					msDiagnostic = "Could not disable Nagle's algorithm for Peer";
 			}
 		}
 		else if (WSAGetLastError() != WSAEWOULDBLOCK)
@@ -121,7 +126,7 @@ eGameInteractionTransportEvent cGameInteractionTransport::Update(std::vector<std
 	if (mPeerSocket != INVALID_SOCKET)
 	{
 		ReceiveBytes(avReceivedBytes);
-		if (mPeerSocket != INVALID_SOCKET) FlushOutbound();
+		Flush();
 		if (mPeerSocket == INVALID_SOCKET) event = eGameInteractionTransportEvent_PeerDisconnected;
 	}
 	return event;
@@ -167,8 +172,9 @@ void cGameInteractionTransport::ReceiveBytes(std::vector<std::string>& avReceive
 	}
 }
 
-void cGameInteractionTransport::FlushOutbound()
+void cGameInteractionTransport::Flush()
 {
+	if (mPeerSocket == INVALID_SOCKET) return;
 	int remainingBudget = kMaximumBytesSentPerUpdate;
 	while (mlOutboundOffset < msOutboundBytes.size() && remainingBudget > 0)
 	{

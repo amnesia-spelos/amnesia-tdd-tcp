@@ -1,0 +1,55 @@
+{"name":"negotiation grants supported requested Capabilities in canonical order","kind":"session","request_wire":"protocol 2 localpose teleport avatars localpose\n","expected_wire":"RESPONSE protocol ok 2 avatars localpose\n"}
+{"name":"negotiation without Capabilities grants none","kind":"session","request_wire":"protocol 2\n","expected_wire":"RESPONSE protocol ok 2\n"}
+{"name":"negotiation of only unknown Capabilities grants none","kind":"session","request_wire":"protocol 2 teleport\n","expected_wire":"RESPONSE protocol ok 2\n"}
+{"name":"repeated negotiation is rejected","kind":"session","request_wire":"protocol 2 avatars\nprotocol 2 localpose\n","expected_wire":"RESPONSE protocol ok 2 avatars\nRESPONSE protocol already-negotiated\n"}
+{"name":"negotiation after another Command is too late","kind":"session","request_wire":"ping\nprotocol 2 avatars\n","expected_wire":"RESPONSE:ping:pong\nRESPONSE protocol too-late\n"}
+{"name":"unsupported Protocol Version is rejected","kind":"session","request_wire":"protocol 3 avatars\n","expected_wire":"RESPONSE protocol unsupported-version\n"}
+{"name":"negotiation may be retried after an unsupported Protocol Version","kind":"session","request_wire":"protocol 3 avatars\nprotocol 2 avatars\n","expected_wire":"RESPONSE protocol unsupported-version\nRESPONSE protocol ok 2 avatars\n"}
+{"name":"negotiation without a Protocol Version is invalid","kind":"session","request_wire":"protocol\n","expected_wire":"RESPONSE protocol invalid\n"}
+{"name":"non-numeric Protocol Version is invalid","kind":"session","request_wire":"protocol two avatars\n","expected_wire":"RESPONSE protocol invalid\n"}
+{"name":"negotiation with an empty field is invalid","kind":"session","request_wire":"protocol 2  avatars\n","expected_wire":"RESPONSE protocol invalid\n"}
+{"name":"Protocol Version 0 is invalid","kind":"session","request_wire":"protocol 0 avatars\n","expected_wire":"RESPONSE protocol invalid\n"}
+{"name":"Protocol Version with leading zeros is accepted","kind":"session","request_wire":"protocol 02 avatars\n","expected_wire":"RESPONSE protocol ok 2 avatars\n"}
+{"name":"negotiation may be retried after an invalid negotiation","kind":"session","request_wire":"protocol\nprotocol 2 localpose\n","expected_wire":"RESPONSE protocol invalid\nRESPONSE protocol ok 2 localpose\n"}
+{"name":"failed negotiation leaves the Session on the legacy protocol","kind":"session","request_wire":"protocol 3\navatarcreate a1\n","expected_wire":"RESPONSE protocol unsupported-version\nWARNING:Unknown command\n"}
+{"name":"legacy Commands keep working in a negotiated Session","kind":"session","request_wire":"protocol 2 avatars localpose\nping\ngetmap\nexec:DoThing()\nchat:Alice:hi: there\ndance\n","expected_wire":"RESPONSE protocol ok 2 avatars localpose\nRESPONSE:ping:pong\nRESPONSE:getmap:maps/main/level01.map\nRESPONSE:exec:script executed\nRESPONSE:chat:message displayed\nWARNING:Unknown command\n"}
+{"name":"Avatar messages without the avatars Capability are not granted","kind":"session","request_wire":"protocol 2 localpose\navatarcreate a1\navatarremove a1\navatarcollision a1 0\navatarpose a1 1000 0 1.0000 2.0000 3.0000 90.0000 0.0000 0 maps/a b:c.map\n","expected_wire":"RESPONSE protocol ok 2 localpose\nRESPONSE avatarcreate not-granted\nRESPONSE avatarremove not-granted\nRESPONSE avatarcollision not-granted\nRESPONSE avatarpose not-granted\n"}
+{"name":"local Pose messages without the localpose Capability are not granted","kind":"session","request_wire":"protocol 2 avatars\nlocalpose subscribe 20\nlocalpose unsubscribe\n","expected_wire":"RESPONSE protocol ok 2 avatars\nRESPONSE localpose not-granted\nRESPONSE localpose not-granted\n"}
+{"name":"Capability gating does not depend on the message being well formed","kind":"session","request_wire":"protocol 2\navatarcreate\nlocalpose\n","expected_wire":"RESPONSE protocol ok 2\nRESPONSE avatarcreate not-granted\nRESPONSE localpose not-granted\n"}
+{"name":"Protocol Version 2 keywords must be a whole field","kind":"session","request_wire":"protocol 2\navatarcreatex a1\n","expected_wire":"RESPONSE protocol ok 2\nWARNING:Unknown command\n"}
+{"name":"Protocol Version 2 messages are unknown to a Session that never negotiated","kind":"session","request_wire":"avatarcreate a1\navatarpose a1 1000 0 1.0000 2.0000 3.0000 90.0000 0.0000 0 maps/a.map\nlocalpose subscribe 20\nprotocolx 2\n","expected_wire":"WARNING:Unknown command\nWARNING:Unknown command\nWARNING:Unknown command\nWARNING:Unknown command\n"}
+{"name":"numbers are written with four decimals","kind":"format_number","value":"1.25","expected_text":"1.2500"}
+{"name":"negative numbers keep their sign","kind":"format_number","value":"-2.5","expected_text":"-2.5000"}
+{"name":"numbers round half away from zero to four decimals","kind":"format_number","value":"3.14159","expected_text":"3.1416"}
+{"name":"negative numbers round away from zero","kind":"format_number","value":"-0.00005","expected_text":"-0.0001"}
+{"name":"values rounding to zero have no sign","kind":"format_number","value":"-0.00004","expected_text":"0.0000"}
+{"name":"large coordinates keep their integer part","kind":"format_number","value":"12345.6789","expected_text":"12345.6789"}
+{"name":"numbers parse with a point decimal separator","kind":"parse_number","text":"1.2500","valid":true,"expected_value":"1.25"}
+{"name":"negative numbers parse","kind":"parse_number","text":"-42.0001","valid":true,"expected_value":"-42.0001"}
+{"name":"integers parse as numbers","kind":"parse_number","text":"7","valid":true,"expected_value":"7"}
+{"name":"comma decimal separator is rejected","kind":"parse_number","text":"1,25","valid":false}
+{"name":"missing integer digits are rejected","kind":"parse_number","text":".5","valid":false}
+{"name":"missing fraction digits are rejected","kind":"parse_number","text":"1.","valid":false}
+{"name":"plus sign is rejected","kind":"parse_number","text":"+1.0","valid":false}
+{"name":"exponents are rejected","kind":"parse_number","text":"1e3","valid":false}
+{"name":"non-finite words are rejected","kind":"parse_number","text":"nan","valid":false}
+{"name":"empty number is rejected","kind":"parse_number","text":"","valid":false}
+{"name":"numbers beyond fifteen digits are rejected","kind":"parse_number","text":"1234567890.123456","valid":false}
+{"name":"fixed fields are separated by single spaces","kind":"fields","line":"avatarcollision a1 0","field_count":3,"rest":false,"valid":true,"expected_fields":["avatarcollision","a1","0"]}
+{"name":"map path is the last field and keeps spaces and colons","kind":"fields","line":"avatarpose a1 1000 3 1.0000 2.0000 3.0000 90.0000 -10.0000 0 custom_stories/My Story: Part 2/maps/cellar one.map","field_count":10,"rest":true,"valid":true,"expected_fields":["avatarpose","a1","1000","3","1.0000","2.0000","3.0000","90.0000","-10.0000","0","custom_stories/My Story: Part 2/maps/cellar one.map"]}
+{"name":"map path keeps trailing spaces","kind":"fields","line":"STATE localpose maps/a.map ","field_count":2,"rest":true,"valid":true,"expected_fields":["STATE","localpose","maps/a.map "]}
+{"name":"missing map path is rejected","kind":"fields","line":"STATE localpose","field_count":2,"rest":true,"valid":false}
+{"name":"empty map path is rejected","kind":"fields","line":"STATE localpose ","field_count":2,"rest":true,"valid":false}
+{"name":"doubled separator is an empty field","kind":"fields","line":"avatarcollision  a1 0","field_count":3,"rest":false,"valid":false}
+{"name":"trailing separator is an empty field","kind":"fields","line":"avatarcollision a1 0 ","field_count":3,"rest":false,"valid":false}
+{"name":"missing fixed field is rejected","kind":"fields","line":"avatarcollision a1","field_count":3,"rest":false,"valid":false}
+{"name":"extra fixed field is rejected","kind":"fields","line":"avatarcollision a1 0 1","field_count":3,"rest":false,"valid":false}
+{"name":"printable ASCII Avatar Identifier is valid","kind":"avatar_identifier","text":"peer-2_Alice!~","valid":true}
+{"name":"single-character Avatar Identifier is valid","kind":"avatar_identifier","text":"a","valid":true}
+{"name":"32-character Avatar Identifier is valid","kind":"avatar_identifier","text":"abcdefghijklmnopqrstuvwxyz012345","valid":true}
+{"name":"33-character Avatar Identifier is invalid","kind":"avatar_identifier","text":"abcdefghijklmnopqrstuvwxyz0123456","valid":false}
+{"name":"empty Avatar Identifier is invalid","kind":"avatar_identifier","text":"","valid":false}
+{"name":"Avatar Identifier with a space is invalid","kind":"avatar_identifier","text":"a b","valid":false}
+{"name":"Avatar Identifier with a colon is invalid","kind":"avatar_identifier","text":"a:b","valid":false}
+{"name":"Avatar Identifier with a control character is invalid","kind":"avatar_identifier","text":"a\tb","valid":false}
+{"name":"non-ASCII Avatar Identifier is invalid","kind":"avatar_identifier","text":"Žofie","valid":false}
