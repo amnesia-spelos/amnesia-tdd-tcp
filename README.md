@@ -45,6 +45,22 @@ You can check the negotiated [Protocol Version 2](tests/game-interaction-protoco
 
 You can also open `src/amnesia/src/game/Lux.sln` in Visual Studio, select `Release` and `Win32`, and build the solution after extracting `src/HPL2/dependencies.zip` into `src/HPL2`.
 
+### Manual testing with the Controller
+
+To exercise the Game Interaction Protocol against a running `Amnesia.exe`, use [amnesia-csharp-controller](https://github.com/amnesia-spelos/amnesia-csharp-controller), an internal development tool cloned next to this repository. It sends every typed line to the game unchanged and prints every received line with a timestamp. It needs the .NET 10 SDK:
+
+```powershell
+dotnet run --project ..\amnesia-csharp-controller\src\AmnesiaController
+```
+
+It connects to `127.0.0.1:5150` by default, and retries until the game listens. `/reconnect` starts a fresh Session. `/mute <category>` hides a category of received lines. Protocol Version 2 lines, such as `RESPONSE localpose ok subscribe 2` and `STATE ...`, are shown as `uncategorised`. To replay a setup, pipe a file of lines into it:
+
+```powershell
+dotnet run --project ..\amnesia-csharp-controller\src\AmnesiaController -- --linger 600000 < setup.txt
+```
+
+For example, to watch the local Pose, run it and type `protocol 2 localpose`, then `localpose subscribe 2`. Legacy Commands such as `exec:SetPlayerPos(0, 0, 0)` still work in a negotiated Session. They help trigger game behavior while you watch its output.
+
 > The bundled Autodesk FBX SDK 2012 library is tied to the Visual Studio 2010 C++ ABI. Modern Windows builds therefore omit the raw `.fbx` mesh importer. Runtime `.msh` and Collada loading, the game, and its TCP interaction remain in the build.
 
 ## 🚀 Projects using amnesia-tdd-tcp
