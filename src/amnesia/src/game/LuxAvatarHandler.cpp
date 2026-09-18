@@ -86,6 +86,18 @@ void cLuxAvatarHandler::DestroyWorldEntities(cLuxMap *apMap)
 	}
 }
 
+// A game reset deletes every map without sending DestroyWorldEntities, and the worlds take the
+// Avatars' objects with them. The Avatars themselves belong to the Session and stay.
+void cLuxAvatarHandler::Reset()
+{
+	for(tAvatarMapIt it = m_mapAvatars.begin(); it != m_mapAvatars.end(); ++it)
+	{
+		it->second.mpMap = NULL;
+		it->second.mpMeshEntity = NULL;
+		it->second.mpBody = NULL;
+	}
+}
+
 // Reads only the model's mesh; its bodies, joints, and prop variables are ignored.
 bool cLuxAvatarHandler::FindMeshFile(const tString& asEntityFile, tString& asMeshFile)
 {

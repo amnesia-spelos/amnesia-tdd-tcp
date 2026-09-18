@@ -23,6 +23,7 @@ public:
 	void PoseAvatar(const tString& asIdentifier, const cGameInteractionPose& aPose);
 
 	void Update(float afTimeStep);
+	void Reset();
 	void DestroyWorldEntities(cLuxMap *apMap);
 
 private:

@@ -429,11 +429,11 @@ namespace
 		cGameInteractionGateway gateway;
 		SOCKET peer = OpenAvatarSession(gateway, adapter);
 
-		Expect(Exchange(peer, gateway, adapter, "avatarcreate a1\navatarcreate b2 custom_stories/My Story: 2/ghost one.ent\n") ==
+		Expect(Exchange(peer, gateway, adapter, "avatarcreate a1\navatarcreate b2 custom_stories/My Story: 2/visitor one.ent\n") ==
 			"RESPONSE avatarcreate ok a1\nRESPONSE avatarcreate ok b2\n", "creating Avatars is answered with their identifiers");
 		Expect(adapter.mvCreatedAvatars.size() == 2 &&
 			adapter.mvCreatedAvatars[0] == std::string("a1 ") + kDefaultAvatarModel &&
-			adapter.mvCreatedAvatars[1] == "b2 custom_stories/My Story: 2/ghost one.ent",
+			adapter.mvCreatedAvatars[1] == "b2 custom_stories/My Story: 2/visitor one.ent",
 			"the game creates each Avatar from the named model or the default one");
 		Expect(Exchange(peer, gateway, adapter, "avatarcreate a1 entities/other.ent\n") == "RESPONSE avatarcreate exists a1\n",
 			"an Avatar Identifier is created once per Session");
@@ -495,9 +495,9 @@ namespace
 		cGameInteractionGateway gateway;
 		SOCKET peer = OpenAvatarSession(gateway, adapter);
 		const std::string poseFields = " 1000 0 1.0000 2.0000 3.0000 90.0000 0.0000 0 maps/main/level01.map\n";
-		Expect(Exchange(peer, gateway, adapter, "avatarpose ghost" + poseFields + "avatarpose ghost" + poseFields +
+		Expect(Exchange(peer, gateway, adapter, "avatarpose stranger" + poseFields + "avatarpose stranger" + poseFields +
 			"avatarpose other" + poseFields) ==
-			"RESPONSE avatarpose not-found ghost\nRESPONSE avatarpose not-found other\n",
+			"RESPONSE avatarpose not-found stranger\nRESPONSE avatarpose not-found other\n",
 			"an unknown Avatar is reported once per failure streak, separately per Avatar");
 
 		SendCommands(peer, gateway, adapter, "avatarcreate a1\navatarpose a1 bad\navatarpose a1 1000\n");
@@ -509,7 +509,7 @@ namespace
 
 		Expect(Exchange(peer, gateway, adapter, "avatarpose a:b" + poseFields + "avatarpose\navatarpose bad:id x\n") ==
 			"RESPONSE avatarpose invalid\n", "lines without a valid Avatar Identifier share one streak");
-		SendCommands(peer, gateway, adapter, "avatarpose ghost" + poseFields);
+		SendCommands(peer, gateway, adapter, "avatarpose stranger" + poseFields);
 		Expect(ReceiveAvailable(peer, 50).empty(), "an unrelated failure does not reset another Avatar's streak");
 		closesocket(peer);
 		gateway.Shutdown();

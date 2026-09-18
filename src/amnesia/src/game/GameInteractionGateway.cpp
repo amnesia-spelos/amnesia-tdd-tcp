@@ -122,9 +122,8 @@ namespace
 		cSessionAvatars() : mbUnidentifiedPoseFailing(false) {}
 		// In creation order, so the game removes them in a predictable order.
 		std::vector<std::string> mvIdentifiers;
-		// Avatar Identifiers whose avatarpose failure streak was already reported. A successful Pose
-		// ends its Avatar's streak.
-		std::set<std::string> msetFailingPoses;
+		// Avatar Identifiers whose avatarpose failure streak was already reported.
+		std::set<std::string> msetFailingPoseIdentifiers;
 		// The one streak shared by avatarpose lines without a valid Avatar Identifier.
 		bool mbUnidentifiedPoseFailing;
 
@@ -132,6 +131,25 @@ namespace
 		{
 			return std::find(mvIdentifiers.begin(), mvIdentifiers.end(), asIdentifier) != mvIdentifiers.end();
 		}
+
+		bool Remove(const std::string& asIdentifier)
+		{
+			std::vector<std::string>::iterator avatar = std::find(mvIdentifiers.begin(), mvIdentifiers.end(), asIdentifier);
+			if (avatar == mvIdentifiers.end()) return false;
+			mvIdentifiers.erase(avatar);
+			return true;
+		}
+
+		// True only for the failure that starts a streak; an empty identifier is the shared streak.
+		bool StartsPoseFailureStreak(const std::string& asIdentifier)
+		{
+			if (!asIdentifier.empty()) return msetFailingPoseIdentifiers.insert(asIdentifier).second;
+			const bool starts = !mbUnidentifiedPoseFailing;
+			mbUnidentifiedPoseFailing = true;
+			return starts;
+		}
+
+		void EndPoseFailureStreak(const std::string& asIdentifier) { msetFailingPoseIdentifiers.erase(asIdentifier); }
 	};
 
 	struct cSessionProtocol
@@ -264,11 +282,8 @@ namespace
 		const cGameInteractionAvatarRequest& request = aCommand.GetAvatarRequest();
 		if (!request.mbValid)
 			return AvatarResponse(aCommand.GetType(), eGameInteractionCommandOutcome_Invalid, std::string());
-		std::vector<std::string>::iterator avatar =
-			std::find(aAvatars.mvIdentifiers.begin(), aAvatars.mvIdentifiers.end(), request.msIdentifier);
-		if (avatar == aAvatars.mvIdentifiers.end())
+		if (!aAvatars.Remove(request.msIdentifier))
 			return AvatarResponse(aCommand.GetType(), eGameInteractionCommandOutcome_AvatarNotFound, request.msIdentifier);
-		aAvatars.mvIdentifiers.erase(avatar);
 		aGameAdapter.RemoveAvatar(request.msIdentifier);
 		return AvatarResponse(aCommand.GetType(), eGameInteractionCommandOutcome_Success, request.msIdentifier);
 	}
@@ -284,15 +299,12 @@ namespace
 			eGameInteractionCommandOutcome_Success;
 		if (outcome == eGameInteractionCommandOutcome_Success)
 		{
-			aAvatars.msetFailingPoses.erase(request.msIdentifier);
+			aAvatars.EndPoseFailureStreak(request.msIdentifier);
 			aGameAdapter.PoseAvatar(request.msIdentifier, request.mPose);
 			return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_None);
 		}
-
-		const bool streakStarts = request.msIdentifier.empty() ?
-			!aAvatars.mbUnidentifiedPoseFailing : aAvatars.msetFailingPoses.insert(request.msIdentifier).second;
-		if (request.msIdentifier.empty()) aAvatars.mbUnidentifiedPoseFailing = true;
-		if (!streakStarts) return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_None, outcome);
+		if (!aAvatars.StartsPoseFailureStreak(request.msIdentifier))
+			return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_None);
 		return AvatarResponse(aCommand.GetType(), outcome, request.msIdentifier);
 	}
 
