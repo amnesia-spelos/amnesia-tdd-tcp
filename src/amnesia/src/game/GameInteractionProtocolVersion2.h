@@ -28,6 +28,7 @@ public:
 	static bool IsNegotiation(const std::string& asLine);
 	static cGameInteractionCommand ParseCommand(const std::string& asLine);
 	static std::string SerializeResponse(const cGameInteractionResponse& aResponse);
+	static std::string SerializeLocalPose(const cGameInteractionLocalPose& aPose);
 
 	static std::string FormatNumber(double afValue);
 	static bool TryParseNumber(const std::string& asText, double& afValue);

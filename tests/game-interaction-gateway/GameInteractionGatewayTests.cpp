@@ -28,7 +28,14 @@ namespace
 			: mbMapLoaded(true), mPosition(1.25f, -2.5f, 3.75f),
 			mRotation(1.570796325f, -0.7853981625f), msMapFile("maps/main/level01.map"),
 			mbChatAvailable(true), mlDisplayedChatEntries(0), mbInMainMenu(true),
-			mPeer(INVALID_SOCKET), mbResponseDeliveredBeforeStart(false) {}
+			mPeer(INVALID_SOCKET), mbResponseDeliveredBeforeStart(false),
+			mLocalPoseAvailability(eGameInteractionLocalPoseAvailability_Live)
+		{
+			mLocalPose.mlTimeMs = 1000;
+			mLocalPose.mFeetPosition = cGameInteractionPosition(1.25f, -2.5f, 3.75f);
+			mLocalPose.mfBodyYawDegrees = 90.0f;
+			mLocalPose.msMapFile = "maps/main/level01.map";
+		}
 
 		virtual bool IsMapLoaded() const { return mbMapLoaded; }
 		virtual cGameInteractionPosition GetPosition() const { return mPosition; }
@@ -63,6 +70,11 @@ namespace
 			mbResponseDeliveredBeforeStart = select(0, &readable, NULL, NULL, &noWait) == 1;
 			mvStartedCustomStories.push_back(asIdentifier);
 		}
+		virtual eGameInteractionLocalPoseAvailability GetLocalPoseAvailability() const
+		{
+			return mLocalPoseAvailability;
+		}
+		virtual cGameInteractionLocalPose GetLocalPose() const { return mLocalPose; }
 
 		bool mbMapLoaded;
 		cGameInteractionPosition mPosition;
@@ -79,6 +91,8 @@ namespace
 		std::vector<std::wstring> mvStartedCustomStories;
 		SOCKET mPeer;
 		bool mbResponseDeliveredBeforeStart;
+		eGameInteractionLocalPoseAvailability mLocalPoseAvailability;
+		cGameInteractionLocalPose mLocalPose;
 	};
 
 	SOCKET Connect(cGameInteractionGateway& aGateway, cFakeGameAdapter& aAdapter)
@@ -146,6 +160,237 @@ namespace
 		Expect(Receive(peer) == "EVENT:MapChanged:maps/main/level02.map\nEVENT:CHAT:Daniel:hi: all\n",
 			"legacy Events keep their wire form in a negotiated Session");
 		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	// Returns whatever arrives within the wait, or nothing.
+	std::string ReceiveAvailable(SOCKET aPeer, long alMilliseconds)
+	{
+		fd_set readable;
+		FD_ZERO(&readable);
+		FD_SET(aPeer, &readable);
+		timeval timeout = { 0, alMilliseconds * 1000 };
+		if (select(0, &readable, NULL, NULL, &timeout) != 1) return std::string();
+		char buffer[65536];
+		const int count = recv(aPeer, buffer, sizeof(buffer), 0);
+		return count > 0 ? std::string(buffer, count) : std::string();
+	}
+
+	std::string ReceiveLines(SOCKET aPeer, int alLineCount)
+	{
+		std::string received;
+		for (int attempt = 0; attempt < 20; ++attempt)
+		{
+			size_t lines = 0;
+			for (size_t index = 0; index < received.size(); ++index)
+				if (received[index] == '\n') ++lines;
+			if (lines >= static_cast<size_t>(alLineCount)) return received;
+			received += ReceiveAvailable(aPeer, 100);
+		}
+		return received;
+	}
+
+	// The fake adapter's Pose as a State Update at the given time.
+	std::string LocalPoseStateUpdate(const std::string& asTimeMs)
+	{
+		return "STATE localpose " + asTimeMs + " 0 1.2500 -2.5000 3.7500 90.0000 0.0000 0 maps/main/level01.map\n";
+	}
+
+	std::string UpdateAt(cGameInteractionGateway& aGateway, cFakeGameAdapter& aAdapter, SOCKET aPeer,
+		unsigned long long alTimeMs)
+	{
+		aAdapter.mLocalPose.mlTimeMs = alTimeMs;
+		aGateway.Update(aAdapter);
+		return ReceiveAvailable(aPeer, 50);
+	}
+
+	SOCKET OpenLocalPoseSession(cGameInteractionGateway& aGateway, cFakeGameAdapter& aAdapter)
+	{
+		SOCKET peer = OpenSession(aGateway, aAdapter);
+		Expect(Exchange(peer, aGateway, aAdapter, "protocol 2 localpose\n") == "RESPONSE protocol ok 2 localpose\n",
+			"Session negotiates the localpose Capability");
+		return peer;
+	}
+
+	void LocalPoseStateUpdatesFollowTheSubscribedRate()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenLocalPoseSession(gateway, adapter);
+		SendCommands(peer, gateway, adapter, "localpose subscribe 20\n");
+		Expect(ReceiveLines(peer, 2) == "RESPONSE localpose ok subscribe 20\n" + LocalPoseStateUpdate("1000"),
+			"subscribing sends the current Pose right after the Response");
+		Expect(UpdateAt(gateway, adapter, peer, 1049).empty(), "no State Update before the 20 Hz interval elapses");
+		Expect(UpdateAt(gateway, adapter, peer, 1050) == LocalPoseStateUpdate("1050"),
+			"a State Update follows once the interval elapses");
+		Expect(UpdateAt(gateway, adapter, peer, 1110) == LocalPoseStateUpdate("1110"), "a late update still samples");
+		Expect(UpdateAt(gateway, adapter, peer, 1149).empty(), "a late sample does not shift the schedule");
+		Expect(UpdateAt(gateway, adapter, peer, 1150) == LocalPoseStateUpdate("1150"),
+			"the schedule keeps the subscribed average rate");
+		Expect(UpdateAt(gateway, adapter, peer, 1500) == LocalPoseStateUpdate("1500"),
+			"a stalled clock resumes sampling");
+		Expect(UpdateAt(gateway, adapter, peer, 1549).empty(), "after a stall the schedule restarts from the sample");
+
+		SendCommands(peer, gateway, adapter, "localpose unsubscribe\n");
+		Expect(ReceiveLines(peer, 1) == "RESPONSE localpose ok unsubscribe\n", "unsubscribing is answered");
+		Expect(UpdateAt(gateway, adapter, peer, 5000).empty(), "unsubscribing stops State Updates");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void LocalPoseRateIsClamped()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenLocalPoseSession(gateway, adapter);
+		SendCommands(peer, gateway, adapter, "localpose subscribe 1000\n");
+		Expect(ReceiveLines(peer, 2) == "RESPONSE localpose ok subscribe 60\n" + LocalPoseStateUpdate("1000"),
+			"a rate above 60 Hz is clamped to 60 Hz");
+		Expect(UpdateAt(gateway, adapter, peer, 1016).empty(), "60 Hz does not sample within 16 ms");
+		Expect(UpdateAt(gateway, adapter, peer, 1017) == LocalPoseStateUpdate("1017"), "60 Hz samples after 16.7 ms");
+
+		SendCommands(peer, gateway, adapter, "localpose subscribe 0\n");
+		Expect(ReceiveLines(peer, 2) == "RESPONSE localpose ok subscribe 1\n" + LocalPoseStateUpdate("1017"),
+			"a rate below 1 Hz is clamped to 1 Hz and subscribing again samples at once");
+		Expect(UpdateAt(gateway, adapter, peer, 2016).empty(), "1 Hz does not sample within a second");
+		Expect(UpdateAt(gateway, adapter, peer, 2017) == LocalPoseStateUpdate("2017"), "1 Hz samples after a second");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void LocalPoseRequiresTheLocalPoseCapability()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenSession(gateway, adapter);
+		Expect(Exchange(peer, gateway, adapter, "protocol 2 avatars\nlocalpose subscribe 20\n") ==
+			"RESPONSE protocol ok 2 avatars\nRESPONSE localpose not-granted\n",
+			"subscribing without the localpose Capability is not granted");
+		Expect(UpdateAt(gateway, adapter, peer, 2000).empty(), "a Session without the Capability gets no State Update");
+		closesocket(peer);
+		gateway.Shutdown();
+
+		SOCKET legacyPeer = OpenSession(gateway, adapter);
+		Expect(Exchange(legacyPeer, gateway, adapter, "localpose subscribe 20\n") == "WARNING:Unknown command\n",
+			"a Session that never negotiated does not know localpose");
+		Expect(UpdateAt(gateway, adapter, legacyPeer, 3000).empty(), "a legacy Session gets no State Update");
+		closesocket(legacyPeer);
+		gateway.Shutdown();
+	}
+
+	void LocalPoseIsEmittedOnlyWhileAMapIsLoaded()
+	{
+		cFakeGameAdapter adapter;
+		adapter.mLocalPoseAvailability = eGameInteractionLocalPoseAvailability_Unavailable;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenLocalPoseSession(gateway, adapter);
+		SendCommands(peer, gateway, adapter, "localpose subscribe 20\n");
+		Expect(ReceiveLines(peer, 1) == "RESPONSE localpose ok subscribe 20\n",
+			"subscribing in the main menu or while loading is answered");
+		Expect(UpdateAt(gateway, adapter, peer, 2000).empty(), "no State Update without a loaded map");
+		adapter.mLocalPoseAvailability = eGameInteractionLocalPoseAvailability_Live;
+		Expect(UpdateAt(gateway, adapter, peer, 2001) == LocalPoseStateUpdate("2001"),
+			"State Updates begin once a map is loaded");
+		adapter.mLocalPoseAvailability = eGameInteractionLocalPoseAvailability_Unavailable;
+		Expect(UpdateAt(gateway, adapter, peer, 3000).empty(), "State Updates stop while the next map loads");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void SuspendedPlayEmitsTheLocalPoseOnlyWhenItChanged()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenLocalPoseSession(gateway, adapter);
+		SendCommands(peer, gateway, adapter, "localpose subscribe 20\n");
+		Expect(ReceiveLines(peer, 2) == "RESPONSE localpose ok subscribe 20\n" + LocalPoseStateUpdate("1000"),
+			"a live Session receives the Pose");
+		adapter.mLocalPoseAvailability = eGameInteractionLocalPoseAvailability_Suspended;
+		Expect(UpdateAt(gateway, adapter, peer, 1050).empty(), "an unchanged Pose is not repeated while paused");
+		Expect(UpdateAt(gateway, adapter, peer, 1500).empty(), "an unchanged Pose stays silent while paused");
+		adapter.mLocalPose.mfCameraPitchDegrees = -10.0f;
+		Expect(UpdateAt(gateway, adapter, peer, 1510) ==
+			"STATE localpose 1510 0 1.2500 -2.5000 3.7500 90.0000 -10.0000 0 maps/main/level01.map\n",
+			"a changed Pose is sent while in the inventory");
+		adapter.mLocalPose.mlTeleportCounter = 1;
+		Expect(UpdateAt(gateway, adapter, peer, 1520).empty(), "a changed Pose while paused still keeps the rate");
+		Expect(UpdateAt(gateway, adapter, peer, 1560) ==
+			"STATE localpose 1560 1 1.2500 -2.5000 3.7500 90.0000 -10.0000 0 maps/main/level01.map\n",
+			"a teleport while paused is a changed Pose");
+		adapter.mLocalPoseAvailability = eGameInteractionLocalPoseAvailability_Live;
+		Expect(UpdateAt(gateway, adapter, peer, 1610) ==
+			"STATE localpose 1610 1 1.2500 -2.5000 3.7500 90.0000 -10.0000 0 maps/main/level01.map\n",
+			"an unchanged Pose is sent again once play resumes");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void SlowPeerHoldsOnlyTheNewestLocalPose()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		Expect(gateway.Listen("127.0.0.1", 0), "gateway listens for a slow Peer");
+		SOCKET peer = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+		const int smallBuffer = 4096;
+		setsockopt(peer, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&smallBuffer), sizeof(smallBuffer));
+		sockaddr_in address = {};
+		address.sin_family = AF_INET;
+		address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+		address.sin_port = htons(static_cast<u_short>(gateway.GetPort()));
+		Expect(connect(peer, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == 0, "slow Peer connects");
+		gateway.Update(adapter);
+		SendCommands(peer, gateway, adapter, "protocol 2 localpose\nlocalpose subscribe 60\n");
+
+		// Far more Pose bytes than the 1 MiB delivery queue limit, none of which the Peer reads.
+		const int poseCount = 30000;
+		for (int pose = 1; pose <= poseCount; ++pose)
+		{
+			adapter.mLocalPose.mFeetPosition.mfX = static_cast<float>(pose);
+			adapter.mLocalPose.mlTimeMs = 1000 + static_cast<unsigned long long>(pose) * 17;
+			gateway.Update(adapter);
+		}
+		Expect(gateway.GetDiagnostic().empty(), "a Peer that does not read is not disconnected for Poses alone");
+
+		const std::string newest =
+			"STATE localpose 511000 0 30000.0000 -2.5000 3.7500 90.0000 0.0000 0 maps/main/level01.map\n";
+		std::string received;
+		for (int attempt = 0; attempt < 500 && (received.size() < newest.size() ||
+			received.compare(received.size() - newest.size(), newest.size(), newest) != 0); ++attempt)
+		{
+			gateway.Update(adapter);
+			received += ReceiveAvailable(peer, 10);
+		}
+		Expect(received.compare(0, 39, "Hello, from Amnesia: The Dark Descent!\n") == 0, "slow Peer gets the greeting");
+		Expect(received.size() >= newest.size() &&
+			received.compare(received.size() - newest.size(), newest.size(), newest) == 0,
+			"once the Peer reads, the newest Pose arrives last");
+		Expect(received.size() < 1024 * 1024, "undelivered Poses were replaced rather than queued");
+		Expect(Exchange(peer, gateway, adapter, "ping\n") == "RESPONSE:ping:pong\n", "slow Peer's Session continues");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void LocalPoseSubscriptionEndsWithTheSession()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenLocalPoseSession(gateway, adapter);
+		SendCommands(peer, gateway, adapter, "localpose subscribe 20\n");
+		Expect(ReceiveLines(peer, 2) == "RESPONSE localpose ok subscribe 20\n" + LocalPoseStateUpdate("1000"),
+			"first Session is subscribed");
+		closesocket(peer);
+		for (int update = 0; update < 50 && gateway.GetDiagnostic().empty(); ++update)
+		{
+			Sleep(10);
+			gateway.Update(adapter);
+		}
+
+		SOCKET laterPeer = Connect(gateway, adapter);
+		Expect(Receive(laterPeer) == "Hello, from Amnesia: The Dark Descent!\n", "a new Session starts");
+		Expect(Exchange(laterPeer, gateway, adapter, "protocol 2 localpose\n") == "RESPONSE protocol ok 2 localpose\n",
+			"the new Session negotiates localpose");
+		Expect(UpdateAt(gateway, adapter, laterPeer, 5000).empty(), "the new Session does not inherit the subscription");
+		closesocket(laterPeer);
 		gateway.Shutdown();
 	}
 
@@ -308,6 +553,13 @@ int main()
 	ProtocolVersion2NegotiationGrantsSupportedRequestedCapabilities();
 	ResponseIsDeliveredWithinTheUpdateThatProcessedItsCommand();
 	OverlongInboundLineDisconnectsThePeerWithAReason();
+	LocalPoseStateUpdatesFollowTheSubscribedRate();
+	LocalPoseRateIsClamped();
+	LocalPoseRequiresTheLocalPoseCapability();
+	LocalPoseIsEmittedOnlyWhileAMapIsLoaded();
+	SuspendedPlayEmitsTheLocalPoseOnlyWhenItChanged();
+	SlowPeerHoldsOnlyTheNewestLocalPose();
+	LocalPoseSubscriptionEndsWithTheSession();
 	std::cout << "Game Interaction Protocol gateway loopback cases passed\n";
 	return 0;
 }

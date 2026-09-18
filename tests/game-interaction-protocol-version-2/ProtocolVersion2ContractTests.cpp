@@ -115,6 +115,22 @@ namespace
 			return eGameInteractionCustomStoryAvailability_NotFound;
 		}
 		virtual void StartCustomStory(const std::wstring&) {}
+		virtual eGameInteractionLocalPoseAvailability GetLocalPoseAvailability() const
+		{
+			return eGameInteractionLocalPoseAvailability_Live;
+		}
+		virtual cGameInteractionLocalPose GetLocalPose() const
+		{
+			cGameInteractionLocalPose pose;
+			pose.mlTimeMs = 123456;
+			pose.mlTeleportCounter = 3;
+			pose.mFeetPosition = cGameInteractionPosition(1.25f, -2.5f, 3.75f);
+			pose.mfBodyYawDegrees = 90.0f;
+			pose.mfCameraPitchDegrees = -45.0f;
+			pose.mbCrouching = true;
+			pose.msMapFile = "custom_stories/My Story: Part 2/maps/cellar one.map";
+			return pose;
+		}
 	};
 
 	std::string Receive(SOCKET peer, long microseconds)
@@ -245,6 +261,22 @@ int main(int argc, char** argv)
 			valid = valid && reader.IsAtEnd();
 			actual = valid ? JoinFields(fields) : "invalid";
 			expected = ReadBool(line, "valid") ? JoinFields(ReadStrings(line, "expected_fields")) : "invalid";
+		}
+		else if (kind == "local_pose")
+		{
+			cGameInteractionLocalPose pose;
+			std::istringstream(ReadString(line, "time_ms")) >> pose.mlTimeMs;
+			std::istringstream(ReadString(line, "teleport_counter")) >> pose.mlTeleportCounter;
+			pose.mFeetPosition = cGameInteractionPosition(
+				static_cast<float>(ReadClassicNumber(ReadString(line, "x"))),
+				static_cast<float>(ReadClassicNumber(ReadString(line, "y"))),
+				static_cast<float>(ReadClassicNumber(ReadString(line, "z"))));
+			pose.mfBodyYawDegrees = static_cast<float>(ReadClassicNumber(ReadString(line, "yaw")));
+			pose.mfCameraPitchDegrees = static_cast<float>(ReadClassicNumber(ReadString(line, "pitch")));
+			pose.mbCrouching = ReadBool(line, "crouch");
+			pose.msMapFile = ReadString(line, "map");
+			actual = cGameInteractionProtocolVersion2::SerializeLocalPose(pose);
+			expected = ReadString(line, "expected_text");
 		}
 		else if (kind == "avatar_identifier")
 		{

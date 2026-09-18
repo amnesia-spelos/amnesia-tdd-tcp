@@ -63,6 +63,14 @@ enum eGameInteractionCapability
 	eGameInteractionCapability_LocalPose = 1 << 1
 };
 
+// What a localpose Command asks for. Invalid means the line was malformed.
+enum eGameInteractionLocalPoseRequest
+{
+	eGameInteractionLocalPoseRequest_Invalid,
+	eGameInteractionLocalPoseRequest_Subscribe,
+	eGameInteractionLocalPoseRequest_Unsubscribe
+};
+
 enum eGameInteractionCommandClassification
 {
 	eGameInteractionCommandClassification_Observational,
@@ -81,6 +89,9 @@ public:
 	// Capabilities are the recognized requested ones, as a set of eGameInteractionCapability flags.
 	cGameInteractionCommand(eGameInteractionCommandType aType, unsigned int alProtocolVersion,
 		unsigned int alCapabilities);
+	// A localpose Command. The rate is the requested State Update rate in Hz before clamping.
+	cGameInteractionCommand(eGameInteractionCommandType aType, eGameInteractionLocalPoseRequest aRequest,
+		unsigned int alLocalPoseRate);
 	eGameInteractionCommandType GetType() const { return mType; }
 	eGameInteractionCommandClassification GetClassification() const;
 	const std::string& GetData() const { return msData; }
@@ -89,6 +100,8 @@ public:
 	const std::wstring& GetCustomStoryIdentifier() const { return msCustomStoryIdentifier; }
 	unsigned int GetProtocolVersion() const { return mlProtocolVersion; }
 	unsigned int GetCapabilities() const { return mlCapabilities; }
+	eGameInteractionLocalPoseRequest GetLocalPoseRequest() const { return mLocalPoseRequest; }
+	unsigned int GetLocalPoseRate() const { return mlLocalPoseRate; }
 
 private:
 	eGameInteractionCommandType mType;
@@ -98,6 +111,8 @@ private:
 	std::wstring msCustomStoryIdentifier;
 	unsigned int mlProtocolVersion;
 	unsigned int mlCapabilities;
+	eGameInteractionLocalPoseRequest mLocalPoseRequest;
+	unsigned int mlLocalPoseRate;
 };
 
 enum eGameInteractionResponseType
@@ -112,6 +127,7 @@ enum eGameInteractionResponseType
 	eGameInteractionResponse_CustomStories,
 	eGameInteractionResponse_CustomStoryStarting,
 	eGameInteractionResponse_ProtocolNegotiated,
+	eGameInteractionResponse_LocalPoseSubscription,
 	eGameInteractionResponse_Rejected
 };
 
@@ -157,6 +173,33 @@ struct cGameInteractionRotation
 	float mfPitchRadians;
 };
 
+// The local player's Pose as a Peer receives it in a localpose State Update.
+struct cGameInteractionLocalPose
+{
+	cGameInteractionLocalPose()
+		: mlTimeMs(0), mlTeleportCounter(0), mfBodyYawDegrees(0.0f), mfCameraPitchDegrees(0.0f),
+		  mbCrouching(false) {}
+	// Milliseconds on the game's monotonic clock.
+	unsigned long long mlTimeMs;
+	// Changes whenever the local player is placed rather than moved.
+	unsigned int mlTeleportCounter;
+	cGameInteractionPosition mFeetPosition;
+	float mfBodyYawDegrees;
+	float mfCameraPitchDegrees;
+	bool mbCrouching;
+	std::string msMapFile;
+};
+
+enum eGameInteractionLocalPoseAvailability
+{
+	// No map is loaded, or one is loading, so there is no local Pose to report.
+	eGameInteractionLocalPoseAvailability_Unavailable,
+	// The local player is in play.
+	eGameInteractionLocalPoseAvailability_Live,
+	// A map is loaded but play is suspended, such as while paused or in the inventory.
+	eGameInteractionLocalPoseAvailability_Suspended
+};
+
 class cGameInteractionCustomStory
 {
 public:
@@ -184,6 +227,9 @@ public:
 	virtual eGameInteractionCustomStoryAvailability GetCustomStoryAvailability(
 		const std::wstring& asIdentifier) const = 0;
 	virtual void StartCustomStory(const std::wstring& asIdentifier) = 0;
+	virtual eGameInteractionLocalPoseAvailability GetLocalPoseAvailability() const = 0;
+	// Called only while the local Pose is available.
+	virtual cGameInteractionLocalPose GetLocalPose() const = 0;
 };
 
 class cGameInteractionResponse
@@ -199,6 +245,8 @@ public:
 	const std::string& GetMapFile() const { return msMapFile; }
 	const std::vector<cGameInteractionCustomStory>& GetCustomStories() const { return mvCustomStories; }
 	unsigned int GetCapabilities() const { return mlCapabilities; }
+	eGameInteractionLocalPoseRequest GetLocalPoseRequest() const { return mLocalPoseRequest; }
+	unsigned int GetLocalPoseRate() const { return mlLocalPoseRate; }
 	void SetPosition(const cGameInteractionPosition& aPosition) { mPosition = aPosition; }
 	void SetRotation(const cGameInteractionRotation& aRotation) { mRotation = aRotation; }
 	void SetMapFile(const std::string& asMapFile) { msMapFile = asMapFile; }
@@ -207,6 +255,11 @@ public:
 		mvCustomStories = avCustomStories;
 	}
 	void SetCapabilities(unsigned int alCapabilities) { mlCapabilities = alCapabilities; }
+	void SetLocalPoseSubscription(eGameInteractionLocalPoseRequest aRequest, unsigned int alRate)
+	{
+		mLocalPoseRequest = aRequest;
+		mlLocalPoseRate = alRate;
+	}
 
 private:
 	eGameInteractionCommandType mCommandType;
@@ -217,6 +270,8 @@ private:
 	std::string msMapFile;
 	std::vector<cGameInteractionCustomStory> mvCustomStories;
 	unsigned int mlCapabilities;
+	eGameInteractionLocalPoseRequest mLocalPoseRequest;
+	unsigned int mlLocalPoseRate;
 };
 
 class cGameInteractionGateway

@@ -25,26 +25,36 @@ cGameInteractionEvent::cGameInteractionEvent(eGameInteractionEventType aType,
 
 cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
 	const std::string& asData)
-	: mType(aType), msData(asData), mlProtocolVersion(0), mlCapabilities(0)
+	: mType(aType), msData(asData), mlProtocolVersion(0), mlCapabilities(0),
+	  mLocalPoseRequest(eGameInteractionLocalPoseRequest_Invalid), mlLocalPoseRate(0)
 {
 }
 
 cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
 	const std::wstring& asChatAuthor, const std::wstring& asChatMessage)
 	: mType(aType), msChatAuthor(asChatAuthor), msChatMessage(asChatMessage), mlProtocolVersion(0),
-	  mlCapabilities(0)
+	  mlCapabilities(0), mLocalPoseRequest(eGameInteractionLocalPoseRequest_Invalid), mlLocalPoseRate(0)
 {
 }
 
 cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
 	const std::wstring& asCustomStoryIdentifier)
-	: mType(aType), msCustomStoryIdentifier(asCustomStoryIdentifier), mlProtocolVersion(0), mlCapabilities(0)
+	: mType(aType), msCustomStoryIdentifier(asCustomStoryIdentifier), mlProtocolVersion(0), mlCapabilities(0),
+	  mLocalPoseRequest(eGameInteractionLocalPoseRequest_Invalid), mlLocalPoseRate(0)
 {
 }
 
 cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
 	unsigned int alProtocolVersion, unsigned int alCapabilities)
-	: mType(aType), mlProtocolVersion(alProtocolVersion), mlCapabilities(alCapabilities)
+	: mType(aType), mlProtocolVersion(alProtocolVersion), mlCapabilities(alCapabilities),
+	  mLocalPoseRequest(eGameInteractionLocalPoseRequest_Invalid), mlLocalPoseRate(0)
+{
+}
+
+cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
+	eGameInteractionLocalPoseRequest aRequest, unsigned int alLocalPoseRate)
+	: mType(aType), mlProtocolVersion(0), mlCapabilities(0), mLocalPoseRequest(aRequest),
+	  mlLocalPoseRate(alLocalPoseRate)
 {
 }
 
@@ -60,7 +70,8 @@ eGameInteractionCommandClassification cGameInteractionCommand::GetClassification
 
 cGameInteractionResponse::cGameInteractionResponse(eGameInteractionCommandType aCommandType,
 	eGameInteractionResponseType aType, eGameInteractionCommandOutcome aOutcome)
-	: mCommandType(aCommandType), mType(aType), mOutcome(aOutcome), mlCapabilities(0)
+	: mCommandType(aCommandType), mType(aType), mOutcome(aOutcome), mlCapabilities(0),
+	  mLocalPoseRequest(eGameInteractionLocalPoseRequest_Invalid), mlLocalPoseRate(0)
 {
 }
 
@@ -77,6 +88,23 @@ namespace
 	const unsigned int kSupportedCapabilities =
 		eGameInteractionCapability_Avatars | eGameInteractionCapability_LocalPose;
 
+	const unsigned int kMinimumLocalPoseRate = 1;
+	const unsigned int kMaximumLocalPoseRate = 60;
+
+	struct cLocalPoseSubscription
+	{
+		cLocalPoseSubscription() : mbSubscribed(false), mlRate(0), mbScheduled(false), mfNextSampleTimeMs(0.0) {}
+		bool mbSubscribed;
+		unsigned int mlRate;
+		bool mbScheduled;
+		double mfNextSampleTimeMs;
+		// The newest sampled State Update not yet handed to the transport, or empty. A newer Pose
+		// replaces it, so a Peer that reads slowly never accumulates Poses.
+		std::string msUndeliveredStateUpdate;
+		// The last sampled Pose serialized without its time, or empty after the Pose was unavailable.
+		std::string msLastSampledPose;
+	};
+
 	struct cSessionProtocol
 	{
 		cSessionProtocol()
@@ -85,6 +113,7 @@ namespace
 		// Set by any Command other than a failed negotiation, after which negotiating is too late.
 		bool mbCommandProcessed;
 		unsigned int mlGrantedCapabilities;
+		cLocalPoseSubscription mLocalPoseSubscription;
 	};
 
 	eGameInteractionCommandOutcome NegotiationOutcomeFor(const cGameInteractionCommand& aCommand,
@@ -109,6 +138,67 @@ namespace
 		aSession.mlGrantedCapabilities = aCommand.GetCapabilities() & kSupportedCapabilities;
 		response.SetCapabilities(aSession.mlGrantedCapabilities);
 		return response;
+	}
+
+	// Subscribing again restarts the subscription at the new rate.
+	cGameInteractionResponse ChangeLocalPoseSubscription(const cGameInteractionCommand& aCommand,
+		cLocalPoseSubscription& aSubscription)
+	{
+		cGameInteractionResponse response(aCommand.GetType(), eGameInteractionResponse_LocalPoseSubscription);
+		switch (aCommand.GetLocalPoseRequest())
+		{
+		case eGameInteractionLocalPoseRequest_Subscribe:
+		{
+			unsigned int rate = aCommand.GetLocalPoseRate();
+			if (rate < kMinimumLocalPoseRate) rate = kMinimumLocalPoseRate;
+			if (rate > kMaximumLocalPoseRate) rate = kMaximumLocalPoseRate;
+			aSubscription = cLocalPoseSubscription();
+			aSubscription.mbSubscribed = true;
+			aSubscription.mlRate = rate;
+			response.SetLocalPoseSubscription(eGameInteractionLocalPoseRequest_Subscribe, rate);
+			return response;
+		}
+		case eGameInteractionLocalPoseRequest_Unsubscribe:
+			aSubscription = cLocalPoseSubscription();
+			response.SetLocalPoseSubscription(eGameInteractionLocalPoseRequest_Unsubscribe, 0);
+			return response;
+		default:
+			return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_LocalPoseSubscription,
+				eGameInteractionCommandOutcome_Invalid);
+		}
+	}
+
+	// Samples at most once per rate interval of the Pose's own clock. While play is suspended, an
+	// unchanged Pose is not sampled again.
+	void SampleLocalPose(iGameInteractionGameAdapter& aGameAdapter, cLocalPoseSubscription& aSubscription)
+	{
+		if (!aSubscription.mbSubscribed) return;
+		const eGameInteractionLocalPoseAvailability availability = aGameAdapter.GetLocalPoseAvailability();
+		if (availability == eGameInteractionLocalPoseAvailability_Unavailable)
+		{
+			aSubscription.msUndeliveredStateUpdate.clear();
+			aSubscription.msLastSampledPose.clear();
+			return;
+		}
+
+		cGameInteractionLocalPose pose = aGameAdapter.GetLocalPose();
+		const double now = static_cast<double>(pose.mlTimeMs);
+		if (aSubscription.mbScheduled && now < aSubscription.mfNextSampleTimeMs) return;
+		const std::string stateUpdate = cGameInteractionProtocolVersion2::SerializeLocalPose(pose);
+		// Comparing at wire precision ignores changes a Peer could not observe.
+		pose.mlTimeMs = 0;
+		const std::string timelessPose = cGameInteractionProtocolVersion2::SerializeLocalPose(pose);
+		if (availability == eGameInteractionLocalPoseAvailability_Suspended &&
+			timelessPose == aSubscription.msLastSampledPose) return;
+
+		// Keeping to the schedule holds the average rate even when updates do not land on it exactly.
+		const double interval = 1000.0 / aSubscription.mlRate;
+		double next = aSubscription.mfNextSampleTimeMs + interval;
+		if (!aSubscription.mbScheduled || next <= now) next = now + interval;
+		aSubscription.mbScheduled = true;
+		aSubscription.mfNextSampleTimeMs = next;
+		aSubscription.msUndeliveredStateUpdate = stateUpdate;
+		aSubscription.msLastSampledPose = timelessPose;
 	}
 
 	unsigned int RequiredCapability(eGameInteractionCommandType aType)
@@ -151,12 +241,13 @@ namespace
 		{
 		case eGameInteractionCommand_NegotiateProtocol:
 			return NegotiateProtocol(aCommand, aSession);
+		case eGameInteractionCommand_LocalPose:
+			return ChangeLocalPoseSubscription(aCommand, aSession.mLocalPoseSubscription);
 		case eGameInteractionCommand_AvatarCreate:
 		case eGameInteractionCommand_AvatarRemove:
 		case eGameInteractionCommand_AvatarCollision:
 		case eGameInteractionCommand_AvatarPose:
-		case eGameInteractionCommand_LocalPose:
-			// Granted Capabilities gain their behavior in #30 and #31; until then their Commands are unknown.
+			// The avatars Capability gains its behavior in #31; until then its Commands are unknown.
 			return cGameInteractionResponse(eGameInteractionCommand_Unknown, eGameInteractionResponse_Rejected);
 		case eGameInteractionCommand_GetPosition:
 		{
@@ -268,6 +359,17 @@ public:
 		return cLegacyGameInteractionProtocol::SerializeResponse(aResponse);
 	}
 
+	// A State Update is handed to the transport only once everything queued before it was sent, so
+	// at most one undelivered local Pose exists and it is always the newest one.
+	void DeliverLocalPose()
+	{
+		std::string& stateUpdate = mSession.mLocalPoseSubscription.msUndeliveredStateUpdate;
+		if (stateUpdate.empty() || !mTransport.HasPeer() || mTransport.GetPendingDeliveryByteCount() != 0) return;
+		mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(stateUpdate));
+		stateUpdate.clear();
+		mTransport.Flush();
+	}
+
 	// Runs after the transport has flushed the accepting Response and outside Command processing,
 	// because starting a Custom Story blocks while its start map loads.
 	void PerformPendingCustomStoryStart(iGameInteractionGameAdapter& aGameAdapter)
@@ -337,6 +439,8 @@ void cGameInteractionGateway::Update(iGameInteractionGameAdapter& aGameAdapter)
 	}
 	// Delivering Responses now rather than on the next update removes a tick of latency.
 	mpImplementation->mTransport.Flush();
+	SampleLocalPose(aGameAdapter, mpImplementation->mSession.mLocalPoseSubscription);
+	mpImplementation->DeliverLocalPose();
 
 	if (mpImplementation->mInboundLines.HasExceededLineLimit())
 	{

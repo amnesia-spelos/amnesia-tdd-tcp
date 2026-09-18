@@ -15,6 +15,7 @@ namespace
 	const char* const kNegotiationKeyword = "protocol";
 	const std::string kNegotiationPrefix = std::string(kNegotiationKeyword) + " ";
 	const unsigned long long kMaximumProtocolVersion = 0xFFFFFFFFu;
+	const unsigned long long kLargestParsedLocalPoseRate = 0xFFFFFFFFu;
 
 	struct cCapabilityName
 	{
@@ -104,6 +105,34 @@ namespace
 		}
 		return cGameInteractionCommand(eGameInteractionCommand_NegotiateProtocol,
 			static_cast<unsigned int>(version), capabilities);
+	}
+
+	// Any decimal integer is a rate; the gateway clamps it, so rates beyond 32 bits saturate.
+	bool TryParseLocalPoseRate(const std::string& asText, unsigned int& alRate)
+	{
+		if (asText.empty() || asText.find_first_not_of("0123456789") != std::string::npos) return false;
+		unsigned long long rate = kLargestParsedLocalPoseRate;
+		cGameInteractionProtocolVersion2::TryParseUnsignedInteger(asText, kLargestParsedLocalPoseRate, rate);
+		alRate = static_cast<unsigned int>(rate);
+		return true;
+	}
+
+	cGameInteractionCommand ParseLocalPose(const std::string& asLine)
+	{
+		cGameInteractionFieldReader reader(asLine);
+		std::string keyword;
+		reader.TryReadField(keyword);
+		std::string request;
+		if (reader.TryReadField(request) && request == "unsubscribe" && reader.IsAtEnd())
+			return cGameInteractionCommand(eGameInteractionCommand_LocalPose,
+				eGameInteractionLocalPoseRequest_Unsubscribe, 0);
+		std::string rateField;
+		unsigned int rate = 0;
+		if (request == "subscribe" && reader.TryReadField(rateField) && reader.IsAtEnd() &&
+			TryParseLocalPoseRate(rateField, rate))
+			return cGameInteractionCommand(eGameInteractionCommand_LocalPose,
+				eGameInteractionLocalPoseRequest_Subscribe, rate);
+		return cGameInteractionCommand(eGameInteractionCommand_LocalPose, eGameInteractionLocalPoseRequest_Invalid, 0);
 	}
 }
 
@@ -210,7 +239,8 @@ bool cGameInteractionProtocolVersion2::IsNegotiation(const std::string& asLine)
 	return asLine == kNegotiationKeyword || asLine.compare(0, kNegotiationPrefix.size(), kNegotiationPrefix) == 0;
 }
 
-// A Command's fields beyond its keyword are kept whole for its Capability's behavior to parse.
+// Fields beyond the keyword of a Command without a typed form are kept whole for its Capability's
+// behavior to parse.
 cGameInteractionCommand cGameInteractionProtocolVersion2::ParseCommand(const std::string& asLine)
 {
 	if (IsNegotiation(asLine)) return ParseNegotiation(asLine);
@@ -219,6 +249,7 @@ cGameInteractionCommand cGameInteractionProtocolVersion2::ParseCommand(const std
 	const eGameInteractionCommandType type = reader.TryReadField(keyword) ? CommandTypeFor(keyword) :
 		eGameInteractionCommand_Unknown;
 	if (type == eGameInteractionCommand_Unknown) return cLegacyGameInteractionProtocol::ParseCommand(asLine);
+	if (type == eGameInteractionCommand_LocalPose) return ParseLocalPose(asLine);
 	std::string fields;
 	reader.TryReadRest(fields);
 	return cGameInteractionCommand(type, fields);
@@ -230,11 +261,30 @@ std::string cGameInteractionProtocolVersion2::SerializeResponse(const cGameInter
 	if (!keyword) return cLegacyGameInteractionProtocol::SerializeResponse(aResponse);
 
 	std::string response = std::string("RESPONSE ") + keyword + " " + OutcomeToken(aResponse.GetOutcome());
-	if (aResponse.GetType() != eGameInteractionResponse_ProtocolNegotiated ||
-		aResponse.GetOutcome() != eGameInteractionCommandOutcome_Success) return response;
-	response += " 2";
-	for (int index = 0; index < kCapabilityNameCount; ++index)
-		if (aResponse.GetCapabilities() & kCapabilityNames[index].mCapability)
-			response += std::string(" ") + kCapabilityNames[index].mpName;
+	if (aResponse.GetOutcome() != eGameInteractionCommandOutcome_Success) return response;
+	if (aResponse.GetType() == eGameInteractionResponse_ProtocolNegotiated)
+	{
+		response += " 2";
+		for (int index = 0; index < kCapabilityNameCount; ++index)
+			if (aResponse.GetCapabilities() & kCapabilityNames[index].mCapability)
+				response += std::string(" ") + kCapabilityNames[index].mpName;
+	}
+	else if (aResponse.GetType() == eGameInteractionResponse_LocalPoseSubscription)
+	{
+		if (aResponse.GetLocalPoseRequest() == eGameInteractionLocalPoseRequest_Unsubscribe)
+			return response + " unsubscribe";
+		char rate[16];
+		sprintf(rate, " subscribe %u", aResponse.GetLocalPoseRate());
+		response += rate;
+	}
 	return response;
+}
+
+std::string cGameInteractionProtocolVersion2::SerializeLocalPose(const cGameInteractionLocalPose& aPose)
+{
+	char clockFields[64];
+	sprintf(clockFields, "STATE localpose %llu %u ", aPose.mlTimeMs, aPose.mlTeleportCounter);
+	return clockFields + FormatNumber(aPose.mFeetPosition.mfX) + " " + FormatNumber(aPose.mFeetPosition.mfY) +
+		" " + FormatNumber(aPose.mFeetPosition.mfZ) + " " + FormatNumber(aPose.mfBodyYawDegrees) + " " +
+		FormatNumber(aPose.mfCameraPitchDegrees) + (aPose.mbCrouching ? " 1 " : " 0 ") + aPose.msMapFile;
 }

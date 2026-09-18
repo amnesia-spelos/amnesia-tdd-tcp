@@ -148,6 +148,11 @@ namespace
 			return eGameInteractionCustomStoryAvailability_NotFound;
 		}
 		virtual void StartCustomStory(const std::wstring& identifier) { mvStartedCustomStories.push_back(identifier); }
+		virtual eGameInteractionLocalPoseAvailability GetLocalPoseAvailability() const
+		{
+			return eGameInteractionLocalPoseAvailability_Unavailable;
+		}
+		virtual cGameInteractionLocalPose GetLocalPose() const { return cGameInteractionLocalPose(); }
 	};
 
 	SOCKET Connect(cGameInteractionGateway& gateway, cFixtureGameAdapter& adapter)

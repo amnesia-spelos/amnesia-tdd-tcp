@@ -4,7 +4,8 @@ Protocol Version 2 (ADR 0004) is a per-Session superset of the [legacy protocol]
 
 `contract.jsonl` holds language-neutral fixtures, one JSON object per line:
 
-- `session`: a fresh Session receives `request_wire` in one write. `expected_wire` is everything it answers after the greeting.
+- `session`: a fresh Session receives `request_wire` in one write. `expected_wire` is everything it answers after the greeting. The harness game has a map loaded and reports a fixed local Pose: time `123456`, teleport counter `3`, feet at `1.25 -2.5 3.75`, body yaw `90`, camera pitch `-45`, crouching, on map `custom_stories/My Story: Part 2/maps/cellar one.map`.
+- `local_pose`: how a local Pose is written as a `localpose` State Update.
 - `format_number`, `parse_number`: how numbers are written and which texts are accepted. The harness runs these under a comma-decimal system locale to prove locale independence.
 - `fields`: how a line splits into fixed fields and an optional trailing map path.
 - `avatar_identifier`: which Avatar Identifiers are valid.
@@ -65,11 +66,11 @@ The gateway checks Capabilities before it parses a message. A Protocol Version 2
 | `avatarcollision <id> <0\|1>` | `avatars` | `ok <id>`, `not-found <id>`, `invalid` |
 | `avatarpose <id> <timeMs> <teleportCounter> <x> <y> <z> <yaw> <pitch> <crouch> <map>` | `avatars` | none on success; `not-found <id>`, `invalid [<id>]` |
 | `localpose subscribe <hz>` | `localpose` | `ok subscribe <hz>`, `invalid` |
-| `localpose unsubscribe` | `localpose` | `ok unsubscribe` |
+| `localpose unsubscribe` | `localpose` | `ok unsubscribe`, `invalid` |
 
 - `avatarcreate`: `<entityFile>` is a path field and defaults to `entities/multiplayer/skeleton_spelos/TheSkeletonSpelos.ent`. `limit` means the Session already drives 16 Avatars. `invalid` means the line is malformed or the Avatar Identifier is invalid. In that case the Response does not echo the identifier.
 - `avatarpose`: `<map>` is the map path of the sender's Pose, and `<x> <y> <z>` is the feet position. A failure is reported once per Avatar per failure streak, and the next success for that Avatar resets its streak. `invalid` echoes `<id>` only when that field is a valid Avatar Identifier. All lines without a valid identifier share one streak.
-- `localpose subscribe`: `<hz>` is a decimal integer. The rate is clamped to 1–60, and the Response reports the clamped rate. Subscribing again changes the rate. `localpose unsubscribe` succeeds even if the Session is not subscribed. The subscription ends when the Session ends.
+- `localpose subscribe`: `<hz>` is a decimal integer. The rate is clamped to 1–60, even when `<hz>` does not fit in 32 bits, and the Response reports the clamped rate. Subscribing again changes the rate and restarts the subscription, so the current Pose follows at once. `localpose unsubscribe` succeeds even if the Session is not subscribed. `invalid` means the line is malformed, including a negative or fractional `<hz>`. The subscription ends when the Session ends.
 
 The `localpose` State Update is sent to a subscribed Session:
 
@@ -77,9 +78,12 @@ The `localpose` State Update is sent to a subscribed Session:
 STATE localpose <timeMs> <teleportCounter> <x> <y> <z> <yaw> <pitch> <crouch> <map>
 ```
 
-It reports the local player's feet position, body yaw, camera pitch, and crouch flag in the current map. A newer Pose replaces any undelivered older one instead of queueing behind it.
+- It reports the local player's feet position, body yaw, camera pitch, and crouch flag in the current map. `<timeMs>` is the game clock, which only moves forward while the game runs. `<teleportCounter>` changes whenever the player is placed rather than moved: `TeleportPlayer`, `SetPlayerPos`, start position placement on map entry or at a checkpoint, and save load.
+- The first State Update is the current Pose and follows the subscribing Response. After that, at most one State Update is sent per `1000 / <hz>` milliseconds of game time. The schedule holds that average rate even when game updates do not land on it exactly.
+- State Updates are sent only while a map is loaded. None are sent in the main menu or while a map loads. While the game is paused or the player is in the inventory, journal, or another menu, a State Update is sent only when the Pose changed. Time does not count as a change.
+- A newer Pose replaces any undelivered older one instead of queueing behind it. A Peer that reads slowly receives the newest Pose once it catches up, and is never disconnected because of State Updates.
 
-Until #30 (`localpose`) and #31 (`avatars`) add their behavior, messages of a granted Capability are answered with `WARNING:Unknown command`.
+Until #31 adds its behavior, messages of the granted `avatars` Capability are answered with `WARNING:Unknown command`.
 
 ## Transport
 
