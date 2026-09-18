@@ -95,3 +95,19 @@ _Avoid_: Chat history, message archive
 **Chat Composer**:
 The temporary input mode in which the local player writes a Chat Entry while ordinary game controls are suppressed without pausing the game.
 _Avoid_: Chat box, console
+
+**Avatar**:
+An in-world stand-in whose Pose is driven by a Peer rather than by local input or AI. An Avatar belongs to its Session rather than to a map, and a Session may drive several Avatars.
+_Avoid_: Remote player, ghost, puppet, other player
+
+**Avatar Identifier**:
+A Peer-chosen value that uniquely identifies an Avatar within a Session.
+_Avoid_: Player name, entity name
+
+**Pose**:
+The position and facing of the local player or an Avatar at a moment in time.
+_Avoid_: Transform, position update
+
+**Dormant Avatar**:
+An Avatar whose latest Pose belongs to a different map than the local one, and which is therefore neither visible nor collidable until a Pose for the local map arrives.
+_Avoid_: Hidden avatar, inactive avatar

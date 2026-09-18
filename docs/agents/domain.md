@@ -24,13 +24,16 @@ This is a single-context repository:
 
 This repository is the Amnesia: The Dark Descent game fork that exposes external game interaction and control over TCP.
 
-The sibling `../streamnesia` repository is a .NET consumer of this functionality. Its `Streamnesia.Execution.AmnesiaClient` connects to the game through TCP; the checked-out configuration defaults to `127.0.0.1:5150`.
+Two sibling .NET repositories consume this functionality over TCP (default `127.0.0.1:5150`):
+
+- `../amnesia-multiplayer` is the primary consumer. Its game-facing client lives under `src/Multimnesia.Client`.
+- `../streamnesia` (`Streamnesia.Execution.AmnesiaClient`) uses the legacy protocol and pins an older build of this repository. The legacy protocol is intended to be retired (ADR 0004); if Streamnesia upgrades, it moves to the negotiated protocol.
 
 When changing the TCP protocol, connection lifecycle, command handling, responses, events, encoding, framing, or default endpoint:
 
-1. Inspect the corresponding client behavior in `../streamnesia`.
-2. Treat compatibility with that client as part of this repository's contract.
-3. Account for required coordinated changes or migration work in both repositories.
+1. Inspect the corresponding client behavior in `../amnesia-multiplayer`, and in `../streamnesia` when touching the legacy protocol.
+2. Keep Sessions that do not negotiate a Protocol Version on the legacy protocol byte-for-byte until it is deliberately retired.
+3. Account for required coordinated changes or migration work in the consuming repositories.
 4. Keep each repository's issue tracking and changes scoped to its own repository.
 
 ## Use the glossary's vocabulary
