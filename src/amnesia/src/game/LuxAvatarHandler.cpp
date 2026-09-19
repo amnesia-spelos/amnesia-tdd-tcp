@@ -5,6 +5,9 @@
 #include "LuxMapHandler.h"
 #include "LuxPlayer.h"
 
+// Heavier than any character can push, yet finite so the engine's force arithmetic stays sound.
+static const float kUnpushableMass = 1.0e6f;
+
 cLuxAvatarHandler::cLuxAvatarHandler()
 	: iLuxUpdateable("LuxAvatarHandler")
 {
@@ -64,7 +67,7 @@ void cLuxAvatarHandler::SetAvatarCollision(const tString& asIdentifier, bool abC
 	it->second.mCollision.SetEnabled(abCollides);
 }
 
-// The Pose is applied every update, so nothing that pushes the body moves the Avatar away from it.
+// The Pose is applied every update and the body cannot be pushed, so nothing moves the Avatar away from it.
 void cLuxAvatarHandler::Update(float afTimeStep)
 {
 	cLuxMap *pCurrentMap = gpBase->mpMapHandler->GetCurrentMap();
@@ -84,6 +87,10 @@ void cLuxAvatarHandler::Update(float afTimeStep)
 		if(avatar.mpBody == NULL) CreateWorldObjects(it->first, avatar, pCurrentMap);
 		if(avatar.mpBody == NULL) continue;
 
+		// The body's own update moves it, and the mesh with it, by any velocity it gathered, so only
+		// the Pose may place it.
+		avatar.mpBody->SetForce(0);
+		avatar.mpBody->SetForceVelocity(0);
 		avatar.mpBody->SetFeetPosition(cVector3f(pose.mfX, pose.mfY, pose.mfZ));
 		avatar.mpBody->SetYaw(cMath::ToRad(pose.mfYawDegrees));
 		UpdateCollision(avatar, true);
@@ -167,6 +174,9 @@ void cLuxAvatarHandler::CreateWorldObjects(const tString& asIdentifier, cAvatar&
 	iCharacterBody *pBody = apMap->GetPhysicsWorld()->CreateCharacterBody(sName, gpBase->mpPlayer->GetBodySize());
 	pBody->SetGravityActive(false);
 	pBody->SetCollideFlags(kCollideFlag);
+	// A character pushes only bodies no heavier than its CharacterMaxPushMass, so the player bumps
+	// into an Avatar instead of shoving its mesh away from its Pose.
+	pBody->SetMass(kUnpushableMass);
 	pBody->SetEntity(aAvatar.mpMeshEntity);
 	pBody->SetEntityOffset(GetAvatarMeshOffset(pBody->GetSize().y));
 	aAvatar.mpBody = pBody;
