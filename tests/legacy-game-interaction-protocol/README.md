@@ -2,6 +2,8 @@
 
 `contract.jsonl` is the language-neutral compatibility source of truth for what a legacy Peer observes. Each line is an independent JSON fixture so consumers can deserialize cases without depending on the C++ harness.
 
+A Session that negotiates [Protocol Version 2](../game-interaction-protocol-version-2/README.md) with `protocol 2 ...` keeps every behavior described here. A Session that never negotiates observes exactly this contract, with two exceptions for every Session. First, a line that begins with the `protocol` field is answered as a negotiation. Second, an inbound line longer than 65,536 bytes, not counting its terminator, disconnects the Peer.
+
 `request_wire` and `expected_wire` include the newline delimiters exchanged on the wire. Rotation inputs are radians because that is how the game adapter observes them; legacy Responses expose degrees. The `script_call_observation` case deliberately records `SCRIPT_CALL` as its own top-level category. It is not normalized into an Event because that is the current runtime behavior.
 
 Chat Commands use the grammar `chat:<author>:<message>`. The first colon after `chat:` ends the Chat Author, so later colons belong to the message. Both fields must be valid UTF-8. After Unicode whitespace trimming, a Chat Author must contain 1–32 Unicode scalars and a message 1–256; control characters are rejected, and a Chat Author cannot contain a colon. Invalid input is rejected whole, without truncation or partial display.

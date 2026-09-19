@@ -36,6 +36,14 @@ When changing the TCP protocol, connection lifecycle, command handling, response
 3. Account for required coordinated changes or migration work in the consuming repositories.
 4. Keep each repository's issue tracking and changes scoped to its own repository.
 
+### Manual verification
+
+`../amnesia-csharp-controller` is an internal development tool, not a consumer. It connects to a running game, sends each typed line unchanged, and prints each received line with a timestamp. See the README section "Manual testing with the Controller" for how to run it.
+
+When a change affects protocol behavior that the automated harnesses cannot fully prove against the real game, give the user a manual verification checklist that uses the Controller. Such behavior includes game adapter hooks, timing, and in-game states such as the main menu, loading, pause, or map changes. For each step, list the exact lines to type and the lines expected back. Legacy `exec:` Commands can trigger game behavior during a check, for example `exec:SetPlayerPos(0, 0, 0)`.
+
+The Controller only recognizes legacy line markers (`RESPONSE:`, `EVENT:`, and so on). Protocol Version 2 lines appear as `uncategorised`. If a missing Controller feature blocks a check, propose the change in that repository instead of working around it here.
+
 ## Use the glossary's vocabulary
 
 When output names a domain concept—in an issue title, refactor proposal, hypothesis, or test name—use the term defined in `CONTEXT.md`. Avoid synonyms the glossary explicitly rejects.

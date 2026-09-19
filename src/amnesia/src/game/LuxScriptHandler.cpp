@@ -1401,7 +1401,8 @@ void __stdcall cLuxScriptHandler::ShowPlayerCrossHairIcons(bool abX)
 
 void __stdcall cLuxScriptHandler::SetPlayerPos(float afX, float afY, float afZ)
 {
-	return gpBase->mpPlayer->GetCharacterBody()->SetFeetPosition(cVector3f(afX, afY, afZ));
+	gpBase->mpPlayer->GetCharacterBody()->SetFeetPosition(cVector3f(afX, afY, afZ));
+	gpBase->mpPlayer->CountTeleport();
 }
 
 //-----------------------------------------------------------------------

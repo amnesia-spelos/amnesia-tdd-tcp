@@ -29,6 +29,7 @@ $executable = Join-Path $outputDirectory 'GameInteractionFramingTests.exe'
 	(Join-Path $sourceDirectory 'GameInteractionGateway.cpp') `
 	(Join-Path $sourceDirectory 'GameInteractionTransport.cpp') `
     (Join-Path $sourceDirectory 'LegacyGameInteractionProtocol.cpp') `
+	(Join-Path $sourceDirectory 'GameInteractionProtocolVersion2.cpp') `
 	(Join-Path $sourceDirectory 'ChatModel.cpp') `
     /Fo:"$outputDirectory\" `
     /Fe:$executable `

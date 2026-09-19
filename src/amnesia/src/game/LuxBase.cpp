@@ -56,6 +56,7 @@
 
 #include "LuxPlayer.h"
 
+#include "LuxAvatarHandler.h"
 #include "LuxSocketServer.h"
 #include "LuxSideAppManager.h"
 
@@ -446,6 +447,7 @@ cLuxBase::cLuxBase()
 	mpGameCfg = NULL;
 	mpDemoCfg = NULL;
 	mpSideAppManager = NULL;
+	mpAvatarHandler = NULL;
 
 	mpCurrentMapLoading = NULL;
 
@@ -1495,6 +1497,9 @@ bool cLuxBase::InitGame()
 	// Run the LoadMainConfig message for game modules, couldn't be run before
 	RunModuleMessage(eLuxUpdateableMessage_LoadMainConfig);
 
+	// Avatars belong to the Game Interaction Protocol Session, so their module precedes the server.
+	mpAvatarHandler = hplNew(cLuxAvatarHandler, ());
+	AddGlobalModule(mpAvatarHandler);
 	mpSocketServer = hplNew(cLuxSocketServer, ());
 	AddGlobalModule(mpSocketServer);
 

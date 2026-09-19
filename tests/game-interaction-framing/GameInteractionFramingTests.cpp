@@ -59,6 +59,40 @@ namespace
 		Expect(!buffer.TryPopLine(command), "disconnect does not expose an unterminated Command");
 	}
 
+	void LinesUpToTheLimitAreAccepted()
+	{
+		cGameInteractionLineBuffer buffer(6);
+		std::string command;
+		buffer.Append("getpos\r\n", 8);
+		Expect(buffer.TryPopLine(command) && command == "getpos", "line at the length limit is extracted");
+		buffer.Append("getp", 4);
+		Expect(!buffer.TryPopLine(command) && !buffer.HasExceededLineLimit(),
+			"unterminated fragment within the limit is retained");
+	}
+
+	void UnterminatedLineBeyondTheLimitIsReported()
+	{
+		cGameInteractionLineBuffer buffer(6);
+		std::string command;
+		buffer.Append("getposr", 7);
+		Expect(!buffer.TryPopLine(command), "overlong fragment is not a Command");
+		Expect(buffer.HasExceededLineLimit(), "overlong unterminated line exceeds the limit");
+	}
+
+	void CompleteLineBeyondTheLimitStopsExtraction()
+	{
+		cGameInteractionLineBuffer buffer(6);
+		std::string command;
+		const char received[] = "ping\ngetposrot\nping\n";
+		buffer.Append(received, sizeof(received) - 1);
+		Expect(buffer.TryPopLine(command) && command == "ping", "line before the overlong line is extracted");
+		Expect(!buffer.TryPopLine(command), "overlong complete line is not extracted");
+		Expect(buffer.HasExceededLineLimit(), "overlong complete line exceeds the limit");
+		Expect(!buffer.TryPopLine(command), "no line is extracted after the limit is exceeded");
+		buffer.Clear();
+		Expect(!buffer.HasExceededLineLimit(), "clearing for a new Session resets the limit");
+	}
+
 	void LoopbackStreamUsesNewlineFramingAcrossReceiveBoundaries()
 	{
 		WSADATA data;
@@ -128,6 +162,9 @@ int main()
 	CommandSplitAcrossReadsExecutesOnceAfterNewline();
 	CompleteCommandsAreExtractedInOrderAndPartialCommandIsRetained();
 	DisconnectDiscardsUnterminatedCommand();
+	LinesUpToTheLimitAreAccepted();
+	UnterminatedLineBeyondTheLimitIsReported();
+	CompleteLineBeyondTheLimitStopsExtraction();
 	LoopbackStreamUsesNewlineFramingAcrossReceiveBoundaries();
 	if (gFailures != 0) return 1;
 	std::cout << "Game Interaction Protocol framing tests passed\n";

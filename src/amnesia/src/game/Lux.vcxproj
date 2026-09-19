@@ -141,10 +141,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="AvatarCollisionModel.cpp" />
+    <ClCompile Include="AvatarPoseModel.cpp" />
     <ClCompile Include="ChatModel.cpp" />
     <ClCompile Include="LuxChatHandler.cpp" />
     <ClCompile Include="GameInteractionGateway.cpp" />
     <ClCompile Include="LegacyGameInteractionProtocol.cpp" />
+    <ClCompile Include="GameInteractionProtocolVersion2.cpp" />
     <ClCompile Include="GameInteractionTransport.cpp" />
     <ClCompile Include="LuxSideAppManager.cpp" />
     <ClCompile Include="LuxAchievementHandler.cpp" />
@@ -153,6 +156,7 @@
     <ClCompile Include="LuxEnemy_ManPig.cpp" />
     <ClCompile Include="LuxHelpFuncs.cpp" />
     <ClCompile Include="LuxMainMenu_StartGame.cpp" />
+    <ClCompile Include="LuxAvatarHandler.cpp" />
     <ClCompile Include="LuxSocketServer.cpp" />
     <ClCompile Include="LuxTypes.cpp" />
     <ClCompile Include="Main.cpp" />
@@ -257,10 +261,14 @@
     <ClCompile Include="LuxPlayerState_UseItem.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AvatarCollisionModel.h" />
+    <ClInclude Include="AvatarMeshOffset.h" />
+    <ClInclude Include="AvatarPoseModel.h" />
     <ClInclude Include="ChatModel.h" />
     <ClInclude Include="LuxChatHandler.h" />
     <ClInclude Include="GameInteractionGateway.h" />
     <ClInclude Include="LegacyGameInteractionProtocol.h" />
+    <ClInclude Include="GameInteractionProtocolVersion2.h" />
     <ClInclude Include="GameInteractionTransport.h" />
     <ClInclude Include="LuxSideAppManager.h" />
     <ClInclude Include="LuxAchievementHandler.h" />
@@ -270,6 +278,7 @@
     <ClInclude Include="LuxHelpFuncs.h" />
     <ClInclude Include="LuxIdleBehavior_ManPig.h" />
     <ClInclude Include="LuxMainMenu_StartGame.h" />
+    <ClInclude Include="LuxAvatarHandler.h" />
     <ClInclude Include="LuxSocketServer.h" />
     <ClInclude Include="LuxTypes.h" />
     <ClInclude Include="LuxWinSocketInit.h" />

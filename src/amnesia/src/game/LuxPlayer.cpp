@@ -61,6 +61,7 @@ cLuxPlayer::cLuxPlayer() : iLuxUpdateable("LuxPlayer"), iLuxCollideCallbackConta
 	// Init data pointers
 	mpCharBody = NULL;
 	mpTerrorSound = NULL;
+	mlTeleportCounter = 0;
 
 	//////////////////////////////////
 	// Create and setup camera
@@ -831,6 +832,7 @@ void cLuxPlayer::PlaceAtStartNode(cLuxNode_PlayerStart *apNode)
 	mpCamera->SetYaw(apNode->GetAngle());
 	mpCamera->SetPitch(0);
 	mpCharBody->Update(0.001f);
+	CountTeleport();
 }
 
 //-----------------------------------------------------------------------

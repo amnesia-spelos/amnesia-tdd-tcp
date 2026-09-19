@@ -18,26 +18,26 @@ $developerShell = Join-Path $visualStudio 'Common7\Tools\Microsoft.VisualStudio.
 Import-Module $developerShell
 Enter-VsDevShell -VsInstallPath $visualStudio -SkipAutomaticLocation -DevCmdArguments '-arch=x86 -host_arch=x64' | Out-Null
 
-$testDirectory = Join-Path $repositoryRoot 'tests\game-interaction-gateway'
+$testDirectory = Join-Path $repositoryRoot 'tests\game-interaction-protocol-version-2'
 $sourceDirectory = Join-Path $repositoryRoot 'src\amnesia\src\game'
 $outputDirectory = Join-Path $repositoryRoot 'artifacts\tests'
 New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
-$executable = Join-Path $outputDirectory 'GameInteractionGatewayTests.exe'
+$executable = Join-Path $outputDirectory 'ProtocolVersion2ContractTests.exe'
 
 & cl /nologo /EHsc /W4 /WX /D_CRT_SECURE_NO_WARNINGS /I $sourceDirectory `
-    (Join-Path $testDirectory 'GameInteractionGatewayTests.cpp') `
-    (Join-Path $sourceDirectory 'GameInteractionGateway.cpp') `
+    (Join-Path $testDirectory 'ProtocolVersion2ContractTests.cpp') `
+	(Join-Path $sourceDirectory 'GameInteractionGateway.cpp') `
 	(Join-Path $sourceDirectory 'GameInteractionTransport.cpp') `
-	(Join-Path $sourceDirectory 'LegacyGameInteractionProtocol.cpp') `
+    (Join-Path $sourceDirectory 'LegacyGameInteractionProtocol.cpp') `
 	(Join-Path $sourceDirectory 'GameInteractionProtocolVersion2.cpp') `
 	(Join-Path $sourceDirectory 'ChatModel.cpp') `
     /Fo:"$outputDirectory\" `
     /Fe:$executable /link ws2_32.lib
 if ($LASTEXITCODE -ne 0) {
-    throw "Game Interaction Protocol gateway harness compilation failed with exit code $LASTEXITCODE."
+    throw "Protocol Version 2 harness compilation failed with exit code $LASTEXITCODE."
 }
 
-& $executable
+& $executable (Join-Path $testDirectory 'contract.jsonl')
 if ($LASTEXITCODE -ne 0) {
-    throw "Game Interaction Protocol gateway test failed with exit code $LASTEXITCODE."
+    throw "Protocol Version 2 contract failed with exit code $LASTEXITCODE."
 }

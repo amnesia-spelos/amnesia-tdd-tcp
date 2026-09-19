@@ -18,26 +18,22 @@ $developerShell = Join-Path $visualStudio 'Common7\Tools\Microsoft.VisualStudio.
 Import-Module $developerShell
 Enter-VsDevShell -VsInstallPath $visualStudio -SkipAutomaticLocation -DevCmdArguments '-arch=x86 -host_arch=x64' | Out-Null
 
-$testDirectory = Join-Path $repositoryRoot 'tests\game-interaction-gateway'
+$testDirectory = Join-Path $repositoryRoot 'tests\avatar-collision-model'
 $sourceDirectory = Join-Path $repositoryRoot 'src\amnesia\src\game'
 $outputDirectory = Join-Path $repositoryRoot 'artifacts\tests'
 New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
-$executable = Join-Path $outputDirectory 'GameInteractionGatewayTests.exe'
+$executable = Join-Path $outputDirectory 'AvatarCollisionModelTests.exe'
 
-& cl /nologo /EHsc /W4 /WX /D_CRT_SECURE_NO_WARNINGS /I $sourceDirectory `
-    (Join-Path $testDirectory 'GameInteractionGatewayTests.cpp') `
-    (Join-Path $sourceDirectory 'GameInteractionGateway.cpp') `
-	(Join-Path $sourceDirectory 'GameInteractionTransport.cpp') `
-	(Join-Path $sourceDirectory 'LegacyGameInteractionProtocol.cpp') `
-	(Join-Path $sourceDirectory 'GameInteractionProtocolVersion2.cpp') `
-	(Join-Path $sourceDirectory 'ChatModel.cpp') `
+& cl /nologo /EHsc /W4 /WX /I $sourceDirectory `
+    (Join-Path $testDirectory 'AvatarCollisionModelTests.cpp') `
+    (Join-Path $sourceDirectory 'AvatarCollisionModel.cpp') `
     /Fo:"$outputDirectory\" `
-    /Fe:$executable /link ws2_32.lib
+    /Fe:$executable
 if ($LASTEXITCODE -ne 0) {
-    throw "Game Interaction Protocol gateway harness compilation failed with exit code $LASTEXITCODE."
+    throw "Avatar collision model harness compilation failed with exit code $LASTEXITCODE."
 }
 
 & $executable
 if ($LASTEXITCODE -ne 0) {
-    throw "Game Interaction Protocol gateway test failed with exit code $LASTEXITCODE."
+    throw "Avatar collision model test failed with exit code $LASTEXITCODE."
 }

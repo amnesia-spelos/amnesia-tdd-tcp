@@ -148,6 +148,15 @@ namespace
 			return eGameInteractionCustomStoryAvailability_NotFound;
 		}
 		virtual void StartCustomStory(const std::wstring& identifier) { mvStartedCustomStories.push_back(identifier); }
+		virtual eGameInteractionLocalPoseAvailability GetLocalPoseAvailability() const
+		{
+			return eGameInteractionLocalPoseAvailability_Unavailable;
+		}
+		virtual cGameInteractionPose GetLocalPose() const { return cGameInteractionPose(); }
+		virtual bool CreateAvatar(const std::string&, const std::string&) { return true; }
+		virtual void RemoveAvatar(const std::string&) {}
+		virtual void PoseAvatar(const std::string&, const cGameInteractionPose&) {}
+		virtual void SetAvatarCollision(const std::string&, bool) {}
 	};
 
 	SOCKET Connect(cGameInteractionGateway& gateway, cFixtureGameAdapter& adapter)

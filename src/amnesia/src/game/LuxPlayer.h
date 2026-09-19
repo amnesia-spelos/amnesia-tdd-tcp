@@ -125,6 +125,11 @@ public:
 
 	void PlaceAtStartNode(cLuxNode_PlayerStart *apNode);
 
+	// Counts placements rather than movement (start nodes, SetPlayerPos, save loads), so a Peer can
+	// snap instead of interpolating. It survives Reset so it never repeats within a game run.
+	void CountTeleport(){ ++mlTeleportCounter; }
+	unsigned int GetTeleportCounter(){ return mlTeleportCounter; }
+
 	////////////////////
 	// Data
 	cCamera* GetCamera(){ return mpCamera;}
@@ -345,6 +350,8 @@ private:
 	bool mbJumpDisabled;
 	bool mbCrouchDisabled;
 	bool mbSanityDrainDisabled;
+
+	unsigned int mlTeleportCounter;
 
 	float mfEventMoveSpeedMul;
 	float mfEventRunSpeedMul;

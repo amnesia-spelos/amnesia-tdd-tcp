@@ -1,10 +1,12 @@
 #include "LuxSocketServer.h"
+#include "LuxAvatarHandler.h"
 #include "LuxMap.h"
 #include "LuxMapHandler.h"
 #include "LuxPlayer.h"
 #include "LuxChatHandler.h"
 #include "LuxInputHandler.h"
 #include "LuxMainMenu.h"
+#include "LuxMoveState_Normal.h"
 
 #include <set>
 
@@ -89,6 +91,57 @@ namespace
 
 			story.SetActive();
 			gpBase->StartCustomStory();
+		}
+
+		virtual eGameInteractionLocalPoseAvailability GetLocalPoseAvailability() const
+		{
+			if(!IsMapLoaded()) return eGameInteractionLocalPoseAvailability_Unavailable;
+			switch(gpBase->mpInputHandler->GetState())
+			{
+			case eLuxInputState_LoadScreen: return eGameInteractionLocalPoseAvailability_Unavailable;
+			case eLuxInputState_Game: return eGameInteractionLocalPoseAvailability_Live;
+			// The in-game main menu is the pause menu.
+			default: return eGameInteractionLocalPoseAvailability_Suspended;
+			}
+		}
+
+		virtual cGameInteractionPose GetLocalPose() const
+		{
+			cLuxPlayer *pPlayer = gpBase->mpPlayer;
+			iCharacterBody* pCharBody = pPlayer->GetCharacterBody();
+			const cVector3f vFeet = pCharBody->GetFeetPosition();
+			cLuxMoveState_Normal *pMoveNormal =
+				static_cast<cLuxMoveState_Normal*>(pPlayer->GetMoveStateData(eLuxMoveState_Normal));
+
+			cGameInteractionPose pose;
+			pose.mlTimeMs = static_cast<unsigned long long>(gpBase->mpEngine->GetGameTime() * 1000.0);
+			pose.mlTeleportCounter = pPlayer->GetTeleportCounter();
+			pose.mFeetPosition = cGameInteractionPosition(vFeet.x, vFeet.y, vFeet.z);
+			pose.mfBodyYawDegrees = cMath::ToDeg(pCharBody->GetYaw());
+			pose.mfCameraPitchDegrees = cMath::ToDeg(pPlayer->GetCamera()->GetPitch());
+			pose.mbCrouching = pMoveNormal->IsCrouching();
+			pose.msMapFile = GetMapFile();
+			return pose;
+		}
+
+		virtual bool CreateAvatar(const std::string& asIdentifier, const std::string& asEntityFile)
+		{
+			return gpBase->mpAvatarHandler && gpBase->mpAvatarHandler->CreateAvatar(asIdentifier, asEntityFile);
+		}
+
+		virtual void RemoveAvatar(const std::string& asIdentifier)
+		{
+			if(gpBase->mpAvatarHandler) gpBase->mpAvatarHandler->RemoveAvatar(asIdentifier);
+		}
+
+		virtual void PoseAvatar(const std::string& asIdentifier, const cGameInteractionPose& aPose)
+		{
+			if(gpBase->mpAvatarHandler) gpBase->mpAvatarHandler->PoseAvatar(asIdentifier, aPose);
+		}
+
+		virtual void SetAvatarCollision(const std::string& asIdentifier, bool abCollides)
+		{
+			if(gpBase->mpAvatarHandler) gpBase->mpAvatarHandler->SetAvatarCollision(asIdentifier, abCollides);
 		}
 
 	private:

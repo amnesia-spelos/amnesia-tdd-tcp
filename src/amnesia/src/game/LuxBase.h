@@ -65,6 +65,7 @@ class cLuxMainMenu;
 
 class cLuxPlayer;
 
+class cLuxAvatarHandler;
 class cLuxSocketServer;
 class cLuxSideAppManager;
 
@@ -283,6 +284,7 @@ public:
 	cLuxDemoEnd* mpDemoEnd;
 	iLuxAchievementHandler* mpAchievementHandler;
 
+	cLuxAvatarHandler* mpAvatarHandler;
 	cLuxSocketServer* mpSocketServer;
 	cLuxSideAppManager* mpSideAppManager;
 
