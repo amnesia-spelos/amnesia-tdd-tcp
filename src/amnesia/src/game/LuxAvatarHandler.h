@@ -55,10 +55,20 @@ private:
 		iCharacterBody *mpBody;
 		cLightPoint *mpLantern;
 	};
+	// The glow of the local player's lantern, which every Avatar's lantern copies.
+	struct cLanternLight
+	{
+		cLanternLight() : mColor(0, 0), mfRadius(0) {}
+		cColor mColor;
+		float mfRadius;
+		tString msGobo;
+	};
+
 	typedef std::map<tString, cAvatar> tAvatarMap;
 	typedef tAvatarMap::iterator tAvatarMapIt;
 
 	bool FindMeshFile(const tString& asEntityFile, tString& asMeshFile);
+	void LoadLanternLight();
 	static double GetLocalTimeMs();
 	void CreateWorldObjects(const tString& asIdentifier, cAvatar& aAvatar, cLuxMap *apMap);
 	void DestroyWorldObjects(cAvatar& aAvatar);
@@ -67,6 +77,7 @@ private:
 	void UpdateLantern(cAvatar& aAvatar, const cAvatarRenderedPose *apPose, float afTimeStep);
 
 	tAvatarMap m_mapAvatars;
+	cLanternLight mLanternLight;
 };
 
 //----------------------------------------------

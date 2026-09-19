@@ -12,6 +12,7 @@ static const float kUnpushableMass = 1.0e6f;
 cLuxAvatarHandler::cLuxAvatarHandler()
 	: iLuxUpdateable("LuxAvatarHandler")
 {
+	LoadLanternLight();
 }
 
 // World objects belong to the map's world, which destroys them if it outlives this module.
@@ -154,6 +155,41 @@ bool cLuxAvatarHandler::FindMeshFile(const tString& asEntityFile, tString& asMes
 	return true;
 }
 
+// The local lantern glows through the lights of the hand-held lantern model, since the player
+// lantern's own light in game.cfg is a placeholder without range. The widest of them is the glow;
+// the others only light the lantern's glass.
+void cLuxAvatarHandler::LoadLanternLight()
+{
+	const tString sHandObjectFile = "/models/hand_objects/lantern/lantern.ho";
+	cResources *pResources = gpBase->mpEngine->GetResources();
+	iXmlDocument *pHandObjectDoc = pResources->LoadXmlDocument(sHandObjectFile);
+	cXmlElement *pMainElem = pHandObjectDoc ? pHandObjectDoc->GetFirstElement("Main") : NULL;
+	const tString sModelFile = pMainElem ? pMainElem->GetAttributeString("Model", "") : "";
+	if(pHandObjectDoc) pResources->DestroyXmlDocument(pHandObjectDoc);
+
+	iXmlDocument *pModelDoc = sModelFile != "" ? pResources->LoadXmlDocument(sModelFile) : NULL;
+	cXmlElement *pModelDataElem = pModelDoc ? pModelDoc->GetFirstElement("ModelData") : NULL;
+	cXmlElement *pEntitiesElem = pModelDataElem ? pModelDataElem->GetFirstElement("Entities") : NULL;
+	if(pEntitiesElem)
+	{
+		cXmlNodeListIterator it = pEntitiesElem->GetChildIterator();
+		while(it.HasNext())
+		{
+			cXmlElement *pLightElem = it.Next()->ToElement();
+			if(pLightElem->GetValue() != "PointLight") continue;
+			const float fRadius = pLightElem->GetAttributeFloat("Radius", 0);
+			if(fRadius <= mLanternLight.mfRadius) continue;
+			mLanternLight.mColor = pLightElem->GetAttributeColor("DiffuseColor", cColor(0, 0));
+			mLanternLight.mfRadius = fRadius;
+			mLanternLight.msGobo = pLightElem->GetAttributeString("Gobo", "");
+		}
+	}
+	if(pModelDoc) pResources->DestroyXmlDocument(pModelDoc);
+
+	if(mLanternLight.mfRadius <= 0)
+		Error("No lantern light found through '%s', so Avatars give off no light\n", sHandObjectFile.c_str());
+}
+
 // The clock Poses arrive and are rendered by; the local Pose is stamped with the same one.
 double cLuxAvatarHandler::GetLocalTimeMs()
 {
@@ -186,14 +222,16 @@ void cLuxAvatarHandler::CreateWorldObjects(const tString& asIdentifier, cAvatar&
 	pBody->SetEntityOffset(GetAvatarMeshOffset(pBody->GetSize().y));
 	aAvatar.mpBody = pBody;
 
-	// Like the local lantern's light, except that it never casts shadows.
-	cLuxPlayerLantern *pLocalLantern = gpBase->mpPlayer->GetHelperLantern();
-	cLightPoint *pLantern = apMap->GetWorld()->CreateLightPoint(sName + "_Lantern", pLocalLantern->GetGobo(), false);
-	pLantern->SetDiffuseColor(cColor(0, 0));
-	pLantern->SetRadius(pLocalLantern->GetRadius());
-	pLantern->SetCastShadows(false);
-	pLantern->SetIsSaved(false);
-	aAvatar.mpLantern = pLantern;
+	// Like the local lantern's glow, except that it never casts shadows.
+	if(mLanternLight.mfRadius > 0)
+	{
+		cLightPoint *pLantern = apMap->GetWorld()->CreateLightPoint(sName + "_Lantern", mLanternLight.msGobo, false);
+		pLantern->SetDiffuseColor(cColor(0, 0));
+		pLantern->SetRadius(mLanternLight.mfRadius);
+		pLantern->SetCastShadows(false);
+		pLantern->SetIsSaved(false);
+		aAvatar.mpLantern = pLantern;
+	}
 
 	// Waking places the new objects before they show.
 	SetAwake(aAvatar, false);
@@ -264,7 +302,7 @@ void cLuxAvatarHandler::UpdateLantern(cAvatar& aAvatar, const cAvatarRenderedPos
 	const float fBrightness = aAvatar.mLanternModel.Update(bAwake, bAwake && apPose->mbLanternRaised, afTimeStep);
 	if(aAvatar.mpLantern == NULL) return;
 
-	aAvatar.mpLantern->SetDiffuseColor(gpBase->mpPlayer->GetHelperLantern()->GetDefaultColor() * fBrightness);
+	aAvatar.mpLantern->SetDiffuseColor(mLanternLight.mColor * fBrightness);
 	aAvatar.mpLantern->SetVisible(fBrightness > 0);
 	if(bAwake) aAvatar.mpLantern->SetMatrix(GetLanternMatrix(*apPose));
 }
