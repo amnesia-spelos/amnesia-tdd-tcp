@@ -56,6 +56,14 @@ void cLuxAvatarHandler::PoseAvatar(const tString& asIdentifier, const cGameInter
 	it->second.mPoseModel.AddPose(sample, GetLocalTimeMs());
 }
 
+// Takes effect on the next update, whether or not the Avatar is awake.
+void cLuxAvatarHandler::SetAvatarCollision(const tString& asIdentifier, bool abCollides)
+{
+	tAvatarMapIt it = m_mapAvatars.find(asIdentifier);
+	if(it == m_mapAvatars.end()) return;
+	it->second.mCollision.SetEnabled(abCollides);
+}
+
 // The Pose is applied every update, so nothing that pushes the body moves the Avatar away from it.
 void cLuxAvatarHandler::Update(float afTimeStep)
 {
@@ -69,6 +77,7 @@ void cLuxAvatarHandler::Update(float afTimeStep)
 		if(!avatar.mPoseModel.Sample(fLocalTimeMs, sCurrentMapFile, pose))
 		{
 			SetAwake(avatar, false);
+			UpdateCollision(avatar, false);
 			continue;
 		}
 
@@ -77,6 +86,7 @@ void cLuxAvatarHandler::Update(float afTimeStep)
 
 		avatar.mpBody->SetFeetPosition(cVector3f(pose.mfX, pose.mfY, pose.mfZ));
 		avatar.mpBody->SetYaw(cMath::ToRad(pose.mfYawDegrees));
+		UpdateCollision(avatar, true);
 		if(!avatar.mpBody->IsActive())
 		{
 			// A dormant body is not updated, so its mesh is moved to the new Pose before it shows.
@@ -156,6 +166,7 @@ void cLuxAvatarHandler::CreateWorldObjects(const tString& asIdentifier, cAvatar&
 
 	iCharacterBody *pBody = apMap->GetPhysicsWorld()->CreateCharacterBody(sName, gpBase->mpPlayer->GetBodySize());
 	pBody->SetGravityActive(false);
+	pBody->SetCollideFlags(kCollideFlag);
 	pBody->SetEntity(aAvatar.mpMeshEntity);
 	pBody->SetEntityOffset(GetAvatarMeshOffset(pBody->GetSize().y));
 	aAvatar.mpBody = pBody;
@@ -177,4 +188,27 @@ void cLuxAvatarHandler::SetAwake(cAvatar& aAvatar, bool abAwake)
 {
 	if(aAvatar.mpBody) aAvatar.mpBody->SetActive(abAwake);
 	if(aAvatar.mpMeshEntity) aAvatar.mpMeshEntity->SetVisible(abAwake);
+}
+
+static cAvatarCollisionCylinder GetCollisionCylinder(iCharacterBody *apBody)
+{
+	cAvatarCollisionCylinder cylinder;
+	const cVector3f vFeet = apBody->GetFeetPosition();
+	cylinder.mfFeetX = vFeet.x;
+	cylinder.mfFeetY = vFeet.y;
+	cylinder.mfFeetZ = vFeet.z;
+	cylinder.mfRadius = cMath::Max(apBody->GetSize().x, apBody->GetSize().z) * 0.5f;
+	cylinder.mfHeight = apBody->GetSize().y;
+	return cylinder;
+}
+
+// Turning off the body's collision test, rather than the body, keeps it carrying the mesh.
+void cLuxAvatarHandler::UpdateCollision(cAvatar& aAvatar, bool abAwake)
+{
+	iCharacterBody *pPlayerBody = gpBase->mpPlayer->GetCharacterBody();
+	float fGapToPlayer = cAvatarCollisionModel::kClearanceMeters;
+	if(abAwake && aAvatar.mpBody && pPlayerBody)
+		fGapToPlayer = GetAvatarCollisionGap(GetCollisionCylinder(aAvatar.mpBody), GetCollisionCylinder(pPlayerBody));
+	const bool bCollides = aAvatar.mCollision.Update(abAwake, fGapToPlayer);
+	if(aAvatar.mpBody) aAvatar.mpBody->SetTestCollision(bCollides);
 }

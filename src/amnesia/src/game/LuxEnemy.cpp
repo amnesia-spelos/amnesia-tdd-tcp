@@ -22,6 +22,7 @@
 #include "LuxEnemyMover.h"
 #include "LuxEnemyPathfinder.h"
 
+#include "LuxAvatarHandler.h"
 #include "LuxMap.h"
 #include "LuxMapHelper.h"
 #include "LuxMapHandler.h"
@@ -183,6 +184,8 @@ void iLuxEnemyLoader::AfterLoad(cXmlElement *apRootElem, const cMatrixf &a_mtxTr
 	// Load character body
 	iCharacterBody *pCharBody = apWorld->GetPhysicsWorld()->CreateCharacterBody(msName, GetVarVector3f("Body_Size", 1));
 	
+	// Enemies pass through Avatars, since pathfinding does not know about them.
+	pCharBody->SetCollideFlags(eFlagBit_All & ~cLuxAvatarHandler::kCollideFlag);
 	pCharBody->SetMass(					GetVarFloat("Body_Mass", 1));
 	pCharBody->SetAccurateClimbing(		GetVarBool("Body_AccurateClimbing",false) );
 	pCharBody->SetMaxNoSlideSlopeAngle(cMath::ToRad(GetVarFloat("Body_MaxNoSlideSlopeAngle",0) ) );

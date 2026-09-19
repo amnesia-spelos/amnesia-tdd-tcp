@@ -88,6 +88,10 @@ namespace
 			mvPosedAvatars.push_back(asIdentifier);
 			mLastAvatarPose = aPose;
 		}
+		virtual void SetAvatarCollision(const std::string& asIdentifier, bool abCollides)
+		{
+			mvAvatarCollisions.push_back(asIdentifier + (abCollides ? " 1" : " 0"));
+		}
 
 		bool mbMapLoaded;
 		cGameInteractionPosition mPosition;
@@ -111,6 +115,7 @@ namespace
 		std::vector<std::string> mvRemovedAvatars;
 		std::vector<std::string> mvPosedAvatars;
 		cGameInteractionPose mLastAvatarPose;
+		std::vector<std::string> mvAvatarCollisions;
 	};
 
 	SOCKET Connect(cGameInteractionGateway& aGateway, cFakeGameAdapter& aAdapter)
@@ -515,6 +520,35 @@ namespace
 		gateway.Shutdown();
 	}
 
+	void AvatarCollisionIsToggledPerAvatarThroughTheGameAdapter()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenAvatarSession(gateway, adapter);
+		Expect(Exchange(peer, gateway, adapter, "avatarcreate a1\navatarcreate b2\n") ==
+			"RESPONSE avatarcreate ok a1\nRESPONSE avatarcreate ok b2\n", "the Session creates two Avatars");
+
+		Expect(Exchange(peer, gateway, adapter, "avatarcollision a1 0\navatarcollision b2 1\navatarcollision a1 1\n") ==
+			"RESPONSE avatarcollision ok a1\nRESPONSE avatarcollision ok b2\nRESPONSE avatarcollision ok a1\n",
+			"toggling collision is answered with the Avatar Identifier");
+		Expect(adapter.mvAvatarCollisions.size() == 3 && adapter.mvAvatarCollisions[0] == "a1 0" &&
+			adapter.mvAvatarCollisions[1] == "b2 1" && adapter.mvAvatarCollisions[2] == "a1 1",
+			"each toggle reaches its Avatar in the game");
+
+		Expect(Exchange(peer, gateway, adapter, "avatarcollision stranger 0\n") ==
+			"RESPONSE avatarcollision not-found stranger\n", "an unknown Avatar is not found");
+		Expect(Exchange(peer, gateway, adapter,
+			"avatarcollision a1\navatarcollision a1 2\navatarcollision a1 0 1\navatarcollision a:1 0\navatarcollision a1 0 \n") ==
+			"RESPONSE avatarcollision invalid\nRESPONSE avatarcollision invalid\nRESPONSE avatarcollision invalid\n"
+			"RESPONSE avatarcollision invalid\nRESPONSE avatarcollision invalid\n",
+			"malformed toggles are invalid and do not echo an identifier");
+		Expect(Exchange(peer, gateway, adapter, "avatarremove a1\navatarcollision a1 0\n") ==
+			"RESPONSE avatarremove ok a1\nRESPONSE avatarcollision not-found a1\n", "a removed Avatar is not found");
+		Expect(adapter.mvAvatarCollisions.size() == 3, "rejected toggles do not reach the game");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
 	void AvatarsAreRemovedWhenTheSessionEnds()
 	{
 		cFakeGameAdapter adapter;
@@ -730,6 +764,7 @@ int main()
 	AvatarsAreCreatedPosedAndRemovedThroughTheGameAdapter();
 	SessionDrivesAtMostSixteenAvatars();
 	AvatarPoseFailuresAreReportedOncePerStreak();
+	AvatarCollisionIsToggledPerAvatarThroughTheGameAdapter();
 	AvatarsAreRemovedWhenTheSessionEnds();
 	std::cout << "Game Interaction Protocol gateway loopback cases passed\n";
 	return 0;

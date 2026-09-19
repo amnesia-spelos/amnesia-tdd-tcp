@@ -176,7 +176,7 @@ namespace
 		return true;
 	}
 
-	// avatarcreate <id> [<entityFile>], avatarremove <id>, and
+	// avatarcreate <id> [<entityFile>], avatarremove <id>, avatarcollision <id> <0|1>, and
 	// avatarpose <id> <timeMs> <teleportCounter> <x> <y> <z> <yaw> <pitch> <crouch> <map>.
 	cGameInteractionCommand ParseAvatarCommand(eGameInteractionCommandType aType, const std::string& asLine)
 	{
@@ -187,6 +187,8 @@ namespace
 		bool valid = TryReadAvatarIdentifier(reader, request);
 		if (valid && aType == eGameInteractionCommand_AvatarCreate && !reader.IsAtEnd())
 			valid = reader.TryReadRest(request.msEntityFile);
+		else if (valid && aType == eGameInteractionCommand_AvatarCollision)
+			valid = TryReadFlag(reader, request.mbCollides);
 		else if (valid && aType == eGameInteractionCommand_AvatarPose)
 		{
 			cGameInteractionPose& pose = request.mPose;
@@ -319,7 +321,7 @@ cGameInteractionCommand cGameInteractionProtocolVersion2::ParseCommand(const std
 	if (type == eGameInteractionCommand_Unknown) return cLegacyGameInteractionProtocol::ParseCommand(asLine);
 	if (type == eGameInteractionCommand_LocalPose) return ParseLocalPose(asLine);
 	if (type == eGameInteractionCommand_AvatarCreate || type == eGameInteractionCommand_AvatarRemove ||
-		type == eGameInteractionCommand_AvatarPose)
+		type == eGameInteractionCommand_AvatarCollision || type == eGameInteractionCommand_AvatarPose)
 		return ParseAvatarCommand(type, asLine);
 	std::string fields;
 	reader.TryReadRest(fields);

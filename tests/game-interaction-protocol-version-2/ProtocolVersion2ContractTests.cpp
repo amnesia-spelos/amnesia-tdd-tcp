@@ -137,6 +137,7 @@ namespace
 		}
 		virtual void RemoveAvatar(const std::string&) {}
 		virtual void PoseAvatar(const std::string&, const cGameInteractionPose&) {}
+		virtual void SetAvatarCollision(const std::string&, bool) {}
 	};
 
 	std::string Receive(SOCKET peer, long microseconds)

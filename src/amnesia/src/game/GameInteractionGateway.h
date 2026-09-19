@@ -103,11 +103,13 @@ struct cGameInteractionPose
 // Peer named no model.
 struct cGameInteractionAvatarRequest
 {
-	cGameInteractionAvatarRequest() : mbValid(false) {}
+	cGameInteractionAvatarRequest() : mbValid(false), mbCollides(false) {}
 	bool mbValid;
 	std::string msIdentifier;
 	std::string msEntityFile;
 	cGameInteractionPose mPose;
+	// Whether an avatarcollision Command turns the Avatar's collision with the local player on.
+	bool mbCollides;
 };
 
 // What a localpose Command asks for. Invalid means the line was malformed.
@@ -258,6 +260,8 @@ public:
 	virtual bool CreateAvatar(const std::string& asIdentifier, const std::string& asEntityFile) = 0;
 	virtual void RemoveAvatar(const std::string& asIdentifier) = 0;
 	virtual void PoseAvatar(const std::string& asIdentifier, const cGameInteractionPose& aPose) = 0;
+	// Whether the local player collides with the Avatar while it is awake. It is on until turned off.
+	virtual void SetAvatarCollision(const std::string& asIdentifier, bool abCollides) = 0;
 };
 
 class cGameInteractionResponse

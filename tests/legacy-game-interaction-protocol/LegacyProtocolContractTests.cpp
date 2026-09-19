@@ -156,6 +156,7 @@ namespace
 		virtual bool CreateAvatar(const std::string&, const std::string&) { return true; }
 		virtual void RemoveAvatar(const std::string&) {}
 		virtual void PoseAvatar(const std::string&, const cGameInteractionPose&) {}
+		virtual void SetAvatarCollision(const std::string&, bool) {}
 	};
 
 	SOCKET Connect(cGameInteractionGateway& gateway, cFixtureGameAdapter& adapter)

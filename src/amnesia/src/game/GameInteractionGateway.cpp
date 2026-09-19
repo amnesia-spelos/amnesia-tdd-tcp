@@ -288,6 +288,18 @@ namespace
 		return AvatarResponse(aCommand.GetType(), eGameInteractionCommandOutcome_Success, request.msIdentifier);
 	}
 
+	cGameInteractionResponse SetAvatarCollision(const cGameInteractionCommand& aCommand,
+		iGameInteractionGameAdapter& aGameAdapter, const cSessionAvatars& aAvatars)
+	{
+		const cGameInteractionAvatarRequest& request = aCommand.GetAvatarRequest();
+		if (!request.mbValid)
+			return AvatarResponse(aCommand.GetType(), eGameInteractionCommandOutcome_Invalid, std::string());
+		if (!aAvatars.Contains(request.msIdentifier))
+			return AvatarResponse(aCommand.GetType(), eGameInteractionCommandOutcome_AvatarNotFound, request.msIdentifier);
+		aGameAdapter.SetAvatarCollision(request.msIdentifier, request.mbCollides);
+		return AvatarResponse(aCommand.GetType(), eGameInteractionCommandOutcome_Success, request.msIdentifier);
+	}
+
 	// Poses stream at network rate, so a success is not answered and a failure is answered only
 	// when it starts its Avatar's failure streak.
 	cGameInteractionResponse PoseAvatar(const cGameInteractionCommand& aCommand,
@@ -357,8 +369,7 @@ namespace
 		case eGameInteractionCommand_AvatarPose:
 			return PoseAvatar(aCommand, aGameAdapter, aSession.mAvatars);
 		case eGameInteractionCommand_AvatarCollision:
-			// avatarcollision gains its behavior in #33; until then it is unknown.
-			return cGameInteractionResponse(eGameInteractionCommand_Unknown, eGameInteractionResponse_Rejected);
+			return SetAvatarCollision(aCommand, aGameAdapter, aSession.mAvatars);
 		case eGameInteractionCommand_GetPosition:
 		{
 			cGameInteractionResponse response(aCommand.GetType(), eGameInteractionResponse_Position,

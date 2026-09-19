@@ -139,6 +139,11 @@ namespace
 			if(gpBase->mpAvatarHandler) gpBase->mpAvatarHandler->PoseAvatar(asIdentifier, aPose);
 		}
 
+		virtual void SetAvatarCollision(const std::string& asIdentifier, bool abCollides)
+		{
+			if(gpBase->mpAvatarHandler) gpBase->mpAvatarHandler->SetAvatarCollision(asIdentifier, abCollides);
+		}
+
 	private:
 		static bool IsInMainMenu()
 		{
