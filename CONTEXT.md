@@ -76,6 +76,10 @@ _Avoid_: Event, update event
 A player-installed story with its own maps and start position, started from the beginning rather than resumed from a save.
 _Avoid_: Mod, campaign
 
+**Main Story**:
+The game's own story, started from the beginning from its configured start map rather than resumed from a save.
+_Avoid_: Main game, base game, campaign, new game
+
 **Custom Story Identifier**:
 The installed folder name that uniquely identifies a Custom Story, as opposed to its possibly duplicated display name.
 _Avoid_: Story name, story title
