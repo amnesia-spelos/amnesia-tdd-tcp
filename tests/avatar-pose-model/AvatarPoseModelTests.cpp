@@ -42,6 +42,22 @@ namespace
 		Expect(aModel.Sample(afLocalTimeMs, kMap, rendered), asDescription + " (awake)");
 		return rendered.mfX;
 	}
+
+	cAvatarPoseSample LanternPose(double afSenderTimeMs, float afX, bool abLanternRaised,
+		unsigned int alTeleportCounter = 0)
+	{
+		cAvatarPoseSample sample = Pose(afSenderTimeMs, afX, 0.0f, alTeleportCounter);
+		sample.mbLanternRaised = abLanternRaised;
+		return sample;
+	}
+
+	// Renders the model at a local time and returns whether the lantern is raised, failing if it is dormant.
+	bool RenderedLantern(cAvatarPoseModel& aModel, double afLocalTimeMs, const std::string& asDescription)
+	{
+		cAvatarRenderedPose rendered;
+		Expect(aModel.Sample(afLocalTimeMs, kMap, rendered), asDescription + " (awake)");
+		return rendered.mbLanternRaised;
+	}
 }
 
 int main()
@@ -190,6 +206,42 @@ int main()
 			model.AddPose(Pose(5000.0 + index * 50.0, index * 0.1f), 1200.0 + index * 50.0);
 		Expect(Near(RenderedX(model, 11225.0, "latency rise"), 19.85f),
 			"a lasting rise in latency is adopted, so the Avatar is again rendered 100 ms behind");
+	}
+
+	{
+		cAvatarPoseModel model;
+		model.AddPose(LanternPose(5000.0, 0.0f, false), 1000.0);
+		model.AddPose(LanternPose(5100.0, 1.0f, true), 1100.0);
+		model.AddPose(LanternPose(5200.0, 2.0f, false), 1200.0);
+		Expect(!RenderedLantern(model, 1100.0, "lantern at a sample"), "the lantern is rendered as the Pose at render time");
+		Expect(!RenderedLantern(model, 1190.0, "lantern while interpolating"),
+			"while interpolating, the lantern comes from the older sample, even when the newer one is nearer");
+		Expect(RenderedLantern(model, 1200.0, "lantern switch"), "the lantern switches on the sender's time");
+		Expect(RenderedLantern(model, 1290.0, "lantern while interpolating"),
+			"a raised lantern stays raised until the render time reaches the Pose that lowers it");
+		Expect(!RenderedLantern(model, 1300.0, "lantern switch"), "the lantern is lowered on the sender's time");
+	}
+
+	{
+		cAvatarPoseModel model;
+		model.AddPose(LanternPose(5000.0, 0.0f, false), 1000.0);
+		model.AddPose(LanternPose(5100.0, 2.0f, true), 1100.0);
+		Expect(RenderedLantern(model, 1300.0, "lantern hold"), "the lantern holds with the last Pose when samples stop");
+		Expect(RenderedLantern(model, 60000.0, "lantern hold"), "and keeps holding for as long as no Pose arrives");
+	}
+
+	{
+		cAvatarPoseModel model;
+		model.AddPose(LanternPose(5000.0, 0.0f, true, 7), 1000.0);
+		model.AddPose(LanternPose(5100.0, 1.0f, false, 8), 1100.0);
+		Expect(RenderedLantern(model, 1199.0, "lantern before a teleport"),
+			"the lantern is held with the Pose before a teleport");
+		Expect(!RenderedLantern(model, 1200.0, "lantern at a teleport"), "and snaps with the teleported Pose");
+
+		model.AddPose(LanternPose(5200.0, 10.0f, true, 8), 1200.0);
+		Expect(!RenderedLantern(model, 1250.0, "lantern before a distance snap"),
+			"the lantern is held with the Pose before a distance snap");
+		Expect(RenderedLantern(model, 1300.0, "lantern at a distance snap"), "and snaps with the distant Pose");
 	}
 
 	std::cout << "Avatar Pose model cases passed\n";

@@ -16,6 +16,7 @@ namespace
 		aRendered.mfY = aPose.mfY;
 		aRendered.mfZ = aPose.mfZ;
 		aRendered.mfYawDegrees = aPose.mfYawDegrees;
+		aRendered.mbLanternRaised = aPose.mbLanternRaised;
 	}
 
 	float Lerp(float afFrom, float afTo, float afT)
@@ -107,5 +108,6 @@ bool cAvatarPoseModel::Sample(double afLocalTimeMs, const std::string& asCurrent
 	aPose.mfY = Lerp(from.mfY, to.mfY, fFraction);
 	aPose.mfZ = Lerp(from.mfZ, to.mfZ, fFraction);
 	aPose.mfYawDegrees = LerpYawDegrees(from.mfYawDegrees, to.mfYawDegrees, fFraction);
+	aPose.mbLanternRaised = from.mbLanternRaised;
 	return true;
 }

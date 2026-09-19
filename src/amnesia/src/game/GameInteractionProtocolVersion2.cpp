@@ -176,8 +176,13 @@ namespace
 		return true;
 	}
 
+	const char* FormatFlag(bool abValue)
+	{
+		return abValue ? "1" : "0";
+	}
+
 	// avatarcreate <id> [<entityFile>], avatarremove <id>, avatarcollision <id> <0|1>, and
-	// avatarpose <id> <timeMs> <teleportCounter> <x> <y> <z> <yaw> <pitch> <crouch> <map>.
+	// avatarpose <id> <timeMs> <teleportCounter> <x> <y> <z> <yaw> <pitch> <crouch> <lantern> <map>.
 	cGameInteractionCommand ParseAvatarCommand(eGameInteractionCommandType aType, const std::string& asLine)
 	{
 		cGameInteractionFieldReader reader(asLine);
@@ -198,6 +203,7 @@ namespace
 				TryReadNumber(reader, pose.mFeetPosition.mfX) && TryReadNumber(reader, pose.mFeetPosition.mfY) &&
 				TryReadNumber(reader, pose.mFeetPosition.mfZ) && TryReadNumber(reader, pose.mfBodyYawDegrees) &&
 				TryReadNumber(reader, pose.mfCameraPitchDegrees) && TryReadFlag(reader, pose.mbCrouching) &&
+				TryReadFlag(reader, pose.mbLanternRaised) &&
 				reader.TryReadRest(pose.msMapFile);
 			pose.mlTeleportCounter = static_cast<unsigned int>(teleportCounter);
 		}
@@ -361,5 +367,6 @@ std::string cGameInteractionProtocolVersion2::SerializeLocalPose(const cGameInte
 	sprintf(clockFields, "STATE localpose %llu %u ", aPose.mlTimeMs, aPose.mlTeleportCounter);
 	return clockFields + FormatNumber(aPose.mFeetPosition.mfX) + " " + FormatNumber(aPose.mFeetPosition.mfY) +
 		" " + FormatNumber(aPose.mFeetPosition.mfZ) + " " + FormatNumber(aPose.mfBodyYawDegrees) + " " +
-		FormatNumber(aPose.mfCameraPitchDegrees) + (aPose.mbCrouching ? " 1 " : " 0 ") + aPose.msMapFile;
+		FormatNumber(aPose.mfCameraPitchDegrees) + " " + FormatFlag(aPose.mbCrouching) + " " +
+		FormatFlag(aPose.mbLanternRaised) + " " + aPose.msMapFile;
 }

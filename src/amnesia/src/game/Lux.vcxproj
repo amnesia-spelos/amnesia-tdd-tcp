@@ -142,6 +142,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="AvatarCollisionModel.cpp" />
+    <ClCompile Include="AvatarLanternModel.cpp" />
     <ClCompile Include="AvatarPoseModel.cpp" />
     <ClCompile Include="ChatModel.cpp" />
     <ClCompile Include="LuxChatHandler.cpp" />
@@ -262,6 +263,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AvatarCollisionModel.h" />
+    <ClInclude Include="AvatarLanternModel.h" />
     <ClInclude Include="AvatarMeshOffset.h" />
     <ClInclude Include="AvatarPoseModel.h" />
     <ClInclude Include="ChatModel.h" />

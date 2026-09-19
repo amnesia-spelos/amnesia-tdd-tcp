@@ -216,7 +216,7 @@ namespace
 	// The fake adapter's Pose as a State Update at the given time.
 	std::string LocalPoseStateUpdate(const std::string& asTimeMs)
 	{
-		return "STATE localpose " + asTimeMs + " 0 1.2500 -2.5000 3.7500 90.0000 0.0000 0 maps/main/level01.map\n";
+		return "STATE localpose " + asTimeMs + " 0 1.2500 -2.5000 3.7500 90.0000 0.0000 0 0 maps/main/level01.map\n";
 	}
 
 	std::string UpdateAt(cGameInteractionGateway& aGateway, cFakeGameAdapter& aAdapter, SOCKET aPeer,
@@ -333,16 +333,16 @@ namespace
 		Expect(UpdateAt(gateway, adapter, peer, 1500).empty(), "an unchanged Pose stays silent while paused");
 		adapter.mLocalPose.mfCameraPitchDegrees = -10.0f;
 		Expect(UpdateAt(gateway, adapter, peer, 1510) ==
-			"STATE localpose 1510 0 1.2500 -2.5000 3.7500 90.0000 -10.0000 0 maps/main/level01.map\n",
+			"STATE localpose 1510 0 1.2500 -2.5000 3.7500 90.0000 -10.0000 0 0 maps/main/level01.map\n",
 			"a changed Pose is sent while in the inventory");
 		adapter.mLocalPose.mlTeleportCounter = 1;
 		Expect(UpdateAt(gateway, adapter, peer, 1520).empty(), "a changed Pose while paused still keeps the rate");
 		Expect(UpdateAt(gateway, adapter, peer, 1560) ==
-			"STATE localpose 1560 1 1.2500 -2.5000 3.7500 90.0000 -10.0000 0 maps/main/level01.map\n",
+			"STATE localpose 1560 1 1.2500 -2.5000 3.7500 90.0000 -10.0000 0 0 maps/main/level01.map\n",
 			"a teleport while paused is a changed Pose");
 		adapter.mLocalPoseAvailability = eGameInteractionLocalPoseAvailability_Live;
 		Expect(UpdateAt(gateway, adapter, peer, 1610) ==
-			"STATE localpose 1610 1 1.2500 -2.5000 3.7500 90.0000 -10.0000 0 maps/main/level01.map\n",
+			"STATE localpose 1610 1 1.2500 -2.5000 3.7500 90.0000 -10.0000 0 0 maps/main/level01.map\n",
 			"an unchanged Pose is sent again once play resumes");
 		closesocket(peer);
 		gateway.Shutdown();
@@ -375,7 +375,7 @@ namespace
 		Expect(gateway.GetDiagnostic().empty(), "a Peer that does not read is not disconnected for Poses alone");
 
 		const std::string newest =
-			"STATE localpose 511000 0 30000.0000 -2.5000 3.7500 90.0000 0.0000 0 maps/main/level01.map\n";
+			"STATE localpose 511000 0 30000.0000 -2.5000 3.7500 90.0000 0.0000 0 0 maps/main/level01.map\n";
 		std::string received;
 		for (int attempt = 0; attempt < 500 && (received.size() < newest.size() ||
 			received.compare(received.size() - newest.size(), newest.size(), newest) != 0); ++attempt)
@@ -447,13 +447,13 @@ namespace
 		Expect(adapter.mvCreatedAvatars.size() == 2, "rejected creations do not reach the game");
 
 		SendCommands(peer, gateway, adapter,
-			"avatarpose a1 5000 7 1.5000 -2.2500 3.0000 -90.5000 12.2500 1 custom_stories/My Story: 2/maps/cellar one.map\n");
+			"avatarpose a1 5000 7 1.5000 -2.2500 3.0000 -90.5000 12.2500 1 1 custom_stories/My Story: 2/maps/cellar one.map\n");
 		Expect(ReceiveAvailable(peer, 50).empty(), "a successful Pose is not answered");
 		Expect(adapter.mvPosedAvatars.size() == 1 && adapter.mvPosedAvatars[0] == "a1", "the Pose reaches its Avatar");
 		const cGameInteractionPose& pose = adapter.mLastAvatarPose;
 		Expect(pose.mlTimeMs == 5000 && pose.mlTeleportCounter == 7 && pose.mFeetPosition.mfX == 1.5f &&
 			pose.mFeetPosition.mfY == -2.25f && pose.mFeetPosition.mfZ == 3.0f && pose.mfBodyYawDegrees == -90.5f &&
-			pose.mfCameraPitchDegrees == 12.25f && pose.mbCrouching &&
+			pose.mfCameraPitchDegrees == 12.25f && pose.mbCrouching && pose.mbLanternRaised &&
 			pose.msMapFile == "custom_stories/My Story: 2/maps/cellar one.map",
 			"every Pose field reaches the game");
 
@@ -499,7 +499,7 @@ namespace
 		cFakeGameAdapter adapter;
 		cGameInteractionGateway gateway;
 		SOCKET peer = OpenAvatarSession(gateway, adapter);
-		const std::string poseFields = " 1000 0 1.0000 2.0000 3.0000 90.0000 0.0000 0 maps/main/level01.map\n";
+		const std::string poseFields = " 1000 0 1.0000 2.0000 3.0000 90.0000 0.0000 0 0 maps/main/level01.map\n";
 		Expect(Exchange(peer, gateway, adapter, "avatarpose stranger" + poseFields + "avatarpose stranger" + poseFields +
 			"avatarpose other" + poseFields) ==
 			"RESPONSE avatarpose not-found stranger\nRESPONSE avatarpose not-found other\n",

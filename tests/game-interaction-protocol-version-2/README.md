@@ -4,8 +4,9 @@ Protocol Version 2 (ADR 0004) is a per-Session superset of the [legacy protocol]
 
 `contract.jsonl` holds language-neutral fixtures, one JSON object per line:
 
-- `session`: a fresh Session receives `request_wire` in one write. `expected_wire` is everything it answers after the greeting. The harness game has a map loaded and reports a fixed local Pose: time `123456`, teleport counter `3`, feet at `1.25 -2.5 3.75`, body yaw `90`, camera pitch `-45`, crouching, on map `custom_stories/My Story: Part 2/maps/cellar one.map`. It finds every Avatar model except `entities/missing.ent`.
+- `session`: a fresh Session receives `request_wire` in one write. `expected_wire` is everything it answers after the greeting. The harness game has a map loaded and reports a fixed local Pose: time `123456`, teleport counter `3`, feet at `1.25 -2.5 3.75`, body yaw `90`, camera pitch `-45`, crouching, with the lantern raised, on map `custom_stories/My Story: Part 2/maps/cellar one.map`. It finds every Avatar model except `entities/missing.ent`.
 - `local_pose`: how a local Pose is written as a `localpose` State Update.
+- `avatar_pose`: which `avatarpose` lines are well formed, and the crouch flag, lantern flag, and map path read from them.
 - `format_number`, `parse_number`: how numbers are written and which texts are accepted. The harness runs these under a comma-decimal system locale to prove locale independence.
 - `fields`: how a line splits into fixed fields and an optional trailing map path.
 - `avatar_identifier`: which Avatar Identifiers are valid.
@@ -42,7 +43,7 @@ A negotiated Session keeps every legacy Command, Response, and Event unchanged. 
 - **Numbers** (`<x>`, `<y>`, `<z>`, `<yaw>`, `<pitch>`) are written with exactly 4 decimals and a `.` separator, whatever the system locale is. For example: `1.2500`, `-0.0001`, `0.0000`. They are rounded half away from zero, and a value that rounds to zero has no sign. Readers accept `-?digits(.digits)?` with at most 15 digits. Readers reject `,` separators, exponents, `+`, `.5`, `1.`, and `nan`. Angles are in degrees, and positions are in world units.
 - **Time** (`<timeMs>`) is an unsigned decimal integer of milliseconds on the sender's monotonic game clock. It fits in 64 bits.
 - **Teleport counter** (`<teleportCounter>`) is an unsigned decimal 32-bit integer. It changes whenever the sender's Pose is placed rather than moved.
-- **Flags** (`<crouch>`, the collision toggle) are `0` or `1`.
+- **Flags** (`<crouch>`, `<lantern>`, the collision toggle) are `0` or `1`.
 - **Avatar Identifiers** (`<id>`) are 1–32 printable ASCII characters (`!` through `~`), and cannot contain `:`.
 
 ## Responses
@@ -64,23 +65,23 @@ The gateway checks Capabilities before it parses a message. A Protocol Version 2
 | `avatarcreate <id> [<entityFile>]` | `avatars` | `ok <id>`, `exists <id>`, `limit <id>`, `model-not-found <id>`, `invalid` |
 | `avatarremove <id>` | `avatars` | `ok <id>`, `not-found <id>`, `invalid` |
 | `avatarcollision <id> <0\|1>` | `avatars` | `ok <id>`, `not-found <id>`, `invalid` |
-| `avatarpose <id> <timeMs> <teleportCounter> <x> <y> <z> <yaw> <pitch> <crouch> <map>` | `avatars` | none on success; `not-found <id>`, `invalid [<id>]` |
+| `avatarpose <id> <timeMs> <teleportCounter> <x> <y> <z> <yaw> <pitch> <crouch> <lantern> <map>` | `avatars` | none on success; `not-found <id>`, `invalid [<id>]` |
 | `localpose subscribe <hz>` | `localpose` | `ok subscribe <hz>`, `invalid` |
 | `localpose unsubscribe` | `localpose` | `ok unsubscribe`, `invalid` |
 
 - `avatarcreate`: `<entityFile>` is a path field and defaults to `entities/multiplayer/skeleton_spelos/TheSkeletonSpelos.ent`. The checks run in this order: `invalid` means the line is malformed or the Avatar Identifier is invalid, and the Response does not echo the identifier. `exists` means the Session already drives an Avatar with that identifier. `limit` means the Session already drives 16 Avatars. `model-not-found` means the game cannot find the model file or the mesh it names.
 - `avatarremove`: `invalid` means the line is malformed or the Avatar Identifier is invalid, and the Response does not echo the identifier.
 - `avatarcollision`: `1` turns on collision between the local player and the Avatar, and `0` turns it off. Collision is on for a new Avatar. The setting stays in place across map changes, save loads, and dormancy until the next `avatarcollision` for that Avatar. `invalid` means the line is malformed, the Avatar Identifier is invalid, or the flag is not `0` or `1`, and the Response does not echo the identifier.
-- `avatarpose`: `<map>` is the map path of the sender's Pose, and `<x> <y> <z>` is the feet position. A successful `avatarpose` is not answered. `invalid` takes precedence over `not-found`. A failure is reported once per Avatar per failure streak, and the next success for that Avatar resets its streak. `invalid` echoes `<id>` only when that field is a valid Avatar Identifier. All lines without a valid identifier share one streak.
+- `avatarpose`: `<map>` is the map path of the sender's Pose, `<x> <y> <z>` is the feet position, and `<lantern>` is `1` while the sender's lantern is raised. A line without `<lantern>`, or with a flag other than `0` or `1`, is malformed. A successful `avatarpose` is not answered. `invalid` takes precedence over `not-found`. A failure is reported once per Avatar per failure streak, and the next success for that Avatar resets its streak. `invalid` echoes `<id>` only when that field is a valid Avatar Identifier. All lines without a valid identifier share one streak.
 - `localpose subscribe`: `<hz>` is a decimal integer. The rate is clamped to 1–60, even when `<hz>` does not fit in 32 bits, and the Response reports the clamped rate. Subscribing again changes the rate and restarts the subscription, so the current Pose follows at once. `localpose unsubscribe` succeeds even if the Session is not subscribed. `invalid` means the line is malformed, including a negative or fractional `<hz>`. The subscription ends when the Session ends.
 
 The `localpose` State Update is sent to a subscribed Session:
 
 ```text
-STATE localpose <timeMs> <teleportCounter> <x> <y> <z> <yaw> <pitch> <crouch> <map>
+STATE localpose <timeMs> <teleportCounter> <x> <y> <z> <yaw> <pitch> <crouch> <lantern> <map>
 ```
 
-- It reports the local player's feet position, body yaw, camera pitch, and crouch flag in the current map. `<timeMs>` is the game clock, which only moves forward while the game runs. `<teleportCounter>` changes whenever the player is placed rather than moved: `TeleportPlayer`, `SetPlayerPos`, start position placement on map entry or at a checkpoint, and save load.
+- It reports the local player's feet position, body yaw, camera pitch, crouch flag, and lantern flag in the current map. `<lantern>` is `1` exactly while the lantern is raised. It turns `0` as soon as the lantern is lowered, runs out of oil, or is disabled. `<timeMs>` is the game clock, which only moves forward while the game runs. `<teleportCounter>` changes whenever the player is placed rather than moved: `TeleportPlayer`, `SetPlayerPos`, start position placement on map entry or at a checkpoint, and save load.
 - The first State Update is the current Pose and follows the subscribing Response. After that, at most one State Update is sent per `1000 / <hz>` milliseconds of game time. The schedule holds that average rate even when game updates do not land on it exactly.
 - State Updates are sent only while a map is loaded. None are sent in the main menu or while a map loads. While the game is paused or the player is in the inventory, journal, or another menu, a State Update is sent only when the Pose changed. Time does not count as a change.
 - A newer Pose replaces any undelivered older one instead of queueing behind it. A Peer that reads slowly receives the newest Pose once it catches up, and is never disconnected because of State Updates.
@@ -89,6 +90,7 @@ STATE localpose <timeMs> <teleportCounter> <x> <y> <z> <yaw> <pitch> <crouch> <m
 
 - An Avatar belongs to the Session that created it, not to a map. It is removed only by `avatarremove` or when the Session ends. Loading a save or changing maps keeps it.
 - The game shows an Avatar as the mesh of its model, turned by body yaw only. The model's bodies and prop variables are ignored. Pitch and crouch are stored but not shown yet.
+- While its Pose has the lantern raised, an awake Avatar gives off a light like the local lantern: the same gobo, colour, and radius, without shadows. It sits at standing eye height on the Avatar's facing side, even while the Avatar crouches, and ignores pitch. It fades in over about 1 s when the lantern is raised and out over about 0.5 s when it is lowered. It does not dim with oil. A Dormant Avatar gives off no light. The Peer's flag decides the light even where the local map disables the local lantern.
 - An Avatar is dormant, which means invisible and not collidable, while its latest Pose names a map other than the local current map, or while no map is loaded. A new Avatar is dormant until its first Pose for the local map. A dormant Avatar wakes on the first Pose for the local map.
 - The local player collides with an awake Avatar whose collision is on, so the player bumps into it rather than walking through it. Turning collision off leaves the Avatar visible and posed.
 - An Avatar that overlaps the local player by more than 5 cm never traps the player or throws them out. This happens when it wakes, snaps, or walks onto the player, or when its collision is turned on around them. The Avatar becomes passable until it and the player are at least 5 cm apart, and then it collides again. A smaller overlap, such as the player pressing against the Avatar, keeps it solid. So a moving Avatar at most nudges a player standing in its way, and then passes through them.

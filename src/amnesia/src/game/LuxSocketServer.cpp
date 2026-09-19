@@ -3,6 +3,7 @@
 #include "LuxMap.h"
 #include "LuxMapHandler.h"
 #include "LuxPlayer.h"
+#include "LuxPlayerHelpers.h"
 #include "LuxChatHandler.h"
 #include "LuxInputHandler.h"
 #include "LuxMainMenu.h"
@@ -120,6 +121,7 @@ namespace
 			pose.mfBodyYawDegrees = cMath::ToDeg(pCharBody->GetYaw());
 			pose.mfCameraPitchDegrees = cMath::ToDeg(pPlayer->GetCamera()->GetPitch());
 			pose.mbCrouching = pMoveNormal->IsCrouching();
+			pose.mbLanternRaised = pPlayer->GetHelperLantern()->IsActive();
 			pose.msMapFile = GetMapFile();
 			return pose;
 		}

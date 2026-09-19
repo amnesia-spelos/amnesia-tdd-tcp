@@ -86,7 +86,7 @@ struct cGameInteractionPose
 {
 	cGameInteractionPose()
 		: mlTimeMs(0), mlTeleportCounter(0), mfBodyYawDegrees(0.0f), mfCameraPitchDegrees(0.0f),
-		  mbCrouching(false) {}
+		  mbCrouching(false), mbLanternRaised(false) {}
 	// Milliseconds on the sending game's monotonic clock.
 	unsigned long long mlTimeMs;
 	// Changes whenever the player is placed rather than moved.
@@ -95,6 +95,8 @@ struct cGameInteractionPose
 	float mfBodyYawDegrees;
 	float mfCameraPitchDegrees;
 	bool mbCrouching;
+	// Whether the lantern is raised. Its oil level and flicker are not part of the Pose.
+	bool mbLanternRaised;
 	std::string msMapFile;
 };
 

@@ -128,6 +128,7 @@ namespace
 			pose.mfBodyYawDegrees = 90.0f;
 			pose.mfCameraPitchDegrees = -45.0f;
 			pose.mbCrouching = true;
+			pose.mbLanternRaised = true;
 			pose.msMapFile = "custom_stories/My Story: Part 2/maps/cellar one.map";
 			return pose;
 		}
@@ -281,9 +282,21 @@ int main(int argc, char** argv)
 			pose.mfBodyYawDegrees = static_cast<float>(ReadClassicNumber(ReadString(line, "yaw")));
 			pose.mfCameraPitchDegrees = static_cast<float>(ReadClassicNumber(ReadString(line, "pitch")));
 			pose.mbCrouching = ReadBool(line, "crouch");
+			pose.mbLanternRaised = ReadBool(line, "lantern");
 			pose.msMapFile = ReadString(line, "map");
 			actual = cGameInteractionProtocolVersion2::SerializeLocalPose(pose);
 			expected = ReadString(line, "expected_text");
+		}
+		else if (kind == "avatar_pose")
+		{
+			const cGameInteractionAvatarRequest request =
+				cGameInteractionProtocolVersion2::ParseCommand(ReadString(line, "line")).GetAvatarRequest();
+			const cGameInteractionPose& pose = request.mPose;
+			actual = !request.mbValid ? "invalid" : std::string("crouch ") + (pose.mbCrouching ? "1" : "0") +
+				" lantern " + (pose.mbLanternRaised ? "1" : "0") + " map " + pose.msMapFile;
+			expected = !ReadBool(line, "valid") ? "invalid" : std::string("crouch ") +
+				(ReadBool(line, "crouch") ? "1" : "0") + " lantern " + (ReadBool(line, "lantern") ? "1" : "0") +
+				" map " + ReadString(line, "map");
 		}
 		else if (kind == "avatar_identifier")
 		{

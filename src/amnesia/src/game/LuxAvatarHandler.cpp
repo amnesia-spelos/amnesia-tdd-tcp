@@ -4,6 +4,7 @@
 #include "LuxMap.h"
 #include "LuxMapHandler.h"
 #include "LuxPlayer.h"
+#include "LuxPlayerHelpers.h"
 
 // Heavier than any character can push, yet finite so the engine's force arithmetic stays sound.
 static const float kUnpushableMass = 1.0e6f;
@@ -55,6 +56,7 @@ void cLuxAvatarHandler::PoseAvatar(const tString& asIdentifier, const cGameInter
 	sample.mfY = aPose.mFeetPosition.mfY;
 	sample.mfZ = aPose.mFeetPosition.mfZ;
 	sample.mfYawDegrees = aPose.mfBodyYawDegrees;
+	sample.mbLanternRaised = aPose.mbLanternRaised;
 	sample.msMapFile = aPose.msMapFile;
 	it->second.mPoseModel.AddPose(sample, GetLocalTimeMs());
 }
@@ -81,6 +83,7 @@ void cLuxAvatarHandler::Update(float afTimeStep)
 		{
 			SetAwake(avatar, false);
 			UpdateCollision(avatar, false);
+			UpdateLantern(avatar, NULL, afTimeStep);
 			continue;
 		}
 
@@ -101,6 +104,7 @@ void cLuxAvatarHandler::Update(float afTimeStep)
 			avatar.mpBody->Update(0.001f);
 		}
 		SetAwake(avatar, true);
+		UpdateLantern(avatar, &pose, afTimeStep);
 	}
 }
 
@@ -122,6 +126,7 @@ void cLuxAvatarHandler::Reset()
 		it->second.mpMap = NULL;
 		it->second.mpMeshEntity = NULL;
 		it->second.mpBody = NULL;
+		it->second.mpLantern = NULL;
 	}
 }
 
@@ -180,24 +185,37 @@ void cLuxAvatarHandler::CreateWorldObjects(const tString& asIdentifier, cAvatar&
 	pBody->SetEntity(aAvatar.mpMeshEntity);
 	pBody->SetEntityOffset(GetAvatarMeshOffset(pBody->GetSize().y));
 	aAvatar.mpBody = pBody;
+
+	// Like the local lantern's light, except that it never casts shadows.
+	cLuxPlayerLantern *pLocalLantern = gpBase->mpPlayer->GetHelperLantern();
+	cLightPoint *pLantern = apMap->GetWorld()->CreateLightPoint(sName + "_Lantern", pLocalLantern->GetGobo(), false);
+	pLantern->SetDiffuseColor(cColor(0, 0));
+	pLantern->SetRadius(pLocalLantern->GetRadius());
+	pLantern->SetCastShadows(false);
+	pLantern->SetIsSaved(false);
+	aAvatar.mpLantern = pLantern;
+
 	// Waking places the new objects before they show.
 	SetAwake(aAvatar, false);
 }
 
 void cLuxAvatarHandler::DestroyWorldObjects(cAvatar& aAvatar)
 {
+	if(aAvatar.mpLantern) aAvatar.mpMap->GetWorld()->DestroyLight(aAvatar.mpLantern);
 	if(aAvatar.mpBody) aAvatar.mpMap->GetPhysicsWorld()->DestroyCharacterBody(aAvatar.mpBody);
 	if(aAvatar.mpMeshEntity) aAvatar.mpMap->GetWorld()->DestroyMeshEntity(aAvatar.mpMeshEntity);
+	aAvatar.mpLantern = NULL;
 	aAvatar.mpBody = NULL;
 	aAvatar.mpMeshEntity = NULL;
 	aAvatar.mpMap = NULL;
 }
 
-// A dormant Avatar is neither visible nor collidable.
+// A dormant Avatar is neither visible nor collidable, and gives off no light.
 void cLuxAvatarHandler::SetAwake(cAvatar& aAvatar, bool abAwake)
 {
 	if(aAvatar.mpBody) aAvatar.mpBody->SetActive(abAwake);
 	if(aAvatar.mpMeshEntity) aAvatar.mpMeshEntity->SetVisible(abAwake);
+	if(aAvatar.mpLantern && !abAwake) aAvatar.mpLantern->SetVisible(false);
 }
 
 static cAvatarCollisionCylinder GetCollisionCylinder(iCharacterBody *apBody)
@@ -221,4 +239,32 @@ void cLuxAvatarHandler::UpdateCollision(cAvatar& aAvatar, bool abAwake)
 		fGapToPlayer = GetAvatarCollisionGap(GetCollisionCylinder(aAvatar.mpBody), GetCollisionCylinder(pPlayerBody));
 	const bool bCollides = aAvatar.mCollision.Update(abAwake, fGapToPlayer);
 	if(aAvatar.mpBody) aAvatar.mpBody->SetTestCollision(bCollides);
+}
+
+// Where a standing player's lantern would be, with the camera level: iCharacterBody::UpdateCamera
+// places the camera at the standing body's height plus its offset, and the lantern sits at its local
+// offset from the camera. The Pose's crouch and pitch are ignored.
+static cMatrixf GetLanternMatrix(const cAvatarRenderedPose& aPose)
+{
+	cLuxPlayer *pPlayer = gpBase->mpPlayer;
+	const cVector3f& vCameraPosAdd = pPlayer->GetCameraPosAdd();
+	// A character body's forward is -Z.
+	const cVector3f vCameraOffset(vCameraPosAdd.x, pPlayer->GetBodySize().y + vCameraPosAdd.y, -vCameraPosAdd.z);
+	cMatrixf mtxCamera = cMath::MatrixRotateY(cMath::ToRad(aPose.mfYawDegrees));
+	mtxCamera.SetTranslation(cVector3f(aPose.mfX, aPose.mfY, aPose.mfZ));
+	return cMath::MatrixMul(mtxCamera,
+		cMath::MatrixTranslate(vCameraOffset + pPlayer->GetHelperLantern()->GetLocalOffset()));
+}
+
+// The Peer's flag decides the light, even where the local map disables the local lantern. The
+// pose is NULL while the Avatar is dormant.
+void cLuxAvatarHandler::UpdateLantern(cAvatar& aAvatar, const cAvatarRenderedPose *apPose, float afTimeStep)
+{
+	const bool bAwake = apPose != NULL;
+	const float fBrightness = aAvatar.mLanternModel.Update(bAwake, bAwake && apPose->mbLanternRaised, afTimeStep);
+	if(aAvatar.mpLantern == NULL) return;
+
+	aAvatar.mpLantern->SetDiffuseColor(gpBase->mpPlayer->GetHelperLantern()->GetDefaultColor() * fBrightness);
+	aAvatar.mpLantern->SetVisible(fBrightness > 0);
+	if(bAwake) aAvatar.mpLantern->SetMatrix(GetLanternMatrix(*apPose));
 }

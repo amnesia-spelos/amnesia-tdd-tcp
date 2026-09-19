@@ -8,24 +8,28 @@
 struct cAvatarPoseSample
 {
 	cAvatarPoseSample()
-		: mfSenderTimeMs(0.0), mlTeleportCounter(0), mfX(0.0f), mfY(0.0f), mfZ(0.0f), mfYawDegrees(0.0f) {}
+		: mfSenderTimeMs(0.0), mlTeleportCounter(0), mfX(0.0f), mfY(0.0f), mfZ(0.0f), mfYawDegrees(0.0f),
+		  mbLanternRaised(false) {}
 	double mfSenderTimeMs;
 	unsigned int mlTeleportCounter;
 	float mfX;
 	float mfY;
 	float mfZ;
 	float mfYawDegrees;
+	bool mbLanternRaised;
 	std::string msMapFile;
 };
 
-// Where an awake Avatar is shown: feet position and body yaw.
+// Where an awake Avatar is shown: feet position and body yaw, and whether its lantern is raised.
 struct cAvatarRenderedPose
 {
-	cAvatarRenderedPose() : mfX(0.0f), mfY(0.0f), mfZ(0.0f), mfYawDegrees(0.0f) {}
+	cAvatarRenderedPose() : mfX(0.0f), mfY(0.0f), mfZ(0.0f), mfYawDegrees(0.0f), mbLanternRaised(false) {}
 	float mfX;
 	float mfY;
 	float mfZ;
 	float mfYawDegrees;
+	// A flag cannot be blended, so it is the older sample's: it switches on the sender's time.
+	bool mbLanternRaised;
 };
 
 // Buffers one Avatar's Poses and renders them a fixed delay in the past (ADR 0003).

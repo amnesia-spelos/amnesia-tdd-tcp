@@ -405,6 +405,13 @@ public:
 
 	iLight* GetLight(){ return mpLight;}
 
+	// The configured light, before oil and fading dim it. Avatar lanterns copy it.
+	const cColor& GetDefaultColor(){ return mDefaultColor;}
+	float GetRadius(){ return mfRadius;}
+	const tString& GetGobo(){ return msGobo;}
+	// Where the light sits relative to the camera.
+	const cVector3f& GetLocalOffset(){ return mvLocalOffset;}
+
 private:
 	cColor mDefaultColor;
 	float mfRadius;
