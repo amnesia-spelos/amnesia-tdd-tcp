@@ -6,6 +6,7 @@
 #include "AvatarLanternModel.h"
 #include "AvatarPoseModel.h"
 #include "GameInteractionGateway.h"
+#include <vector>
 
 //----------------------------------------------
 
@@ -38,10 +39,18 @@ public:
 	static const tFlag kCollideFlag = eFlagBit_15;
 
 private:
+	struct cAvatarAnimation
+	{
+		tString msFile;
+		tString msName;
+		float mfSpeed;
+	};
+
 	struct cAvatar
 	{
 		cAvatar() : mbMeshBroken(false), mpMap(NULL), mpMeshEntity(NULL), mpBody(NULL), mpLantern(NULL) {}
 		tString msMeshFile;
+		std::vector<cAvatarAnimation> mvAnimations;
 		cAvatarPoseModel mPoseModel;
 		// Kept with the Avatar rather than its body, so it lasts across map changes and dormancy.
 		cAvatarCollisionModel mCollision;
@@ -67,7 +76,8 @@ private:
 	typedef std::map<tString, cAvatar> tAvatarMap;
 	typedef tAvatarMap::iterator tAvatarMapIt;
 
-	bool FindMeshFile(const tString& asEntityFile, tString& asMeshFile);
+	bool FindModelFiles(const tString& asEntityFile, tString& asMeshFile,
+		std::vector<cAvatarAnimation>& avAnimations);
 	void LoadLanternLight();
 	static double GetLocalTimeMs();
 	void CreateWorldObjects(const tString& asIdentifier, cAvatar& aAvatar, cLuxMap *apMap);

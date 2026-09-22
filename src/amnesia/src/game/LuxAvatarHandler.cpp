@@ -23,7 +23,8 @@ cLuxAvatarHandler::~cLuxAvatarHandler()
 bool cLuxAvatarHandler::CreateAvatar(const tString& asIdentifier, const tString& asEntityFile)
 {
 	tString sMeshFile;
-	if(!FindMeshFile(asEntityFile, sMeshFile))
+	std::vector<cAvatarAnimation> vAnimations;
+	if(!FindModelFiles(asEntityFile, sMeshFile, vAnimations))
 	{
 		Log("Game Interaction Protocol: cannot create Avatar '%s': model '%s' not found\n",
 			asIdentifier.c_str(), asEntityFile.c_str());
@@ -33,6 +34,7 @@ bool cLuxAvatarHandler::CreateAvatar(const tString& asIdentifier, const tString&
 	// A new Avatar is dormant until its first Pose for the current map.
 	cAvatar avatar;
 	avatar.msMeshFile = sMeshFile;
+	avatar.mvAnimations = vAnimations;
 	m_mapAvatars[asIdentifier] = avatar;
 	return true;
 }
@@ -131,8 +133,9 @@ void cLuxAvatarHandler::Reset()
 	}
 }
 
-// Reads only the model's mesh; its bodies, joints, and prop variables are ignored.
-bool cLuxAvatarHandler::FindMeshFile(const tString& asEntityFile, tString& asMeshFile)
+// Reads the model's mesh and animation clips; its bodies, joints, and prop variables are ignored.
+bool cLuxAvatarHandler::FindModelFiles(const tString& asEntityFile, tString& asMeshFile,
+	std::vector<cAvatarAnimation>& avAnimations)
 {
 	cResources *pResources = gpBase->mpEngine->GetResources();
 	const tWString sEntityPath = pResources->GetFileSearcher()->GetFilePath(asEntityFile);
@@ -143,6 +146,23 @@ bool cLuxAvatarHandler::FindMeshFile(const tString& asEntityFile, tString& asMes
 	cXmlElement *pModelDataElem = pEntityDoc->GetFirstElement("ModelData");
 	cXmlElement *pMeshElem = pModelDataElem ? pModelDataElem->GetFirstElement("Mesh") : NULL;
 	tString sMeshFile = pMeshElem ? pMeshElem->GetAttributeString("Filename", "") : "";
+	cXmlElement *pAnimationsElem = pModelDataElem ? pModelDataElem->GetFirstElement("Animations") : NULL;
+	if(pAnimationsElem)
+	{
+		cXmlNodeListIterator it = pAnimationsElem->GetChildIterator();
+		while(it.HasNext())
+		{
+			cXmlElement *pAnimElem = it.Next()->ToElement();
+			cAvatarAnimation anim;
+			anim.msFile = pAnimElem->GetAttributeString("File", "");
+			anim.msName = pAnimElem->GetAttributeString("Name", "");
+			anim.mfSpeed = pAnimElem->GetAttributeFloat("Speed", 1.0f);
+			if(cString::GetFilePath(anim.msFile).length() <= 1)
+				anim.msFile = cString::SetFilePath(anim.msFile,
+					cString::To8Char(cString::GetFilePathW(sEntityPath)));
+			avAnimations.push_back(anim);
+		}
+	}
 	pResources->DestroyXmlDocument(pEntityDoc);
 	if(sMeshFile == "") return false;
 
@@ -211,6 +231,17 @@ void cLuxAvatarHandler::CreateWorldObjects(const tString& asIdentifier, cAvatar&
 	const tString sName = "Avatar_" + asIdentifier;
 	aAvatar.mpMap = apMap;
 	aAvatar.mpMeshEntity = apMap->GetWorld()->CreateMeshEntity(sName, pMesh);
+	for(size_t i = 0; i < aAvatar.mvAnimations.size(); ++i)
+	{
+		const cAvatarAnimation& anim = aAvatar.mvAnimations[i];
+		cAnimation *pAnimation = gpBase->mpEngine->GetResources()->GetAnimationManager()->CreateAnimation(anim.msFile);
+		if(pAnimation)
+			aAvatar.mpMeshEntity->AddAnimation(pAnimation, anim.msName, anim.mfSpeed);
+		else
+			Error("Could not load animation '%s' for Avatar '%s'\n", anim.msFile.c_str(), asIdentifier.c_str());
+	}
+	if(aAvatar.mpMeshEntity->GetAnimationStateNum() > 0)
+		aAvatar.mpMeshEntity->Play(0, true, true);
 
 	iCharacterBody *pBody = apMap->GetPhysicsWorld()->CreateCharacterBody(sName, gpBase->mpPlayer->GetBodySize());
 	pBody->SetGravityActive(false);
