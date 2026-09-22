@@ -109,7 +109,7 @@ A Peer-chosen value that uniquely identifies an Avatar within a Session.
 _Avoid_: Player name, entity name
 
 **Pose**:
-The position, facing, crouch, and raised lantern of the local player or an Avatar at a moment in time.
+The feet position, body yaw, camera pitch, crouch, and raised lantern of the local player or an Avatar at a moment in time.
 _Avoid_: Transform, position update
 
 **Dormant Avatar**:
