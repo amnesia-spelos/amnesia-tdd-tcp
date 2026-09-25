@@ -112,6 +112,10 @@ _Avoid_: Player name, entity name
 The feet position, body yaw, camera pitch, crouch, and raised lantern of the local player or an Avatar at a moment in time.
 _Avoid_: Transform, position update
 
+**Peer-Driven Entity**:
+A map-placed entity whose motion a Peer supplies in place of local physics, and which the local player cannot interact with while it lasts. It belongs to its Session.
+_Avoid_: Remote hold, locked entity, puppet prop
+
 **Dormant Avatar**:
 An Avatar whose latest Pose belongs to a different map than the local one, and which is therefore neither visible nor collidable until a Pose for the local map arrives.
 _Avoid_: Hidden avatar, inactive avatar
