@@ -9,14 +9,20 @@ namespace
 	// How much of the latency above the alignment each Pose adopts.
 	const double kClockDriftRate = 0.05;
 	const size_t kMaxBufferedPoses = 256;
+	const float kPi = 3.14159265358979323846f;
 
+	// Holding a Pose or snapping between two discontinuous ones has no meaningful motion (issue #50).
 	void Render(const cAvatarPoseSample& aPose, cAvatarRenderedPose& aRendered)
 	{
 		aRendered.mfX = aPose.mfX;
 		aRendered.mfY = aPose.mfY;
 		aRendered.mfZ = aPose.mfZ;
 		aRendered.mfYawDegrees = aPose.mfYawDegrees;
+		aRendered.mfCameraPitchDegrees = aPose.mfCameraPitchDegrees;
+		aRendered.mbCrouching = aPose.mbCrouching;
 		aRendered.mbLanternRaised = aPose.mbLanternRaised;
+		aRendered.mfHorizontalSpeedMps = 0.0f;
+		aRendered.mfForwardSpeedMps = 0.0f;
 	}
 
 	float Lerp(float afFrom, float afTo, float afT)
@@ -108,6 +114,20 @@ bool cAvatarPoseModel::Sample(double afLocalTimeMs, const std::string& asCurrent
 	aPose.mfY = Lerp(from.mfY, to.mfY, fFraction);
 	aPose.mfZ = Lerp(from.mfZ, to.mfZ, fFraction);
 	aPose.mfYawDegrees = LerpYawDegrees(from.mfYawDegrees, to.mfYawDegrees, fFraction);
+	aPose.mfCameraPitchDegrees = Lerp(from.mfCameraPitchDegrees, to.mfCameraPitchDegrees, fFraction);
+	aPose.mbCrouching = from.mbCrouching;
 	aPose.mbLanternRaised = from.mbLanternRaised;
+
+	// Horizontal motion between the two Poses actually being interpolated, never from the Avatar
+	// body. The forward component is the horizontal velocity dotted with this Pose's yaw's forward
+	// vector; a character's forward is -Z at yaw 0.
+	const float fDtSeconds = static_cast<float>((to.mfSenderTimeMs - from.mfSenderTimeMs) / 1000.0);
+	const float fVelocityX = (to.mfX - from.mfX) / fDtSeconds;
+	const float fVelocityZ = (to.mfZ - from.mfZ) / fDtSeconds;
+	const float fYawRadians = aPose.mfYawDegrees * kPi / 180.0f;
+	const float fForwardX = -std::sin(fYawRadians);
+	const float fForwardZ = -std::cos(fYawRadians);
+	aPose.mfHorizontalSpeedMps = std::sqrt(fVelocityX * fVelocityX + fVelocityZ * fVelocityZ);
+	aPose.mfForwardSpeedMps = fVelocityX * fForwardX + fVelocityZ * fForwardZ;
 	return true;
 }

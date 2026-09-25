@@ -35,12 +35,51 @@ namespace
 		return sample;
 	}
 
+	cAvatarPoseSample PitchPose(double afSenderTimeMs, float afCameraPitchDegrees,
+		unsigned int alTeleportCounter = 0)
+	{
+		cAvatarPoseSample sample = Pose(afSenderTimeMs, 0.0f, 0.0f, alTeleportCounter);
+		sample.mfCameraPitchDegrees = afCameraPitchDegrees;
+		return sample;
+	}
+
+	// Renders the model at a local time and returns the rendered camera pitch, failing if it is dormant.
+	float RenderedPitch(cAvatarPoseModel& aModel, double afLocalTimeMs, const std::string& asDescription)
+	{
+		cAvatarRenderedPose rendered;
+		Expect(aModel.Sample(afLocalTimeMs, kMap, rendered), asDescription + " (awake)");
+		return rendered.mfCameraPitchDegrees;
+	}
+
 	// Renders the model at a local time and returns the rendered x, failing if it is dormant.
 	float RenderedX(cAvatarPoseModel& aModel, double afLocalTimeMs, const std::string& asDescription)
 	{
 		cAvatarRenderedPose rendered;
 		Expect(aModel.Sample(afLocalTimeMs, kMap, rendered), asDescription + " (awake)");
 		return rendered.mfX;
+	}
+
+	cAvatarPoseSample MotionPose(double afSenderTimeMs, float afX, float afZ, float afYawDegrees = 0.0f)
+	{
+		cAvatarPoseSample sample = Pose(afSenderTimeMs, afX, afYawDegrees);
+		sample.mfZ = afZ;
+		return sample;
+	}
+
+	// Renders the model at a local time and returns the rendered horizontal speed, failing if dormant.
+	float RenderedHorizontalSpeed(cAvatarPoseModel& aModel, double afLocalTimeMs, const std::string& asDescription)
+	{
+		cAvatarRenderedPose rendered;
+		Expect(aModel.Sample(afLocalTimeMs, kMap, rendered), asDescription + " (awake)");
+		return rendered.mfHorizontalSpeedMps;
+	}
+
+	// Renders the model at a local time and returns the rendered signed forward speed, failing if dormant.
+	float RenderedForwardSpeed(cAvatarPoseModel& aModel, double afLocalTimeMs, const std::string& asDescription)
+	{
+		cAvatarRenderedPose rendered;
+		Expect(aModel.Sample(afLocalTimeMs, kMap, rendered), asDescription + " (awake)");
+		return rendered.mfForwardSpeedMps;
 	}
 
 	cAvatarPoseSample LanternPose(double afSenderTimeMs, float afX, bool abLanternRaised,
@@ -57,6 +96,22 @@ namespace
 		cAvatarRenderedPose rendered;
 		Expect(aModel.Sample(afLocalTimeMs, kMap, rendered), asDescription + " (awake)");
 		return rendered.mbLanternRaised;
+	}
+
+	cAvatarPoseSample CrouchPose(double afSenderTimeMs, float afX, bool abCrouching,
+		unsigned int alTeleportCounter = 0)
+	{
+		cAvatarPoseSample sample = Pose(afSenderTimeMs, afX, 0.0f, alTeleportCounter);
+		sample.mbCrouching = abCrouching;
+		return sample;
+	}
+
+	// Renders the model at a local time and returns whether it is crouching, failing if it is dormant.
+	bool RenderedCrouch(cAvatarPoseModel& aModel, double afLocalTimeMs, const std::string& asDescription)
+	{
+		cAvatarRenderedPose rendered;
+		Expect(aModel.Sample(afLocalTimeMs, kMap, rendered), asDescription + " (awake)");
+		return rendered.mbCrouching;
 	}
 }
 
@@ -242,6 +297,144 @@ int main()
 		Expect(!RenderedLantern(model, 1250.0, "lantern before a distance snap"),
 			"the lantern is held with the Pose before a distance snap");
 		Expect(RenderedLantern(model, 1300.0, "lantern at a distance snap"), "and snaps with the distant Pose");
+	}
+
+	{
+		cAvatarPoseModel model;
+		model.AddPose(PitchPose(5000.0, 0.0f), 1000.0);
+		model.AddPose(PitchPose(5100.0, 20.0f), 1100.0);
+		Expect(Near(RenderedPitch(model, 1100.0, "pitch at a sample"), 0.0f),
+			"camera pitch renders 100 ms behind the newest sample, in the sender's time");
+		Expect(Near(RenderedPitch(model, 1150.0, "pitch interpolates"), 10.0f),
+			"camera pitch interpolates linearly between the samples around the render time");
+	}
+
+	{
+		cAvatarPoseModel model;
+		model.AddPose(PitchPose(5000.0, 0.0f), 1000.0);
+		model.AddPose(PitchPose(5100.0, 20.0f), 1100.0);
+		Expect(Near(RenderedPitch(model, 1300.0, "pitch hold"), 20.0f),
+			"camera pitch holds the last Pose when the buffer runs dry instead of extrapolating");
+		Expect(Near(RenderedPitch(model, 60000.0, "pitch hold"), 20.0f),
+			"camera pitch keeps holding for as long as no Pose arrives");
+	}
+
+	{
+		cAvatarPoseModel model;
+		model.AddPose(PitchPose(5000.0, 0.0f, 7), 1000.0);
+		model.AddPose(PitchPose(5100.0, 30.0f, 8), 1100.0);
+		Expect(Near(RenderedPitch(model, 1199.0, "pitch before a teleport"), 0.0f),
+			"camera pitch is held with the Pose before a teleport instead of gliding across it");
+		Expect(Near(RenderedPitch(model, 1200.0, "pitch at a teleport"), 30.0f),
+			"and snaps with the teleported Pose");
+	}
+
+	{
+		// Pure forward travel at yaw 0 (forward is -Z): 1 m over 100 ms is 10 m/s.
+		cAvatarPoseModel model;
+		model.AddPose(MotionPose(5000.0, 0.0f, 0.0f), 1000.0);
+		model.AddPose(MotionPose(5100.0, 0.0f, -1.0f), 1100.0);
+		Expect(Near(RenderedHorizontalSpeed(model, 1150.0, "forward"), 10.0f),
+			"total horizontal speed matches pure forward travel");
+		Expect(Near(RenderedForwardSpeed(model, 1150.0, "forward"), 10.0f),
+			"the forward component is positive for pure forward travel");
+	}
+
+	{
+		// Pure backward travel at yaw 0: moving toward +Z is backward.
+		cAvatarPoseModel model;
+		model.AddPose(MotionPose(5000.0, 0.0f, 0.0f), 1000.0);
+		model.AddPose(MotionPose(5100.0, 0.0f, 1.0f), 1100.0);
+		Expect(Near(RenderedHorizontalSpeed(model, 1150.0, "backward"), 10.0f),
+			"total horizontal speed matches pure backward travel");
+		Expect(Near(RenderedForwardSpeed(model, 1150.0, "backward"), -10.0f),
+			"the forward component is negative for pure backward travel");
+	}
+
+	{
+		// Pure sideways travel at yaw 0 has no forward component, but still counts as horizontal speed.
+		cAvatarPoseModel model;
+		model.AddPose(MotionPose(5000.0, 0.0f, 0.0f), 1000.0);
+		model.AddPose(MotionPose(5100.0, 1.0f, 0.0f), 1100.0);
+		Expect(Near(RenderedHorizontalSpeed(model, 1150.0, "sideways"), 10.0f),
+			"total horizontal speed includes pure sideways travel");
+		Expect(Near(RenderedForwardSpeed(model, 1150.0, "sideways"), 0.0f),
+			"pure sideways travel has no forward component");
+	}
+
+	{
+		// Sideways plus backward travel: the forward component stays negative even though sideways
+		// motion dominates the total.
+		cAvatarPoseModel model;
+		model.AddPose(MotionPose(5000.0, 0.0f, 0.0f), 1000.0);
+		model.AddPose(MotionPose(5100.0, 1.0f, 1.0f), 1100.0);
+		Expect(Near(RenderedHorizontalSpeed(model, 1150.0, "sideways and backward"), 14.142136f),
+			"total horizontal speed combines both components");
+		Expect(Near(RenderedForwardSpeed(model, 1150.0, "sideways and backward"), -10.0f),
+			"any backward component keeps the forward component negative under sideways travel");
+	}
+
+	{
+		// A yaw of 90 degrees turns the forward vector to -X, so moving toward -X reads as forward.
+		cAvatarPoseModel model;
+		model.AddPose(MotionPose(5000.0, 0.0f, 0.0f, 90.0f), 1000.0);
+		model.AddPose(MotionPose(5100.0, -1.0f, 0.0f, 90.0f), 1100.0);
+		Expect(Near(RenderedForwardSpeed(model, 1150.0, "rotated forward"), 10.0f),
+			"the forward component follows the rendered yaw's forward vector, not world -Z");
+	}
+
+	{
+		// Holding a single Pose, holding the last Pose once the buffer runs dry, and snapping across a
+		// discontinuity all report zero motion instead of an implied velocity.
+		cAvatarPoseModel model;
+		model.AddPose(MotionPose(5000.0, 0.0f, 0.0f), 1000.0);
+		Expect(Near(RenderedHorizontalSpeed(model, 1000.0, "single Pose"), 0.0f),
+			"a single Pose reports zero motion");
+
+		model.AddPose(MotionPose(5100.0, 2.0f, 0.0f), 1100.0);
+		Expect(Near(RenderedHorizontalSpeed(model, 1300.0, "held Pose"), 0.0f),
+			"holding the last Pose once the buffer runs dry reports zero motion");
+
+		model.AddPose(MotionPose(5200.0, 10.0f, 0.0f), 1200.0);
+		Expect(Near(RenderedHorizontalSpeed(model, 1250.0, "distance snap"), 0.0f),
+			"a distance snap reports zero motion instead of the implied velocity across the jump");
+	}
+
+	{
+		// Crouch takes the older sample's flag at render time, just like the raised lantern (issue #51).
+		cAvatarPoseModel model;
+		model.AddPose(CrouchPose(5000.0, 0.0f, false), 1000.0);
+		model.AddPose(CrouchPose(5100.0, 1.0f, true), 1100.0);
+		model.AddPose(CrouchPose(5200.0, 2.0f, false), 1200.0);
+		Expect(!RenderedCrouch(model, 1100.0, "crouch at a sample"), "crouch is rendered as the Pose at render time");
+		Expect(!RenderedCrouch(model, 1190.0, "crouch while interpolating"),
+			"while interpolating, crouch comes from the older sample, even when the newer one is nearer");
+		Expect(RenderedCrouch(model, 1200.0, "crouch switch"), "crouch switches on the sender's time");
+		Expect(RenderedCrouch(model, 1290.0, "crouch while interpolating"),
+			"a crouched Avatar stays crouched until the render time reaches the Pose that stands it up");
+		Expect(!RenderedCrouch(model, 1300.0, "crouch switch"), "crouch is lifted on the sender's time");
+	}
+
+	{
+		cAvatarPoseModel model;
+		model.AddPose(CrouchPose(5000.0, 0.0f, false), 1000.0);
+		model.AddPose(CrouchPose(5100.0, 2.0f, true), 1100.0);
+		Expect(RenderedCrouch(model, 1300.0, "crouch hold"), "crouch holds with the last Pose when samples stop");
+		Expect(RenderedCrouch(model, 60000.0, "crouch hold"), "and keeps holding for as long as no Pose arrives");
+	}
+
+	{
+		cAvatarPoseModel model;
+		model.AddPose(CrouchPose(5000.0, 0.0f, true, 7), 1000.0);
+		model.AddPose(CrouchPose(5100.0, 1.0f, false, 8), 1100.0);
+		Expect(RenderedCrouch(model, 1199.0, "crouch before a teleport"),
+			"crouch is held with the Pose before a teleport");
+		Expect(!RenderedCrouch(model, 1200.0, "crouch at a teleport"), "and snaps with the teleported Pose");
+
+		model.AddPose(CrouchPose(5200.0, 10.0f, true, 8), 1200.0);
+		Expect(!RenderedCrouch(model, 1250.0, "crouch before a distance snap"),
+			"crouch is held with the Pose before a distance snap");
+		Expect(RenderedCrouch(model, 1300.0, "crouch at a distance snap"), "and snaps with the distant Pose");
 	}
 
 	std::cout << "Avatar Pose model cases passed\n";
