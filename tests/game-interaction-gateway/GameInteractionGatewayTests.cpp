@@ -6,6 +6,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -30,7 +32,7 @@ namespace
 			mRotation(1.570796325f, -0.7853981625f), msMapFile("maps/main/level01.map"),
 			mbChatAvailable(true), mlDisplayedChatEntries(0), mbInMainMenu(true),
 			mPeer(INVALID_SOCKET), mbResponseDeliveredBeforeStart(false),
-			mLocalPoseAvailability(eGameInteractionLocalPoseAvailability_Live)
+			mLocalPoseAvailability(eGameInteractionLocalPoseAvailability_Live), mlReportReads(0)
 		{
 			mLocalPose.mlTimeMs = 1000;
 			mLocalPose.mFeetPosition = cGameInteractionPosition(1.25f, -2.5f, 3.75f);
@@ -92,6 +94,65 @@ namespace
 		{
 			mvAvatarCollisions.push_back(asIdentifier + (abCollides ? " 1" : " 0"));
 		}
+		virtual cGameInteractionBodySamples GetReportedBodies() const
+		{
+			++mlReportReads;
+			return mReport;
+		}
+		virtual eGameInteractionEntityOutcome DriveEntity(int alEntityId)
+		{
+			mvEntityOperations.push_back("drive " + Text(alEntityId));
+			if (alEntityId == 404) return eGameInteractionEntityOutcome_NotFound;
+			if (alEntityId == 405) return eGameInteractionEntityOutcome_NotHoldable;
+			msetDrivenEntities.insert(alEntityId);
+			return eGameInteractionEntityOutcome_Success;
+		}
+		virtual eGameInteractionEntityOutcome DriveEntityBodies(const cGameInteractionBodySamples& aSamples,
+			int& alFailedEntityId)
+		{
+			mvEntityOperations.push_back("bodies " + Text(static_cast<int>(aSamples.mvBodies.size())));
+			mLastDrivenBodies = aSamples;
+			for (size_t index = 0; index < aSamples.mvBodies.size(); ++index)
+			{
+				if (msetDrivenEntities.count(aSamples.mvBodies[index].mlEntityId) != 0) continue;
+				alFailedEntityId = aSamples.mvBodies[index].mlEntityId;
+				return eGameInteractionEntityOutcome_NotFound;
+			}
+			return eGameInteractionEntityOutcome_Success;
+		}
+		virtual eGameInteractionEntityOutcome SetDrivenEntityInteracting(int alEntityId, bool abInteracting)
+		{
+			mvEntityOperations.push_back("interacting " + Text(alEntityId) + (abInteracting ? " 1" : " 0"));
+			return msetDrivenEntities.count(alEntityId) != 0 ? eGameInteractionEntityOutcome_Success :
+				eGameInteractionEntityOutcome_NotFound;
+		}
+		virtual eGameInteractionEntityOutcome BreakDrivenEntity(int alEntityId,
+			const cGameInteractionBodyState& aFinalState)
+		{
+			mvEntityOperations.push_back("break " + Text(alEntityId));
+			mLastBreakState = aFinalState;
+			return msetDrivenEntities.erase(alEntityId) != 0 ? eGameInteractionEntityOutcome_Success :
+				eGameInteractionEntityOutcome_NotFound;
+		}
+		virtual eGameInteractionEntityOutcome ReleaseDrivenEntity(int alEntityId)
+		{
+			mvEntityOperations.push_back("release " + Text(alEntityId));
+			if (alEntityId == 405) return eGameInteractionEntityOutcome_NotHoldable;
+			return msetDrivenEntities.erase(alEntityId) != 0 ? eGameInteractionEntityOutcome_Success :
+				eGameInteractionEntityOutcome_NotFound;
+		}
+		virtual void ReleaseDrivenEntities()
+		{
+			mvEntityOperations.push_back("release all");
+			msetDrivenEntities.clear();
+		}
+
+		static std::string Text(int alValue)
+		{
+			char text[16];
+			sprintf(text, "%d", alValue);
+			return text;
+		}
 
 		bool mbMapLoaded;
 		cGameInteractionPosition mPosition;
@@ -116,6 +177,12 @@ namespace
 		std::vector<std::string> mvPosedAvatars;
 		cGameInteractionPose mLastAvatarPose;
 		std::vector<std::string> mvAvatarCollisions;
+		cGameInteractionBodySamples mReport;
+		mutable int mlReportReads;
+		std::set<int> msetDrivenEntities;
+		std::vector<std::string> mvEntityOperations;
+		cGameInteractionBodySamples mLastDrivenBodies;
+		cGameInteractionBodyState mLastBreakState;
 	};
 
 	SOCKET Connect(cGameInteractionGateway& aGateway, cFakeGameAdapter& aAdapter)
@@ -595,6 +662,310 @@ namespace
 		gateway.Shutdown();
 	}
 
+	const std::string kCurrentMap = "maps/main/level01.map";
+	const std::string kRestingState = "0 0 0 0 0 0 1 0 0 0 0 0 0";
+
+	SOCKET OpenInteractionsSession(cGameInteractionGateway& aGateway, cFakeGameAdapter& aAdapter)
+	{
+		SOCKET peer = OpenSession(aGateway, aAdapter);
+		Expect(Exchange(peer, aGateway, aAdapter, "protocol 2 interactions\n") == "RESPONSE protocol ok 2 interactions\n",
+			"Session negotiates the interactions Capability");
+		return peer;
+	}
+
+	bool IsState(const cGameInteractionBodyState& aState, float afX, float afQy, float afQw, float afVz, float afWy)
+	{
+		return aState.mPosition.mfX == afX && aState.mPosition.mfY == 0.0f && aState.mPosition.mfZ == 0.0f &&
+			aState.mOrientation.mfX == 0.0f && aState.mOrientation.mfY == afQy && aState.mOrientation.mfZ == 0.0f &&
+			aState.mOrientation.mfW == afQw && aState.mLinearVelocity.mfX == 0.0f &&
+			aState.mLinearVelocity.mfY == 0.0f && aState.mLinearVelocity.mfZ == afVz &&
+			aState.mAngularVelocity.mfX == 0.0f && aState.mAngularVelocity.mfY == afWy &&
+			aState.mAngularVelocity.mfZ == 0.0f;
+	}
+
+	void PeerDrivenEntityCommandsReachTheGameAdapter()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenInteractionsSession(gateway, adapter);
+
+		Expect(Exchange(peer, gateway, adapter, "entitydrive 12 " + kCurrentMap + "\nentitydrive 404 " + kCurrentMap +
+			"\nentitydrive 405 " + kCurrentMap + "\n") ==
+			"RESPONSE entitydrive ok 12\nRESPONSE entitydrive not-found 404\nRESPONSE entitydrive not-holdable 405\n",
+			"driving reports the game's outcome for each entity");
+		SendCommands(peer, gateway, adapter, "entitybodies 5000 2 12 3 1.5 0 0 0 0.6 0 0.8 0 0 -2 0 45 0 12 4 " +
+			kRestingState + " " + kCurrentMap + "\n");
+		Expect(ReceiveAvailable(peer, 50).empty(), "driven bodies are not answered");
+		const cGameInteractionBodySamples& bodies = adapter.mLastDrivenBodies;
+		Expect(bodies.mlTimeMs == 5000 && bodies.msMapFile == kCurrentMap && bodies.mvBodies.size() == 2 &&
+			bodies.mvBodies[0].mlEntityId == 12 && bodies.mvBodies[0].mlBodyId == 3 &&
+			IsState(bodies.mvBodies[0].mState, 1.5f, 0.6f, 0.8f, -2.0f, 45.0f) && bodies.mvBodies[1].mlBodyId == 4 &&
+			IsState(bodies.mvBodies[1].mState, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f),
+			"the game receives every body sample with the sender's time");
+		Expect(Exchange(peer, gateway, adapter, "entityinteracting 12 1 " + kCurrentMap + "\nentityinteracting 12 0 " +
+			kCurrentMap + "\n") == "RESPONSE entityinteracting ok 12\nRESPONSE entityinteracting ok 12\n",
+			"marking the entity as interacted with is answered");
+		Expect(Exchange(peer, gateway, adapter, "entitybreak 12 1.5 0 0 0 0.6 0 0.8 0 0 -2 0 45 0 " + kCurrentMap + "\n") ==
+			"RESPONSE entitybreak ok 12\n", "breaking is answered");
+		Expect(IsState(adapter.mLastBreakState, 1.5f, 0.6f, 0.8f, -2.0f, 45.0f), "the game breaks from the final state");
+		Expect(Exchange(peer, gateway, adapter, "entitydrive 13 " + kCurrentMap + "\nentityrelease 13 " + kCurrentMap +
+			"\nentityrelease 13 " + kCurrentMap + "\n") ==
+			"RESPONSE entitydrive ok 13\nRESPONSE entityrelease ok 13\nRESPONSE entityrelease not-found 13\n",
+			"releasing reports whether the Session drove the entity");
+
+		const char* const expected[] = { "drive 12", "drive 404", "drive 405", "bodies 2", "interacting 12 1",
+			"interacting 12 0", "break 12", "drive 13", "release 13", "release 13" };
+		Expect(adapter.mvEntityOperations == std::vector<std::string>(expected, expected + 10),
+			"each Command reaches the game once, in order");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void EntityCommandsForAnotherMapOrMalformedDoNotReachTheGame()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenInteractionsSession(gateway, adapter);
+		Expect(Exchange(peer, gateway, adapter, "entitydrive 12 maps/main/level02.map\nentitybodies 1000 1 12 0 " +
+			kRestingState + " maps/main/level02.map\nentityinteracting 12 1 maps/main/level02.map\nentitybreak 12 " +
+			kRestingState + " maps/main/level02.map\nentityrelease 12 maps/main/level02.map\n") ==
+			"RESPONSE entitydrive wrong-map 12\nRESPONSE entitybodies wrong-map\nRESPONSE entityinteracting wrong-map 12\n"
+			"RESPONSE entitybreak wrong-map 12\nRESPONSE entityrelease wrong-map 12\n",
+			"every entity Command for another map is wrong-map");
+		adapter.mbMapLoaded = false;
+		Expect(Exchange(peer, gateway, adapter, "entitydrive 12 " + kCurrentMap + "\n") ==
+			"RESPONSE entitydrive wrong-map 12\n", "an entity Command without a loaded map is wrong-map");
+		adapter.mbMapLoaded = true;
+		Expect(Exchange(peer, gateway, adapter, "entitydrive 12\nentitybreak 12 0 0 0 0 0 0 3 0 0 0 0 0 0 " +
+			kCurrentMap + "\n") == "RESPONSE entitydrive invalid\nRESPONSE entitybreak invalid\n",
+			"malformed entity Commands are invalid");
+		Expect(adapter.mvEntityOperations.empty(), "rejected entity Commands do not reach the game");
+		Expect(Exchange(peer, gateway, adapter, "entityrelease 405 " + kCurrentMap + "\n") ==
+			"RESPONSE entityrelease not-found 405\n", "only driving can answer not-holdable");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void EntityBodiesFailuresAreReportedOncePerStreak()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenInteractionsSession(gateway, adapter);
+		const std::string stranger = "entitybodies 1000 2 12 0 " + kRestingState + " 13 0 " + kRestingState + " " +
+			kCurrentMap + "\n";
+		Expect(Exchange(peer, gateway, adapter, "entitydrive 12 " + kCurrentMap + "\n" + stranger + stranger) ==
+			"RESPONSE entitydrive ok 12\nRESPONSE entitybodies not-found 13\n",
+			"an undriven entity is named once per failure streak");
+		SendCommands(peer, gateway, adapter, "entitybodies 1000 1 12 0 " + kRestingState + " " + kCurrentMap + "\n" +
+			stranger);
+		Expect(ReceiveLines(peer, 1) == "RESPONSE entitybodies not-found 13\n", "a success ends the failure streak");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void PeerDrivenEntitiesAreReleasedWhenTheSessionEnds()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenInteractionsSession(gateway, adapter);
+		Expect(Exchange(peer, gateway, adapter, "entitydrive 404 " + kCurrentMap + "\n") ==
+			"RESPONSE entitydrive not-found 404\n", "a failed drive drives nothing");
+		closesocket(peer);
+		for (int update = 0; update < 20; ++update)
+		{
+			Sleep(10);
+			gateway.Update(adapter);
+		}
+		Expect(adapter.mvEntityOperations.size() == 1, "a Session that drove nothing releases nothing when it ends");
+
+		SOCKET laterPeer = Connect(gateway, adapter);
+		Expect(Receive(laterPeer) == "Hello, from Amnesia: The Dark Descent!\n", "a new Session starts");
+		Expect(Exchange(laterPeer, gateway, adapter, "protocol 2 interactions\nentitydrive 12 " + kCurrentMap + "\n") ==
+			"RESPONSE protocol ok 2 interactions\nRESPONSE entitydrive ok 12\n", "the new Session drives an entity");
+		closesocket(laterPeer);
+		for (int update = 0; update < 50 && adapter.mvEntityOperations.back() != "release all"; ++update)
+		{
+			Sleep(10);
+			gateway.Update(adapter);
+		}
+		Expect(adapter.mvEntityOperations.back() == "release all", "a disconnect releases the Session's entities");
+
+		SOCKET lastPeer = Connect(gateway, adapter);
+		Expect(Receive(lastPeer) == "Hello, from Amnesia: The Dark Descent!\n", "a third Session starts");
+		Expect(Exchange(lastPeer, gateway, adapter, "protocol 2 interactions\nentitydrive 12 " + kCurrentMap +
+			"\nentityrelease 12 " + kCurrentMap + "\n") ==
+			"RESPONSE protocol ok 2 interactions\nRESPONSE entitydrive ok 12\nRESPONSE entityrelease ok 12\n",
+			"the third Session drives and releases an entity");
+		const size_t operations = adapter.mvEntityOperations.size();
+		gateway.Shutdown();
+		Expect(gateway.Listen("127.0.0.1", 0), "gateway listens again after a shutdown");
+		gateway.Update(adapter);
+		Expect(adapter.mvEntityOperations.size() == operations + 1 && adapter.mvEntityOperations.back() == "release all",
+			"shutting the gateway down releases the Session's entities on the next update");
+		closesocket(lastPeer);
+		gateway.Shutdown();
+	}
+
+	cGameInteractionEntityEvent EntityEvent(int alEntityId)
+	{
+		cGameInteractionEntityEvent entityEvent;
+		entityEvent.mlEntityId = alEntityId;
+		entityEvent.mlBodyId = 3;
+		entityEvent.mEnding = eGameInteractionEnding_Thrown;
+		entityEvent.msMapFile = "maps/main/level01.map";
+		return entityEvent;
+	}
+
+	void ReportAllEvents(cGameInteractionGateway& aGateway, cFakeGameAdapter& aAdapter)
+	{
+		aGateway.Report(cGameInteractionEvent(eGameInteractionEvent_InteractionStarted, EntityEvent(12)));
+		aGateway.Report(cGameInteractionEvent(eGameInteractionEvent_MapChanged, "maps/main/level02.map"));
+		aGateway.Report(cGameInteractionEvent(eGameInteractionEvent_InteractionEnded, EntityEvent(12)));
+		aGateway.Report(cGameInteractionEvent(eGameInteractionEvent_ReportContact, EntityEvent(-7)));
+		aGateway.Report(cGameInteractionEvent(eGameInteractionEvent_ReportSettled, EntityEvent(-7)));
+		aGateway.Report(cGameInteractionEvent(eGameInteractionEvent_ReportBroke, EntityEvent(12)));
+		aGateway.Update(aAdapter);
+	}
+
+	void InteractionsEventsReachOnlySessionsGrantedInteractions()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET legacyPeer = OpenSession(gateway, adapter);
+		ReportAllEvents(gateway, adapter);
+		Expect(ReceiveAvailable(legacyPeer, 100) == "EVENT:MapChanged:maps/main/level02.map\n",
+			"a legacy Session receives only legacy Events");
+		closesocket(legacyPeer);
+		gateway.Shutdown();
+
+		SOCKET otherPeer = OpenLocalPoseSession(gateway, adapter);
+		ReportAllEvents(gateway, adapter);
+		Expect(ReceiveAvailable(otherPeer, 100) == "EVENT:MapChanged:maps/main/level02.map\n",
+			"a Session without interactions receives none of its Events");
+		closesocket(otherPeer);
+		gateway.Shutdown();
+
+		SOCKET peer = OpenInteractionsSession(gateway, adapter);
+		ReportAllEvents(gateway, adapter);
+		Expect(ReceiveLines(peer, 6) ==
+			"EVENT interactionstart 12 3 maps/main/level01.map\n"
+			"EVENT:MapChanged:maps/main/level02.map\n"
+			"EVENT interactionend 12 3 thrown maps/main/level01.map\n"
+			"EVENT reportcontact -7 maps/main/level01.map\n"
+			"EVENT reportsettled -7 maps/main/level01.map\n"
+			"EVENT reportbroke 12 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 1.0000 0.0000 0.0000 0.0000 0.0000 "
+			"0.0000 0.0000 maps/main/level01.map\n",
+			"a Session granted interactions receives its Events in order among legacy Events");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	cGameInteractionBodySample ReportedBody(int alEntityId, float afX)
+	{
+		cGameInteractionBodySample sample;
+		sample.mlEntityId = alEntityId;
+		sample.mState.mPosition = cGameInteractionPosition(afX, 0.0f, 0.0f);
+		return sample;
+	}
+
+	std::string ReportedBodiesStateUpdate(const std::string& asTimeMs, const std::string& asX)
+	{
+		return "STATE reportedbodies " + asTimeMs + " 1 12 0 " + asX + " 0.0000 0.0000 0.0000 0.0000 0.0000 1.0000 "
+			"0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 maps/main/level01.map\n";
+	}
+
+	std::string ReportAt(cGameInteractionGateway& aGateway, cFakeGameAdapter& aAdapter, SOCKET aPeer,
+		unsigned long long alTimeMs)
+	{
+		aAdapter.mReport.mlTimeMs = alTimeMs;
+		aGateway.Update(aAdapter);
+		return ReceiveAvailable(aPeer, 50);
+	}
+
+	void ReportedBodiesFollowTheSubscribedRateWhileTheReportHoldsBodies()
+	{
+		cFakeGameAdapter adapter;
+		adapter.mReport.msMapFile = kCurrentMap;
+		adapter.mReport.mlTimeMs = 1000;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenInteractionsSession(gateway, adapter);
+		SendCommands(peer, gateway, adapter, "reportedbodies subscribe 20\n");
+		Expect(ReceiveLines(peer, 1) == "RESPONSE reportedbodies ok subscribe 20\n", "subscribing is answered");
+		Expect(ReceiveAvailable(peer, 50).empty(), "an empty report sends no State Update");
+
+		adapter.mReport.mvBodies.push_back(ReportedBody(12, 1.0f));
+		Expect(ReportAt(gateway, adapter, peer, 1010) == ReportedBodiesStateUpdate("1010", "1.0000"),
+			"the first reported body is sent at once");
+		Expect(ReportAt(gateway, adapter, peer, 1059).empty(), "no State Update before the 20 Hz interval elapses");
+		Expect(ReportAt(gateway, adapter, peer, 1060) == ReportedBodiesStateUpdate("1060", "1.0000"),
+			"a State Update follows once the interval elapses");
+
+		adapter.mLocalPoseAvailability = eGameInteractionLocalPoseAvailability_Suspended;
+		Expect(ReportAt(gateway, adapter, peer, 1500).empty(), "an unchanged report is not repeated while paused");
+		adapter.mReport.mvBodies[0].mState.mPosition.mfX = 2.0f;
+		Expect(ReportAt(gateway, adapter, peer, 1510) == ReportedBodiesStateUpdate("1510", "2.0000"),
+			"a changed report is sent while paused");
+
+		adapter.mLocalPoseAvailability = eGameInteractionLocalPoseAvailability_Unavailable;
+		const int reads = adapter.mlReportReads;
+		Expect(ReportAt(gateway, adapter, peer, 3000).empty(), "no State Update while no map is loaded");
+		Expect(adapter.mlReportReads == reads, "the report is not read while no map is loaded");
+		adapter.mLocalPoseAvailability = eGameInteractionLocalPoseAvailability_Live;
+
+		adapter.mReport.mvBodies.clear();
+		Expect(ReportAt(gateway, adapter, peer, 4000).empty(), "an emptied report sends no State Update");
+		SendCommands(peer, gateway, adapter, "reportedbodies unsubscribe\n");
+		Expect(ReceiveLines(peer, 1) == "RESPONSE reportedbodies ok unsubscribe\n", "unsubscribing is answered");
+		adapter.mReport.mvBodies.push_back(ReportedBody(12, 1.0f));
+		Expect(ReportAt(gateway, adapter, peer, 5000).empty(), "unsubscribing stops State Updates");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void ReportedBodiesAndLocalPoseAreDeliveredTogether()
+	{
+		cFakeGameAdapter adapter;
+		adapter.mReport.msMapFile = kCurrentMap;
+		adapter.mReport.mlTimeMs = 1000;
+		adapter.mReport.mvBodies.push_back(ReportedBody(12, 1.0f));
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenSession(gateway, adapter);
+		Expect(Exchange(peer, gateway, adapter, "protocol 2 localpose interactions\n") ==
+			"RESPONSE protocol ok 2 localpose interactions\n", "Session negotiates localpose and interactions");
+		SendCommands(peer, gateway, adapter, "localpose subscribe 20\nreportedbodies subscribe 20\n");
+		Expect(ReceiveLines(peer, 4) == "RESPONSE localpose ok subscribe 20\nRESPONSE reportedbodies ok subscribe 20\n" +
+			LocalPoseStateUpdate("1000") + ReportedBodiesStateUpdate("1000", "1.0000"),
+			"both State Updates follow their subscribing Responses");
+		adapter.mLocalPose.mlTimeMs = 1050;
+		Expect(ReportAt(gateway, adapter, peer, 1050) == LocalPoseStateUpdate("1050") +
+			ReportedBodiesStateUpdate("1050", "1.0000"), "both State Updates are delivered in the same update");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void ReportedBodiesAreWrittenWithinTheirBounds()
+	{
+		const float notANumber = std::numeric_limits<float>::quiet_NaN();
+		const float infinity = std::numeric_limits<float>::infinity();
+		cFakeGameAdapter adapter;
+		adapter.mReport.msMapFile = kCurrentMap;
+		adapter.mReport.mlTimeMs = 1000;
+		cGameInteractionBodySample sample = ReportedBody(12, notANumber);
+		sample.mState.mOrientation = cGameInteractionQuaternion(notANumber, 0.0f, 0.0f, 1.0f);
+		sample.mState.mLinearVelocity = cGameInteractionVector(infinity, -infinity, 0.0f);
+		sample.mState.mAngularVelocity = cGameInteractionVector(2.0e9f, -2.0e9f, 0.0f);
+		adapter.mReport.mvBodies.push_back(sample);
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenInteractionsSession(gateway, adapter);
+		SendCommands(peer, gateway, adapter, "reportedbodies subscribe 20\n");
+		Expect(ReceiveLines(peer, 2) == "RESPONSE reportedbodies ok subscribe 20\nSTATE reportedbodies 1000 1 12 0 "
+			"0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 1.0000 0.0000 0.0000 0.0000 "
+			"1000000000.0000 -1000000000.0000 0.0000 maps/main/level01.map\n",
+			"non-finite numbers are written as 0, large ones as the bound, and a broken orientation as the identity");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
 	void OverlongInboundLineDisconnectsThePeerWithAReason()
 	{
 		cFakeGameAdapter adapter;
@@ -653,6 +1024,16 @@ int main()
 		eGameInteractionCommandClassification_Observational, "Custom Story listing is observational");
 	Expect(cGameInteractionCommand(eGameInteractionCommand_StartCustomStory, L"mp-test-cs").GetClassification() ==
 		eGameInteractionCommandClassification_StateChanging, "Custom Story start is state-changing");
+	const eGameInteractionCommandType entityCommands[] = { eGameInteractionCommand_EntityDrive,
+		eGameInteractionCommand_EntityBodies, eGameInteractionCommand_EntityInteracting,
+		eGameInteractionCommand_EntityBreak, eGameInteractionCommand_EntityRelease };
+	for (int index = 0; index < 5; ++index)
+		Expect(cGameInteractionCommand(entityCommands[index], cGameInteractionEntityRequest()).GetClassification() ==
+			eGameInteractionCommandClassification_StateChanging,
+			"every Peer-Driven Entity Command is state-changing and needs the Authority Grant");
+	Expect(cGameInteractionCommand(eGameInteractionCommand_ReportedBodies, eGameInteractionSubscriptionRequest_Subscribe,
+		20).GetClassification() == eGameInteractionCommandClassification_Observational,
+		"subscribing to reported bodies is observational");
 
 	cFakeGameAdapter adapter;
 	cGameInteractionGateway gateway;
@@ -766,6 +1147,14 @@ int main()
 	AvatarPoseFailuresAreReportedOncePerStreak();
 	AvatarCollisionIsToggledPerAvatarThroughTheGameAdapter();
 	AvatarsAreRemovedWhenTheSessionEnds();
+	PeerDrivenEntityCommandsReachTheGameAdapter();
+	EntityCommandsForAnotherMapOrMalformedDoNotReachTheGame();
+	EntityBodiesFailuresAreReportedOncePerStreak();
+	PeerDrivenEntitiesAreReleasedWhenTheSessionEnds();
+	InteractionsEventsReachOnlySessionsGrantedInteractions();
+	ReportedBodiesFollowTheSubscribedRateWhileTheReportHoldsBodies();
+	ReportedBodiesAndLocalPoseAreDeliveredTogether();
+	ReportedBodiesAreWrittenWithinTheirBounds();
 	std::cout << "Game Interaction Protocol gateway loopback cases passed\n";
 	return 0;
 }

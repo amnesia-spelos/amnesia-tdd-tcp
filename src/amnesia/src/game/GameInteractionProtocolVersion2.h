@@ -29,12 +29,19 @@ public:
 	static cGameInteractionCommand ParseCommand(const std::string& asLine);
 	static std::string SerializeResponse(const cGameInteractionResponse& aResponse);
 	static std::string SerializeLocalPose(const cGameInteractionPose& aPose);
+	static std::string SerializeReportedBodies(const cGameInteractionBodySamples& aBodies);
+	// Only the interactions Events have a Protocol Version 2 form.
+	static std::string SerializeEvent(const cGameInteractionEvent& aEvent);
 
 	static std::string FormatNumber(double afValue);
 	static bool TryParseNumber(const std::string& asText, double& afValue);
 	static bool TryParseUnsignedInteger(const std::string& asText, unsigned long long alMaximum,
 		unsigned long long& alValue);
 	static bool IsValidAvatarIdentifier(const std::string& asIdentifier);
+	static std::string FormatEntityIdentifier(int alIdentifier);
+	static bool TryParseEntityIdentifier(const std::string& asText, int& alIdentifier);
+	// Writes the 13 fields of a body state within their bounds.
+	static std::string FormatBodyState(const cGameInteractionBodyState& aState);
 };
 
 #endif

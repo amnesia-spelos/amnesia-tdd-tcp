@@ -157,6 +157,22 @@ namespace
 		virtual void RemoveAvatar(const std::string&) {}
 		virtual void PoseAvatar(const std::string&, const cGameInteractionPose&) {}
 		virtual void SetAvatarCollision(const std::string&, bool) {}
+		virtual cGameInteractionBodySamples GetReportedBodies() const { return cGameInteractionBodySamples(); }
+		virtual eGameInteractionEntityOutcome DriveEntity(int) { return eGameInteractionEntityOutcome_NotFound; }
+		virtual eGameInteractionEntityOutcome DriveEntityBodies(const cGameInteractionBodySamples&, int&)
+		{
+			return eGameInteractionEntityOutcome_NotFound;
+		}
+		virtual eGameInteractionEntityOutcome SetDrivenEntityInteracting(int, bool)
+		{
+			return eGameInteractionEntityOutcome_NotFound;
+		}
+		virtual eGameInteractionEntityOutcome BreakDrivenEntity(int, const cGameInteractionBodyState&)
+		{
+			return eGameInteractionEntityOutcome_NotFound;
+		}
+		virtual eGameInteractionEntityOutcome ReleaseDrivenEntity(int) { return eGameInteractionEntityOutcome_NotFound; }
+		virtual void ReleaseDrivenEntities() {}
 	};
 
 	SOCKET Connect(cGameInteractionGateway& gateway, cFixtureGameAdapter& adapter)

@@ -146,6 +146,46 @@ namespace
 			if(gpBase->mpAvatarHandler) gpBase->mpAvatarHandler->SetAvatarCollision(asIdentifier, abCollides);
 		}
 
+		// The game neither reports interactions nor drives entities yet, so no entity is holdable and
+		// none is ever driven.
+		virtual cGameInteractionBodySamples GetReportedBodies() const
+		{
+			return cGameInteractionBodySamples();
+		}
+
+		virtual eGameInteractionEntityOutcome DriveEntity(int alEntityId)
+		{
+			return eGameInteractionEntityOutcome_NotHoldable;
+		}
+
+		virtual eGameInteractionEntityOutcome DriveEntityBodies(const cGameInteractionBodySamples& aSamples,
+			int& alFailedEntityId)
+		{
+			if(aSamples.mvBodies.empty()) return eGameInteractionEntityOutcome_Success;
+			alFailedEntityId = aSamples.mvBodies[0].mlEntityId;
+			return eGameInteractionEntityOutcome_NotFound;
+		}
+
+		virtual eGameInteractionEntityOutcome SetDrivenEntityInteracting(int alEntityId, bool abInteracting)
+		{
+			return eGameInteractionEntityOutcome_NotFound;
+		}
+
+		virtual eGameInteractionEntityOutcome BreakDrivenEntity(int alEntityId,
+			const cGameInteractionBodyState& aFinalState)
+		{
+			return eGameInteractionEntityOutcome_NotFound;
+		}
+
+		virtual eGameInteractionEntityOutcome ReleaseDrivenEntity(int alEntityId)
+		{
+			return eGameInteractionEntityOutcome_NotFound;
+		}
+
+		virtual void ReleaseDrivenEntities()
+		{
+		}
+
 	private:
 		static bool IsInMainMenu()
 		{
