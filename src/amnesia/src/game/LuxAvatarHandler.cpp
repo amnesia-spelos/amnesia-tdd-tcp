@@ -371,8 +371,11 @@ void cLuxAvatarHandler::ResolvePitchBones(cAvatar& aAvatar, cMesh *apMesh)
 		cAvatarPitchBone bone;
 		bone.mlBoneIndex = lBoneIndex;
 		bone.mfWeight = config.mfWeight;
+		// MatrixMul3x3, not MatrixMul: the axis is a direction, and MatrixMul would add the inverse
+		// transform's translation, skewing it off true sideways and making pitch rotate around a
+		// tilted axis instead of a clean lateral one.
 		bone.mvAxis = cMath::Vector3Normalize(
-			cMath::MatrixMul(cMath::MatrixInverse(pBone->GetWorldTransform()), cVector3f(1, 0, 0)));
+			cMath::MatrixMul3x3(cMath::MatrixInverse(pBone->GetWorldTransform()), cVector3f(1, 0, 0)));
 		aAvatar.mvPitchBones.push_back(bone);
 	}
 }
