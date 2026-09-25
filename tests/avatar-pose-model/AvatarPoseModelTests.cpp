@@ -97,6 +97,22 @@ namespace
 		Expect(aModel.Sample(afLocalTimeMs, kMap, rendered), asDescription + " (awake)");
 		return rendered.mbLanternRaised;
 	}
+
+	cAvatarPoseSample CrouchPose(double afSenderTimeMs, float afX, bool abCrouching,
+		unsigned int alTeleportCounter = 0)
+	{
+		cAvatarPoseSample sample = Pose(afSenderTimeMs, afX, 0.0f, alTeleportCounter);
+		sample.mbCrouching = abCrouching;
+		return sample;
+	}
+
+	// Renders the model at a local time and returns whether it is crouching, failing if it is dormant.
+	bool RenderedCrouch(cAvatarPoseModel& aModel, double afLocalTimeMs, const std::string& asDescription)
+	{
+		cAvatarRenderedPose rendered;
+		Expect(aModel.Sample(afLocalTimeMs, kMap, rendered), asDescription + " (awake)");
+		return rendered.mbCrouching;
+	}
 }
 
 int main()
@@ -382,6 +398,43 @@ int main()
 		model.AddPose(MotionPose(5200.0, 10.0f, 0.0f), 1200.0);
 		Expect(Near(RenderedHorizontalSpeed(model, 1250.0, "distance snap"), 0.0f),
 			"a distance snap reports zero motion instead of the implied velocity across the jump");
+	}
+
+	{
+		// Crouch takes the older sample's flag at render time, just like the raised lantern (issue #51).
+		cAvatarPoseModel model;
+		model.AddPose(CrouchPose(5000.0, 0.0f, false), 1000.0);
+		model.AddPose(CrouchPose(5100.0, 1.0f, true), 1100.0);
+		model.AddPose(CrouchPose(5200.0, 2.0f, false), 1200.0);
+		Expect(!RenderedCrouch(model, 1100.0, "crouch at a sample"), "crouch is rendered as the Pose at render time");
+		Expect(!RenderedCrouch(model, 1190.0, "crouch while interpolating"),
+			"while interpolating, crouch comes from the older sample, even when the newer one is nearer");
+		Expect(RenderedCrouch(model, 1200.0, "crouch switch"), "crouch switches on the sender's time");
+		Expect(RenderedCrouch(model, 1290.0, "crouch while interpolating"),
+			"a crouched Avatar stays crouched until the render time reaches the Pose that stands it up");
+		Expect(!RenderedCrouch(model, 1300.0, "crouch switch"), "crouch is lifted on the sender's time");
+	}
+
+	{
+		cAvatarPoseModel model;
+		model.AddPose(CrouchPose(5000.0, 0.0f, false), 1000.0);
+		model.AddPose(CrouchPose(5100.0, 2.0f, true), 1100.0);
+		Expect(RenderedCrouch(model, 1300.0, "crouch hold"), "crouch holds with the last Pose when samples stop");
+		Expect(RenderedCrouch(model, 60000.0, "crouch hold"), "and keeps holding for as long as no Pose arrives");
+	}
+
+	{
+		cAvatarPoseModel model;
+		model.AddPose(CrouchPose(5000.0, 0.0f, true, 7), 1000.0);
+		model.AddPose(CrouchPose(5100.0, 1.0f, false, 8), 1100.0);
+		Expect(RenderedCrouch(model, 1199.0, "crouch before a teleport"),
+			"crouch is held with the Pose before a teleport");
+		Expect(!RenderedCrouch(model, 1200.0, "crouch at a teleport"), "and snaps with the teleported Pose");
+
+		model.AddPose(CrouchPose(5200.0, 10.0f, true, 8), 1200.0);
+		Expect(!RenderedCrouch(model, 1250.0, "crouch before a distance snap"),
+			"crouch is held with the Pose before a distance snap");
+		Expect(RenderedCrouch(model, 1300.0, "crouch at a distance snap"), "and snaps with the distant Pose");
 	}
 
 	std::cout << "Avatar Pose model cases passed\n";

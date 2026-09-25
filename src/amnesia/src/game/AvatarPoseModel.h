@@ -9,7 +9,7 @@ struct cAvatarPoseSample
 {
 	cAvatarPoseSample()
 		: mfSenderTimeMs(0.0), mlTeleportCounter(0), mfX(0.0f), mfY(0.0f), mfZ(0.0f), mfYawDegrees(0.0f),
-		  mfCameraPitchDegrees(0.0f), mbLanternRaised(false) {}
+		  mfCameraPitchDegrees(0.0f), mbCrouching(false), mbLanternRaised(false) {}
 	double mfSenderTimeMs;
 	unsigned int mlTeleportCounter;
 	float mfX;
@@ -17,6 +17,7 @@ struct cAvatarPoseSample
 	float mfZ;
 	float mfYawDegrees;
 	float mfCameraPitchDegrees;
+	bool mbCrouching;
 	bool mbLanternRaised;
 	std::string msMapFile;
 };
@@ -27,13 +28,14 @@ struct cAvatarRenderedPose
 {
 	cAvatarRenderedPose()
 		: mfX(0.0f), mfY(0.0f), mfZ(0.0f), mfYawDegrees(0.0f), mfCameraPitchDegrees(0.0f),
-		  mbLanternRaised(false), mfHorizontalSpeedMps(0.0f), mfForwardSpeedMps(0.0f) {}
+		  mbCrouching(false), mbLanternRaised(false), mfHorizontalSpeedMps(0.0f), mfForwardSpeedMps(0.0f) {}
 	float mfX;
 	float mfY;
 	float mfZ;
 	float mfYawDegrees;
 	float mfCameraPitchDegrees;
 	// A flag cannot be blended, so it is the older sample's: it switches on the sender's time.
+	bool mbCrouching;
 	bool mbLanternRaised;
 	// Total horizontal speed and the signed forward component (the horizontal velocity dotted with
 	// this Pose's yaw's forward vector) of the two Poses actually being interpolated. Zero while

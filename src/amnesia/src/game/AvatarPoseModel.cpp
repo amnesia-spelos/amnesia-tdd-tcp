@@ -19,6 +19,7 @@ namespace
 		aRendered.mfZ = aPose.mfZ;
 		aRendered.mfYawDegrees = aPose.mfYawDegrees;
 		aRendered.mfCameraPitchDegrees = aPose.mfCameraPitchDegrees;
+		aRendered.mbCrouching = aPose.mbCrouching;
 		aRendered.mbLanternRaised = aPose.mbLanternRaised;
 		aRendered.mfHorizontalSpeedMps = 0.0f;
 		aRendered.mfForwardSpeedMps = 0.0f;
@@ -114,6 +115,7 @@ bool cAvatarPoseModel::Sample(double afLocalTimeMs, const std::string& asCurrent
 	aPose.mfZ = Lerp(from.mfZ, to.mfZ, fFraction);
 	aPose.mfYawDegrees = LerpYawDegrees(from.mfYawDegrees, to.mfYawDegrees, fFraction);
 	aPose.mfCameraPitchDegrees = Lerp(from.mfCameraPitchDegrees, to.mfCameraPitchDegrees, fFraction);
+	aPose.mbCrouching = from.mbCrouching;
 	aPose.mbLanternRaised = from.mbLanternRaised;
 
 	// Horizontal motion between the two Poses actually being interpolated, never from the Avatar

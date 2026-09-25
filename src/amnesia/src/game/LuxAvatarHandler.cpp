@@ -67,6 +67,7 @@ void cLuxAvatarHandler::PoseAvatar(const tString& asIdentifier, const cGameInter
 	sample.mfZ = aPose.mFeetPosition.mfZ;
 	sample.mfYawDegrees = aPose.mfBodyYawDegrees;
 	sample.mfCameraPitchDegrees = aPose.mfCameraPitchDegrees;
+	sample.mbCrouching = aPose.mbCrouching;
 	sample.mbLanternRaised = aPose.mbLanternRaised;
 	sample.msMapFile = aPose.msMapFile;
 	it->second.mPoseModel.AddPose(sample, GetLocalTimeMs());
@@ -109,6 +110,7 @@ void cLuxAvatarHandler::Update(float afTimeStep)
 		avatar.mpBody->SetForceVelocity(0);
 		avatar.mpBody->SetFeetPosition(cVector3f(pose.mfX, pose.mfY, pose.mfZ));
 		avatar.mpBody->SetYaw(cMath::ToRad(pose.mfYawDegrees));
+		UpdateStance(avatar, pose.mbCrouching);
 		UpdateCollision(avatar, true);
 		if(!avatar.mpBody->IsActive())
 		{
@@ -140,9 +142,10 @@ void cLuxAvatarHandler::Reset()
 	{
 		it->second.mpMap = NULL;
 		it->second.mpMeshEntity = NULL;
-		it->second.mpIdleAnimation = NULL;
-		it->second.mpWalkAnimation = NULL;
+		for(int i = 0; i < eAvatarClip_LastEnum; ++i) it->second.mvClipAnimations[i] = NULL;
 		it->second.mpBody = NULL;
+		it->second.mbCrouching = false;
+		it->second.mlCrouchSizeIndex = -1;
 		it->second.mpLantern = NULL;
 	}
 }
@@ -299,6 +302,9 @@ void cLuxAvatarHandler::CreateWorldObjects(const tString& asIdentifier, cAvatar&
 	pBody->SetEntity(aAvatar.mpMeshEntity);
 	pBody->SetEntityOffset(GetAvatarMeshOffset(pBody->GetSize().y));
 	aAvatar.mpBody = pBody;
+	// Created once per body alongside the standing size; SetActiveSize switches to it on crouch (#51).
+	aAvatar.mlCrouchSizeIndex = pBody->AddExtraSize(gpBase->mpPlayer->GetBodyCrouchSize());
+	aAvatar.mbCrouching = false;
 
 	// Like the local lantern's glow, except that it never casts shadows.
 	if(mLanternLight.mfRadius > 0)
@@ -323,8 +329,9 @@ void cLuxAvatarHandler::DestroyWorldObjects(cAvatar& aAvatar)
 	aAvatar.mpLantern = NULL;
 	aAvatar.mpBody = NULL;
 	aAvatar.mpMeshEntity = NULL;
-	aAvatar.mpIdleAnimation = NULL;
-	aAvatar.mpWalkAnimation = NULL;
+	for(int i = 0; i < eAvatarClip_LastEnum; ++i) aAvatar.mvClipAnimations[i] = NULL;
+	aAvatar.mbCrouching = false;
+	aAvatar.mlCrouchSizeIndex = -1;
 	aAvatar.mpMap = NULL;
 }
 
@@ -386,19 +393,28 @@ void cLuxAvatarHandler::ResolvePitchBones(cAvatar& aAvatar, cMesh *apMesh)
 	}
 }
 
-// Resolves the required "idle" and "walk" clips against the loaded mesh's animations once, so
-// choosing between them every update never needs a name lookup. A missing clip is reported but
-// leaves the Avatar visible, starting on whichever of the two clips is present (#50).
+// Resolves the required "idle" and "walk" clips, and the "crouch_idle" and "crouch_walk" clips,
+// against the loaded mesh's animations once, so choosing between them every update never needs a
+// name lookup. A missing required clip is reported but leaves the Avatar visible, starting on
+// whichever of "idle" and "walk" is present (#50). A missing crouch clip is likewise reported, and
+// falls back to standing "idle" at render time where possible (#51).
 void cLuxAvatarHandler::ResolveClips(cAvatar& aAvatar)
 {
-	aAvatar.mpIdleAnimation = aAvatar.mpMeshEntity->GetAnimationStateFromName("idle");
-	aAvatar.mpWalkAnimation = aAvatar.mpMeshEntity->GetAnimationStateFromName("walk");
-	if(aAvatar.mpIdleAnimation == NULL)
-		ReportModelFault(aAvatar.msMeshFile, "missing required 'idle' animation clip");
-	if(aAvatar.mpWalkAnimation == NULL)
-		ReportModelFault(aAvatar.msMeshFile, "missing required 'walk' animation clip");
+	static const char *kClipNames[eAvatarClip_LastEnum] = {"idle", "walk", "crouch_idle", "crouch_walk"};
+	for(int i = 0; i < eAvatarClip_LastEnum; ++i)
+		aAvatar.mvClipAnimations[i] = aAvatar.mpMeshEntity->GetAnimationStateFromName(kClipNames[i]);
 
-	cAnimationState *pStart = aAvatar.mpIdleAnimation ? aAvatar.mpIdleAnimation : aAvatar.mpWalkAnimation;
+	if(aAvatar.mvClipAnimations[eAvatarClip_Idle] == NULL)
+		ReportModelFault(aAvatar.msMeshFile, "missing required 'idle' animation clip");
+	if(aAvatar.mvClipAnimations[eAvatarClip_Walk] == NULL)
+		ReportModelFault(aAvatar.msMeshFile, "missing required 'walk' animation clip");
+	if(aAvatar.mvClipAnimations[eAvatarClip_CrouchIdle] == NULL)
+		ReportModelFault(aAvatar.msMeshFile, "missing 'crouch_idle' animation clip, falling back to 'idle'");
+	if(aAvatar.mvClipAnimations[eAvatarClip_CrouchWalk] == NULL)
+		ReportModelFault(aAvatar.msMeshFile, "missing 'crouch_walk' animation clip, falling back to 'idle'");
+
+	cAnimationState *pStart = NULL;
+	for(int i = 0; i < eAvatarClip_LastEnum && pStart == NULL; ++i) pStart = aAvatar.mvClipAnimations[i];
 	if(pStart) aAvatar.mpMeshEntity->PlayName(pStart->GetName(), true, true);
 }
 
@@ -408,6 +424,19 @@ void cLuxAvatarHandler::SetAwake(cAvatar& aAvatar, bool abAwake)
 	if(aAvatar.mpBody) aAvatar.mpBody->SetActive(abAwake);
 	if(aAvatar.mpMeshEntity) aAvatar.mpMeshEntity->SetVisible(abAwake);
 	if(aAvatar.mpLantern && !abAwake) aAvatar.mpLantern->SetVisible(false);
+}
+
+// Switches the body's active size on a change in the rendered Pose's crouch flag, and moves the
+// mesh offset to match the new active height. UpdateCollision, called right after, recomputes the
+// player's collision clearance from the body's now-current size. CheckCharacterFits is not called:
+// the Avatar follows its Peer rather than being pushed by the world, and the player-overlap guard in
+// cAvatarCollisionModel already covers the local player standing into it (#51).
+void cLuxAvatarHandler::UpdateStance(cAvatar& aAvatar, bool abCrouching)
+{
+	if(aAvatar.mpBody == NULL || aAvatar.mbCrouching == abCrouching) return;
+	aAvatar.mbCrouching = abCrouching;
+	aAvatar.mpBody->SetActiveSize(abCrouching ? aAvatar.mlCrouchSizeIndex : 0);
+	aAvatar.mpBody->SetEntityOffset(GetAvatarMeshOffset(aAvatar.mpBody->GetSize().y));
 }
 
 static cAvatarCollisionCylinder GetCollisionCylinder(iCharacterBody *apBody)
@@ -433,15 +462,20 @@ void cLuxAvatarHandler::UpdateCollision(cAvatar& aAvatar, bool abAwake)
 	if(aAvatar.mpBody) aAvatar.mpBody->SetTestCollision(bCollides);
 }
 
-// Where a standing player's lantern would be, with the camera level: iCharacterBody::UpdateCamera
-// places the camera at the standing body's height plus its offset, and the lantern sits at its local
-// offset from the camera. The Pose's crouch and pitch are ignored.
+// Where a standing or crouched player's lantern would be, with the camera level: iCharacterBody::
+// UpdateCamera places the camera at the active body's height plus its offset, and the lantern sits
+// at its local offset from the camera. Crouching switches straight to the crouched body height,
+// reaching the same final height cLuxMoveState_Normal::SetCrouch eases the local player's own camera
+// to, but without the eased transition: an Avatar's rendered crouch flag is already a discrete,
+// held Pose (#51), not a smoothly animated local stance. The Pose's pitch is ignored, since a point
+// light's rotation has no useful pitch effect.
 static cMatrixf GetLanternMatrix(const cAvatarRenderedPose& aPose)
 {
 	cLuxPlayer *pPlayer = gpBase->mpPlayer;
 	const cVector3f& vCameraPosAdd = pPlayer->GetCameraPosAdd();
+	const float fBodyHeight = aPose.mbCrouching ? pPlayer->GetBodyCrouchSize().y : pPlayer->GetBodySize().y;
 	// A character body's forward is -Z.
-	const cVector3f vCameraOffset(vCameraPosAdd.x, pPlayer->GetBodySize().y + vCameraPosAdd.y, -vCameraPosAdd.z);
+	const cVector3f vCameraOffset(vCameraPosAdd.x, fBodyHeight + vCameraPosAdd.y, -vCameraPosAdd.z);
 	cMatrixf mtxCamera = cMath::MatrixRotateY(cMath::ToRad(aPose.mfYawDegrees));
 	mtxCamera.SetTranslation(cVector3f(aPose.mfX, aPose.mfY, aPose.mfZ));
 	return cMath::MatrixMul(mtxCamera,
@@ -482,20 +516,27 @@ void cLuxAvatarHandler::UpdatePitch(cAvatar& aAvatar, const cAvatarRenderedPose 
 	}
 }
 
-// Chooses idle or walk from the Pose's rendered horizontal motion (cAvatarClipModel) and applies it
-// to the mesh, cross-fading only on the update the choice actually changes and scaling walk's
-// playback by the measured speed. If the chosen clip failed to load, falls back to whichever of the
-// two is present; ResolveClips already reported the fault. The pose is NULL while the Avatar is
+// Chooses idle, walk, crouch_idle, or crouch_walk from the Pose's rendered horizontal motion and
+// crouch (cAvatarClipModel) and applies it to the mesh, cross-fading only on the update the choice
+// actually changes and scaling a walking clip's playback by the measured speed. If the chosen clip
+// failed to load, falls back to standing "idle" where possible, then to whichever of "idle" and
+// "walk" is present; ResolveClips already reported the fault. The pose is NULL while the Avatar is
 // dormant, which leaves the last playing animation alone.
 void cLuxAvatarHandler::UpdateAnimation(cAvatar& aAvatar, const cAvatarRenderedPose *apPose)
 {
 	if(aAvatar.mpMeshEntity == NULL || apPose == NULL) return;
-	if(aAvatar.mpIdleAnimation == NULL && aAvatar.mpWalkAnimation == NULL) return;
+	if(aAvatar.mvClipAnimations[eAvatarClip_Idle] == NULL && aAvatar.mvClipAnimations[eAvatarClip_Walk] == NULL)
+		return;
 
-	const cAvatarClipChoice choice = aAvatar.mClipModel.Update(apPose->mfHorizontalSpeedMps, apPose->mfForwardSpeedMps);
-	cAnimationState *pTarget = choice.mbWalking ? aAvatar.mpWalkAnimation : aAvatar.mpIdleAnimation;
-	if(pTarget == NULL) pTarget = aAvatar.mpIdleAnimation ? aAvatar.mpIdleAnimation : aAvatar.mpWalkAnimation;
+	const cAvatarClipChoice choice =
+		aAvatar.mClipModel.Update(apPose->mfHorizontalSpeedMps, apPose->mfForwardSpeedMps, apPose->mbCrouching);
+
+	cAnimationState *pTarget = aAvatar.mvClipAnimations[choice.mClip];
+	if(pTarget == NULL) pTarget = aAvatar.mvClipAnimations[eAvatarClip_Idle];
+	if(pTarget == NULL) pTarget = aAvatar.mvClipAnimations[eAvatarClip_Walk];
 
 	if(choice.mbChanged) aAvatar.mpMeshEntity->PlayFadeToName(pTarget->GetName(), true, kClipFadeSeconds);
-	if(choice.mbWalking && aAvatar.mpWalkAnimation) aAvatar.mpWalkAnimation->SetSpeed(choice.mfPlaybackSpeed);
+	if(pTarget == aAvatar.mvClipAnimations[eAvatarClip_Walk] ||
+		pTarget == aAvatar.mvClipAnimations[eAvatarClip_CrouchWalk])
+		pTarget->SetSpeed(choice.mfPlaybackSpeed);
 }

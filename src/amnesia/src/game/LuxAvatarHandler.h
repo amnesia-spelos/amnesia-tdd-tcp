@@ -72,8 +72,11 @@ private:
 
 	struct cAvatar
 	{
-		cAvatar() : mbMeshBroken(false), mpMap(NULL), mpMeshEntity(NULL), mpIdleAnimation(NULL),
-			mpWalkAnimation(NULL), mpBody(NULL), mpLantern(NULL) {}
+		cAvatar() : mbMeshBroken(false), mpMap(NULL), mpMeshEntity(NULL),
+			mpBody(NULL), mbCrouching(false), mlCrouchSizeIndex(-1), mpLantern(NULL)
+		{
+			for(int i = 0; i < eAvatarClip_LastEnum; ++i) mvClipAnimations[i] = NULL;
+		}
 		tString msMeshFile;
 		std::vector<cAvatarAnimation> mvAnimations;
 		std::vector<cAvatarPitchBoneConfig> mvPitchBoneConfig;
@@ -88,12 +91,17 @@ private:
 		cLuxMap *mpMap;
 		cMeshEntity *mpMeshEntity;
 		// Resolved once when world objects are created (like the pitch bones), so choosing a clip
-		// never needs a name lookup. NULL when the model is missing that required clip.
-		cAnimationState *mpIdleAnimation;
-		cAnimationState *mpWalkAnimation;
+		// never needs a name lookup. Indexed by eAvatarClip; an entry is NULL when the model is missing
+		// that clip. The required "idle" and "walk" clips are reported as faults, while the crouch
+		// clips fall back to standing idle (#51).
+		cAnimationState *mvClipAnimations[eAvatarClip_LastEnum];
 		// A Pose drives only this body, which carries the mesh with it. A future mode could drive an
 		// existing enemy's character body the same way while its AI is disabled.
 		iCharacterBody *mpBody;
+		// The body's active size as last applied; toggled on a change in the rendered Pose's crouch flag.
+		bool mbCrouching;
+		// The index AddExtraSize returned for the crouch body size, resolved once per body (#51).
+		int mlCrouchSizeIndex;
 		cLightPoint *mpLantern;
 	};
 	// The glow of the local player's lantern, which every Avatar's lantern copies.
@@ -119,6 +127,7 @@ private:
 	void ResolveClips(cAvatar& aAvatar);
 	void ReportModelFault(const tString& asMeshFile, const tString& asFault);
 	void SetAwake(cAvatar& aAvatar, bool abAwake);
+	void UpdateStance(cAvatar& aAvatar, bool abCrouching);
 	void UpdateCollision(cAvatar& aAvatar, bool abAwake);
 	void UpdateLantern(cAvatar& aAvatar, const cAvatarRenderedPose *apPose, float afTimeStep);
 	void UpdatePitch(cAvatar& aAvatar, const cAvatarRenderedPose *apPose);
