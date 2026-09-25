@@ -2,6 +2,7 @@
 #define LUX_AVATAR_HANDLER_H
 
 #include "LuxBase.h"
+#include "AvatarClipModel.h"
 #include "AvatarCollisionModel.h"
 #include "AvatarLanternModel.h"
 #include "AvatarPoseModel.h"
@@ -71,12 +72,14 @@ private:
 
 	struct cAvatar
 	{
-		cAvatar() : mbMeshBroken(false), mpMap(NULL), mpMeshEntity(NULL), mpBody(NULL), mpLantern(NULL) {}
+		cAvatar() : mbMeshBroken(false), mpMap(NULL), mpMeshEntity(NULL), mpIdleAnimation(NULL),
+			mpWalkAnimation(NULL), mpBody(NULL), mpLantern(NULL) {}
 		tString msMeshFile;
 		std::vector<cAvatarAnimation> mvAnimations;
 		std::vector<cAvatarPitchBoneConfig> mvPitchBoneConfig;
 		std::vector<cAvatarPitchBone> mvPitchBones;
 		cAvatarPoseModel mPoseModel;
+		cAvatarClipModel mClipModel;
 		// Kept with the Avatar rather than its body, so it lasts across map changes and dormancy.
 		cAvatarCollisionModel mCollision;
 		cAvatarLanternModel mLanternModel;
@@ -84,6 +87,10 @@ private:
 		bool mbMeshBroken;
 		cLuxMap *mpMap;
 		cMeshEntity *mpMeshEntity;
+		// Resolved once when world objects are created (like the pitch bones), so choosing a clip
+		// never needs a name lookup. NULL when the model is missing that required clip.
+		cAnimationState *mpIdleAnimation;
+		cAnimationState *mpWalkAnimation;
 		// A Pose drives only this body, which carries the mesh with it. A future mode could drive an
 		// existing enemy's character body the same way while its AI is disabled.
 		iCharacterBody *mpBody;
@@ -109,11 +116,13 @@ private:
 	void CreateWorldObjects(const tString& asIdentifier, cAvatar& aAvatar, cLuxMap *apMap);
 	void DestroyWorldObjects(cAvatar& aAvatar);
 	void ResolvePitchBones(cAvatar& aAvatar, cMesh *apMesh);
+	void ResolveClips(cAvatar& aAvatar);
 	void ReportModelFault(const tString& asMeshFile, const tString& asFault);
 	void SetAwake(cAvatar& aAvatar, bool abAwake);
 	void UpdateCollision(cAvatar& aAvatar, bool abAwake);
 	void UpdateLantern(cAvatar& aAvatar, const cAvatarRenderedPose *apPose, float afTimeStep);
 	void UpdatePitch(cAvatar& aAvatar, const cAvatarRenderedPose *apPose);
+	void UpdateAnimation(cAvatar& aAvatar, const cAvatarRenderedPose *apPose);
 
 	tAvatarMap m_mapAvatars;
 	cLanternLight mLanternLight;

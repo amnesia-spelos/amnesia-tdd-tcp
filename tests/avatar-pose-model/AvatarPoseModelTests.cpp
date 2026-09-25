@@ -59,6 +59,29 @@ namespace
 		return rendered.mfX;
 	}
 
+	cAvatarPoseSample MotionPose(double afSenderTimeMs, float afX, float afZ, float afYawDegrees = 0.0f)
+	{
+		cAvatarPoseSample sample = Pose(afSenderTimeMs, afX, afYawDegrees);
+		sample.mfZ = afZ;
+		return sample;
+	}
+
+	// Renders the model at a local time and returns the rendered horizontal speed, failing if dormant.
+	float RenderedHorizontalSpeed(cAvatarPoseModel& aModel, double afLocalTimeMs, const std::string& asDescription)
+	{
+		cAvatarRenderedPose rendered;
+		Expect(aModel.Sample(afLocalTimeMs, kMap, rendered), asDescription + " (awake)");
+		return rendered.mfHorizontalSpeedMps;
+	}
+
+	// Renders the model at a local time and returns the rendered signed forward speed, failing if dormant.
+	float RenderedForwardSpeed(cAvatarPoseModel& aModel, double afLocalTimeMs, const std::string& asDescription)
+	{
+		cAvatarRenderedPose rendered;
+		Expect(aModel.Sample(afLocalTimeMs, kMap, rendered), asDescription + " (awake)");
+		return rendered.mfForwardSpeedMps;
+	}
+
 	cAvatarPoseSample LanternPose(double afSenderTimeMs, float afX, bool abLanternRaised,
 		unsigned int alTeleportCounter = 0)
 	{
@@ -288,6 +311,77 @@ int main()
 			"camera pitch is held with the Pose before a teleport instead of gliding across it");
 		Expect(Near(RenderedPitch(model, 1200.0, "pitch at a teleport"), 30.0f),
 			"and snaps with the teleported Pose");
+	}
+
+	{
+		// Pure forward travel at yaw 0 (forward is -Z): 1 m over 100 ms is 10 m/s.
+		cAvatarPoseModel model;
+		model.AddPose(MotionPose(5000.0, 0.0f, 0.0f), 1000.0);
+		model.AddPose(MotionPose(5100.0, 0.0f, -1.0f), 1100.0);
+		Expect(Near(RenderedHorizontalSpeed(model, 1150.0, "forward"), 10.0f),
+			"total horizontal speed matches pure forward travel");
+		Expect(Near(RenderedForwardSpeed(model, 1150.0, "forward"), 10.0f),
+			"the forward component is positive for pure forward travel");
+	}
+
+	{
+		// Pure backward travel at yaw 0: moving toward +Z is backward.
+		cAvatarPoseModel model;
+		model.AddPose(MotionPose(5000.0, 0.0f, 0.0f), 1000.0);
+		model.AddPose(MotionPose(5100.0, 0.0f, 1.0f), 1100.0);
+		Expect(Near(RenderedHorizontalSpeed(model, 1150.0, "backward"), 10.0f),
+			"total horizontal speed matches pure backward travel");
+		Expect(Near(RenderedForwardSpeed(model, 1150.0, "backward"), -10.0f),
+			"the forward component is negative for pure backward travel");
+	}
+
+	{
+		// Pure sideways travel at yaw 0 has no forward component, but still counts as horizontal speed.
+		cAvatarPoseModel model;
+		model.AddPose(MotionPose(5000.0, 0.0f, 0.0f), 1000.0);
+		model.AddPose(MotionPose(5100.0, 1.0f, 0.0f), 1100.0);
+		Expect(Near(RenderedHorizontalSpeed(model, 1150.0, "sideways"), 10.0f),
+			"total horizontal speed includes pure sideways travel");
+		Expect(Near(RenderedForwardSpeed(model, 1150.0, "sideways"), 0.0f),
+			"pure sideways travel has no forward component");
+	}
+
+	{
+		// Sideways plus backward travel: the forward component stays negative even though sideways
+		// motion dominates the total.
+		cAvatarPoseModel model;
+		model.AddPose(MotionPose(5000.0, 0.0f, 0.0f), 1000.0);
+		model.AddPose(MotionPose(5100.0, 1.0f, 1.0f), 1100.0);
+		Expect(Near(RenderedHorizontalSpeed(model, 1150.0, "sideways and backward"), 14.142136f),
+			"total horizontal speed combines both components");
+		Expect(Near(RenderedForwardSpeed(model, 1150.0, "sideways and backward"), -10.0f),
+			"any backward component keeps the forward component negative under sideways travel");
+	}
+
+	{
+		// A yaw of 90 degrees turns the forward vector to -X, so moving toward -X reads as forward.
+		cAvatarPoseModel model;
+		model.AddPose(MotionPose(5000.0, 0.0f, 0.0f, 90.0f), 1000.0);
+		model.AddPose(MotionPose(5100.0, -1.0f, 0.0f, 90.0f), 1100.0);
+		Expect(Near(RenderedForwardSpeed(model, 1150.0, "rotated forward"), 10.0f),
+			"the forward component follows the rendered yaw's forward vector, not world -Z");
+	}
+
+	{
+		// Holding a single Pose, holding the last Pose once the buffer runs dry, and snapping across a
+		// discontinuity all report zero motion instead of an implied velocity.
+		cAvatarPoseModel model;
+		model.AddPose(MotionPose(5000.0, 0.0f, 0.0f), 1000.0);
+		Expect(Near(RenderedHorizontalSpeed(model, 1000.0, "single Pose"), 0.0f),
+			"a single Pose reports zero motion");
+
+		model.AddPose(MotionPose(5100.0, 2.0f, 0.0f), 1100.0);
+		Expect(Near(RenderedHorizontalSpeed(model, 1300.0, "held Pose"), 0.0f),
+			"holding the last Pose once the buffer runs dry reports zero motion");
+
+		model.AddPose(MotionPose(5200.0, 10.0f, 0.0f), 1200.0);
+		Expect(Near(RenderedHorizontalSpeed(model, 1250.0, "distance snap"), 0.0f),
+			"a distance snap reports zero motion instead of the implied velocity across the jump");
 	}
 
 	std::cout << "Avatar Pose model cases passed\n";

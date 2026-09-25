@@ -9,6 +9,8 @@
 
 // Heavier than any character can push, yet finite so the engine's force arithmetic stays sound.
 static const float kUnpushableMass = 1.0e6f;
+// How long crossing between idle and walk takes, matching the enemy movement selector's cross-fade.
+static const float kClipFadeSeconds = 0.3f;
 
 const float cLuxAvatarHandler::kMaxPitchDegrees = 45.0f;
 
@@ -94,6 +96,7 @@ void cLuxAvatarHandler::Update(float afTimeStep)
 			UpdateCollision(avatar, false);
 			UpdateLantern(avatar, NULL, afTimeStep);
 			UpdatePitch(avatar, NULL);
+			UpdateAnimation(avatar, NULL);
 			continue;
 		}
 
@@ -116,6 +119,7 @@ void cLuxAvatarHandler::Update(float afTimeStep)
 		SetAwake(avatar, true);
 		UpdateLantern(avatar, &pose, afTimeStep);
 		UpdatePitch(avatar, &pose);
+		UpdateAnimation(avatar, &pose);
 	}
 }
 
@@ -136,6 +140,8 @@ void cLuxAvatarHandler::Reset()
 	{
 		it->second.mpMap = NULL;
 		it->second.mpMeshEntity = NULL;
+		it->second.mpIdleAnimation = NULL;
+		it->second.mpWalkAnimation = NULL;
 		it->second.mpBody = NULL;
 		it->second.mpLantern = NULL;
 	}
@@ -281,9 +287,7 @@ void cLuxAvatarHandler::CreateWorldObjects(const tString& asIdentifier, cAvatar&
 		else
 			Error("Could not load animation '%s' for Avatar '%s'\n", anim.msFile.c_str(), asIdentifier.c_str());
 	}
-	if(aAvatar.mpMeshEntity->GetAnimationStateNum() > 0)
-		aAvatar.mpMeshEntity->Play(0, true, true);
-
+	ResolveClips(aAvatar);
 	ResolvePitchBones(aAvatar, pMesh);
 
 	iCharacterBody *pBody = apMap->GetPhysicsWorld()->CreateCharacterBody(sName, gpBase->mpPlayer->GetBodySize());
@@ -319,6 +323,8 @@ void cLuxAvatarHandler::DestroyWorldObjects(cAvatar& aAvatar)
 	aAvatar.mpLantern = NULL;
 	aAvatar.mpBody = NULL;
 	aAvatar.mpMeshEntity = NULL;
+	aAvatar.mpIdleAnimation = NULL;
+	aAvatar.mpWalkAnimation = NULL;
 	aAvatar.mpMap = NULL;
 }
 
@@ -378,6 +384,22 @@ void cLuxAvatarHandler::ResolvePitchBones(cAvatar& aAvatar, cMesh *apMesh)
 			cMath::MatrixMul3x3(cMath::MatrixInverse(pBone->GetWorldTransform()), cVector3f(1, 0, 0)));
 		aAvatar.mvPitchBones.push_back(bone);
 	}
+}
+
+// Resolves the required "idle" and "walk" clips against the loaded mesh's animations once, so
+// choosing between them every update never needs a name lookup. A missing clip is reported but
+// leaves the Avatar visible, starting on whichever of the two clips is present (#50).
+void cLuxAvatarHandler::ResolveClips(cAvatar& aAvatar)
+{
+	aAvatar.mpIdleAnimation = aAvatar.mpMeshEntity->GetAnimationStateFromName("idle");
+	aAvatar.mpWalkAnimation = aAvatar.mpMeshEntity->GetAnimationStateFromName("walk");
+	if(aAvatar.mpIdleAnimation == NULL)
+		ReportModelFault(aAvatar.msMeshFile, "missing required 'idle' animation clip");
+	if(aAvatar.mpWalkAnimation == NULL)
+		ReportModelFault(aAvatar.msMeshFile, "missing required 'walk' animation clip");
+
+	cAnimationState *pStart = aAvatar.mpIdleAnimation ? aAvatar.mpIdleAnimation : aAvatar.mpWalkAnimation;
+	if(pStart) aAvatar.mpMeshEntity->PlayName(pStart->GetName(), true, true);
 }
 
 // A dormant Avatar is neither visible nor collidable, and gives off no light.
@@ -458,4 +480,22 @@ void cLuxAvatarHandler::UpdatePitch(cAvatar& aAvatar, const cAvatarRenderedPose 
 		pBoneState->SetPreTransform(
 			cMath::MatrixQuaternion(cQuaternion(fPitchRadians * bone.mfWeight, bone.mvAxis)));
 	}
+}
+
+// Chooses idle or walk from the Pose's rendered horizontal motion (cAvatarClipModel) and applies it
+// to the mesh, cross-fading only on the update the choice actually changes and scaling walk's
+// playback by the measured speed. If the chosen clip failed to load, falls back to whichever of the
+// two is present; ResolveClips already reported the fault. The pose is NULL while the Avatar is
+// dormant, which leaves the last playing animation alone.
+void cLuxAvatarHandler::UpdateAnimation(cAvatar& aAvatar, const cAvatarRenderedPose *apPose)
+{
+	if(aAvatar.mpMeshEntity == NULL || apPose == NULL) return;
+	if(aAvatar.mpIdleAnimation == NULL && aAvatar.mpWalkAnimation == NULL) return;
+
+	const cAvatarClipChoice choice = aAvatar.mClipModel.Update(apPose->mfHorizontalSpeedMps, apPose->mfForwardSpeedMps);
+	cAnimationState *pTarget = choice.mbWalking ? aAvatar.mpWalkAnimation : aAvatar.mpIdleAnimation;
+	if(pTarget == NULL) pTarget = aAvatar.mpIdleAnimation ? aAvatar.mpIdleAnimation : aAvatar.mpWalkAnimation;
+
+	if(choice.mbChanged) aAvatar.mpMeshEntity->PlayFadeToName(pTarget->GetName(), true, kClipFadeSeconds);
+	if(choice.mbWalking && aAvatar.mpWalkAnimation) aAvatar.mpWalkAnimation->SetSpeed(choice.mfPlaybackSpeed);
 }
