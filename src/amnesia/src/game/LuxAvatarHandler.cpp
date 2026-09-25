@@ -1,6 +1,7 @@
 #include "LuxAvatarHandler.h"
 
 #include "AvatarMeshOffset.h"
+#include "LuxChatHandler.h"
 #include "LuxMap.h"
 #include "LuxMapHandler.h"
 #include "LuxPlayer.h"
@@ -8,6 +9,8 @@
 
 // Heavier than any character can push, yet finite so the engine's force arithmetic stays sound.
 static const float kUnpushableMass = 1.0e6f;
+
+const float cLuxAvatarHandler::kMaxPitchDegrees = 45.0f;
 
 cLuxAvatarHandler::cLuxAvatarHandler()
 	: iLuxUpdateable("LuxAvatarHandler")
@@ -24,7 +27,8 @@ bool cLuxAvatarHandler::CreateAvatar(const tString& asIdentifier, const tString&
 {
 	tString sMeshFile;
 	std::vector<cAvatarAnimation> vAnimations;
-	if(!FindModelFiles(asEntityFile, sMeshFile, vAnimations))
+	std::vector<cAvatarPitchBoneConfig> vPitchBoneConfig;
+	if(!FindModelFiles(asEntityFile, sMeshFile, vAnimations, vPitchBoneConfig))
 	{
 		Log("Game Interaction Protocol: cannot create Avatar '%s': model '%s' not found\n",
 			asIdentifier.c_str(), asEntityFile.c_str());
@@ -35,6 +39,7 @@ bool cLuxAvatarHandler::CreateAvatar(const tString& asIdentifier, const tString&
 	cAvatar avatar;
 	avatar.msMeshFile = sMeshFile;
 	avatar.mvAnimations = vAnimations;
+	avatar.mvPitchBoneConfig = vPitchBoneConfig;
 	m_mapAvatars[asIdentifier] = avatar;
 	return true;
 }
@@ -59,6 +64,7 @@ void cLuxAvatarHandler::PoseAvatar(const tString& asIdentifier, const cGameInter
 	sample.mfY = aPose.mFeetPosition.mfY;
 	sample.mfZ = aPose.mFeetPosition.mfZ;
 	sample.mfYawDegrees = aPose.mfBodyYawDegrees;
+	sample.mfCameraPitchDegrees = aPose.mfCameraPitchDegrees;
 	sample.mbLanternRaised = aPose.mbLanternRaised;
 	sample.msMapFile = aPose.msMapFile;
 	it->second.mPoseModel.AddPose(sample, GetLocalTimeMs());
@@ -87,6 +93,7 @@ void cLuxAvatarHandler::Update(float afTimeStep)
 			SetAwake(avatar, false);
 			UpdateCollision(avatar, false);
 			UpdateLantern(avatar, NULL, afTimeStep);
+			UpdatePitch(avatar, NULL);
 			continue;
 		}
 
@@ -108,6 +115,7 @@ void cLuxAvatarHandler::Update(float afTimeStep)
 		}
 		SetAwake(avatar, true);
 		UpdateLantern(avatar, &pose, afTimeStep);
+		UpdatePitch(avatar, &pose);
 	}
 }
 
@@ -133,9 +141,12 @@ void cLuxAvatarHandler::Reset()
 	}
 }
 
-// Reads the model's mesh and animation clips; its bodies, joints, and prop variables are ignored.
+// Reads the model's mesh and animation clips, and its NPC MoveHeadBones/MoveHeadBoneMuls fields as
+// the pitch bone configuration (the Grasp rig contract; unused by Avatars for their authored
+// purpose, since Avatars bypass the entity loader and NPC behavior entirely, see ADR 0002). Its
+// bodies and joints are ignored.
 bool cLuxAvatarHandler::FindModelFiles(const tString& asEntityFile, tString& asMeshFile,
-	std::vector<cAvatarAnimation>& avAnimations)
+	std::vector<cAvatarAnimation>& avAnimations, std::vector<cAvatarPitchBoneConfig>& avPitchBoneConfig)
 {
 	cResources *pResources = gpBase->mpEngine->GetResources();
 	const tWString sEntityPath = pResources->GetFileSearcher()->GetFilePath(asEntityFile);
@@ -163,8 +174,38 @@ bool cLuxAvatarHandler::FindModelFiles(const tString& asEntityFile, tString& asM
 			avAnimations.push_back(anim);
 		}
 	}
+
+	cXmlElement *pVarsElem = pEntityDoc->GetFirstElement("UserDefinedVariables");
+	tString sPitchBoneNames = "";
+	tString sPitchBoneWeights = "";
+	if(pVarsElem)
+	{
+		cXmlNodeListIterator it = pVarsElem->GetChildIterator();
+		while(it.HasNext())
+		{
+			cXmlElement *pVarElem = it.Next()->ToElement();
+			const tString sName = pVarElem->GetAttributeString("Name", "");
+			if(sName == "MoveHeadBones") sPitchBoneNames = pVarElem->GetAttributeString("Value", "");
+			else if(sName == "MoveHeadBoneMuls") sPitchBoneWeights = pVarElem->GetAttributeString("Value", "");
+		}
+	}
 	pResources->DestroyXmlDocument(pEntityDoc);
 	if(sMeshFile == "") return false;
+
+	tStringVec vBoneNames;
+	cString::GetStringVec(sPitchBoneNames, vBoneNames);
+	tFloatVec vBoneWeights;
+	cString::GetFloatVec(sPitchBoneWeights, vBoneWeights);
+	if(vBoneNames.size() > 0 && vBoneNames.size() == vBoneWeights.size())
+	{
+		for(size_t i = 0; i < vBoneNames.size(); ++i)
+		{
+			cAvatarPitchBoneConfig config;
+			config.msName = vBoneNames[i];
+			config.mfWeight = vBoneWeights[i];
+			avPitchBoneConfig.push_back(config);
+		}
+	}
 
 	// Like the entity loader, a mesh named without a folder is the one beside the model.
 	if(cString::GetFilePath(sMeshFile).size() < 1)
@@ -243,6 +284,8 @@ void cLuxAvatarHandler::CreateWorldObjects(const tString& asIdentifier, cAvatar&
 	if(aAvatar.mpMeshEntity->GetAnimationStateNum() > 0)
 		aAvatar.mpMeshEntity->Play(0, true, true);
 
+	ResolvePitchBones(aAvatar, pMesh);
+
 	iCharacterBody *pBody = apMap->GetPhysicsWorld()->CreateCharacterBody(sName, gpBase->mpPlayer->GetBodySize());
 	pBody->SetGravityActive(false);
 	pBody->SetCollideFlags(kCollideFlag);
@@ -277,6 +320,61 @@ void cLuxAvatarHandler::DestroyWorldObjects(cAvatar& aAvatar)
 	aAvatar.mpBody = NULL;
 	aAvatar.mpMeshEntity = NULL;
 	aAvatar.mpMap = NULL;
+}
+
+// Reports a distinct model/fault once per Session, in a SYSTEM Chat Entry and in hpl.log.
+void cLuxAvatarHandler::ReportModelFault(const tString& asMeshFile, const tString& asFault)
+{
+	const tString sKey = asMeshFile + "|" + asFault;
+	if(m_setReportedModelFaults.find(sKey) != m_setReportedModelFaults.end()) return;
+	m_setReportedModelFaults.insert(sKey);
+
+	const tString sMessage = "Avatar model '" + asMeshFile + "': " + asFault;
+	Log("Game Interaction Protocol: %s\n", sMessage.c_str());
+	if(gpBase->mpChatHandler)
+		gpBase->mpChatHandler->DisplayChatEntry(cChatEntry(_W("SYSTEM"), cString::To16Char(sMessage)));
+}
+
+// Resolves the configured pitch bones against the loaded mesh's skeleton and precomputes each bone's
+// model sideways axis in its bind-pose frame (cLuxProp_NPC's pre-animation bone-transform pattern),
+// so pitch can be applied every frame without a name lookup. A missing skeleton or bone is reported
+// but leaves the Avatar visible; it simply renders no pitch through that bone.
+void cLuxAvatarHandler::ResolvePitchBones(cAvatar& aAvatar, cMesh *apMesh)
+{
+	aAvatar.mvPitchBones.clear();
+
+	if(aAvatar.mvPitchBoneConfig.empty())
+	{
+		ReportModelFault(aAvatar.msMeshFile,
+			"no pitch bones configured (MoveHeadBones/MoveHeadBoneMuls missing or mismatched)");
+		return;
+	}
+
+	cSkeleton *pSkeleton = apMesh->GetSkeleton();
+	if(pSkeleton == NULL)
+	{
+		ReportModelFault(aAvatar.msMeshFile, "mesh has no skeleton, so camera pitch cannot be rendered");
+		return;
+	}
+
+	for(size_t i = 0; i < aAvatar.mvPitchBoneConfig.size(); ++i)
+	{
+		const cAvatarPitchBoneConfig& config = aAvatar.mvPitchBoneConfig[i];
+		const int lBoneIndex = pSkeleton->GetBoneIndexByName(config.msName);
+		if(lBoneIndex < 0)
+		{
+			ReportModelFault(aAvatar.msMeshFile, "configured pitch bone '" + config.msName + "' not found");
+			continue;
+		}
+
+		cBone *pBone = pSkeleton->GetBoneByIndex(lBoneIndex);
+		cAvatarPitchBone bone;
+		bone.mlBoneIndex = lBoneIndex;
+		bone.mfWeight = config.mfWeight;
+		bone.mvAxis = cMath::Vector3Normalize(
+			cMath::MatrixMul(cMath::MatrixInverse(pBone->GetWorldTransform()), cVector3f(1, 0, 0)));
+		aAvatar.mvPitchBones.push_back(bone);
+	}
 }
 
 // A dormant Avatar is neither visible nor collidable, and gives off no light.
@@ -336,4 +434,25 @@ void cLuxAvatarHandler::UpdateLantern(cAvatar& aAvatar, const cAvatarRenderedPos
 	aAvatar.mpLantern->SetDiffuseColor(mLanternLight.mColor * fBrightness);
 	aAvatar.mpLantern->SetVisible(fBrightness > 0);
 	if(bAwake) aAvatar.mpLantern->SetMatrix(GetLanternMatrix(*apPose));
+}
+
+// Renders the Pose's camera pitch through the resolved neck and head bones, clamped in total to
+// kMaxPitchDegrees and distributed by their configured weights (cLuxProp_NPC's pre-animation
+// bone-transform pattern). Pre/post bone transforms only apply while an animation is active, so this
+// is inert on a mesh whose only animation failed to load. The pose is NULL while the Avatar is dormant.
+void cLuxAvatarHandler::UpdatePitch(cAvatar& aAvatar, const cAvatarRenderedPose *apPose)
+{
+	if(aAvatar.mpMeshEntity == NULL || apPose == NULL) return;
+
+	const float fPitchRadians = cMath::ToRad(
+		cMath::Clamp(apPose->mfCameraPitchDegrees, -kMaxPitchDegrees, kMaxPitchDegrees));
+	for(size_t i = 0; i < aAvatar.mvPitchBones.size(); ++i)
+	{
+		const cAvatarPitchBone& bone = aAvatar.mvPitchBones[i];
+		cBoneState *pBoneState = aAvatar.mpMeshEntity->GetBoneState(bone.mlBoneIndex);
+		if(pBoneState == NULL) continue;
+		pBoneState->SetUsePreTransform(true);
+		pBoneState->SetPreTransform(
+			cMath::MatrixQuaternion(cQuaternion(fPitchRadians * bone.mfWeight, bone.mvAxis)));
+	}
 }

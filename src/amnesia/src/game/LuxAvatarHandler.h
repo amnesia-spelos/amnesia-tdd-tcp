@@ -6,6 +6,7 @@
 #include "AvatarLanternModel.h"
 #include "AvatarPoseModel.h"
 #include "GameInteractionGateway.h"
+#include <set>
 #include <vector>
 
 //----------------------------------------------
@@ -37,6 +38,8 @@ public:
 
 	// The collide flag of Avatar bodies. Enemy bodies leave it out, so they never collide with Avatars.
 	static const tFlag kCollideFlag = eFlagBit_15;
+	// The neck and head bones' total rendered pitch is clamped to this many degrees either way.
+	static const float kMaxPitchDegrees;
 
 private:
 	struct cAvatarAnimation
@@ -46,11 +49,33 @@ private:
 		float mfSpeed;
 	};
 
+	// A named, weighted pitch bone as configured in the `.ent`'s `MoveHeadBones`/`MoveHeadBoneMuls`
+	// NPC fields (unused by Avatars for their authored purpose, since Avatars bypass the entity
+	// loader and NPC behavior entirely; see ADR 0002).
+	struct cAvatarPitchBoneConfig
+	{
+		cAvatarPitchBoneConfig() : mfWeight(0.0f) {}
+		tString msName;
+		float mfWeight;
+	};
+
+	// A pitch bone resolved against a loaded mesh's skeleton: its index and the model's sideways
+	// axis expressed in its bind-pose frame (cLuxProp_NPC's pre-animation bone-transform pattern).
+	struct cAvatarPitchBone
+	{
+		cAvatarPitchBone() : mlBoneIndex(-1), mfWeight(0.0f) {}
+		int mlBoneIndex;
+		float mfWeight;
+		cVector3f mvAxis;
+	};
+
 	struct cAvatar
 	{
 		cAvatar() : mbMeshBroken(false), mpMap(NULL), mpMeshEntity(NULL), mpBody(NULL), mpLantern(NULL) {}
 		tString msMeshFile;
 		std::vector<cAvatarAnimation> mvAnimations;
+		std::vector<cAvatarPitchBoneConfig> mvPitchBoneConfig;
+		std::vector<cAvatarPitchBone> mvPitchBones;
 		cAvatarPoseModel mPoseModel;
 		// Kept with the Avatar rather than its body, so it lasts across map changes and dormancy.
 		cAvatarCollisionModel mCollision;
@@ -77,17 +102,23 @@ private:
 	typedef tAvatarMap::iterator tAvatarMapIt;
 
 	bool FindModelFiles(const tString& asEntityFile, tString& asMeshFile,
-		std::vector<cAvatarAnimation>& avAnimations);
+		std::vector<cAvatarAnimation>& avAnimations,
+		std::vector<cAvatarPitchBoneConfig>& avPitchBoneConfig);
 	void LoadLanternLight();
 	static double GetLocalTimeMs();
 	void CreateWorldObjects(const tString& asIdentifier, cAvatar& aAvatar, cLuxMap *apMap);
 	void DestroyWorldObjects(cAvatar& aAvatar);
+	void ResolvePitchBones(cAvatar& aAvatar, cMesh *apMesh);
+	void ReportModelFault(const tString& asMeshFile, const tString& asFault);
 	void SetAwake(cAvatar& aAvatar, bool abAwake);
 	void UpdateCollision(cAvatar& aAvatar, bool abAwake);
 	void UpdateLantern(cAvatar& aAvatar, const cAvatarRenderedPose *apPose, float afTimeStep);
+	void UpdatePitch(cAvatar& aAvatar, const cAvatarRenderedPose *apPose);
 
 	tAvatarMap m_mapAvatars;
 	cLanternLight mLanternLight;
+	// Each distinct model/fault pair is reported to the Chat Log and hpl.log only once per Session.
+	std::set<tString> m_setReportedModelFaults;
 };
 
 //----------------------------------------------

@@ -35,6 +35,22 @@ namespace
 		return sample;
 	}
 
+	cAvatarPoseSample PitchPose(double afSenderTimeMs, float afCameraPitchDegrees,
+		unsigned int alTeleportCounter = 0)
+	{
+		cAvatarPoseSample sample = Pose(afSenderTimeMs, 0.0f, 0.0f, alTeleportCounter);
+		sample.mfCameraPitchDegrees = afCameraPitchDegrees;
+		return sample;
+	}
+
+	// Renders the model at a local time and returns the rendered camera pitch, failing if it is dormant.
+	float RenderedPitch(cAvatarPoseModel& aModel, double afLocalTimeMs, const std::string& asDescription)
+	{
+		cAvatarRenderedPose rendered;
+		Expect(aModel.Sample(afLocalTimeMs, kMap, rendered), asDescription + " (awake)");
+		return rendered.mfCameraPitchDegrees;
+	}
+
 	// Renders the model at a local time and returns the rendered x, failing if it is dormant.
 	float RenderedX(cAvatarPoseModel& aModel, double afLocalTimeMs, const std::string& asDescription)
 	{
@@ -242,6 +258,36 @@ int main()
 		Expect(!RenderedLantern(model, 1250.0, "lantern before a distance snap"),
 			"the lantern is held with the Pose before a distance snap");
 		Expect(RenderedLantern(model, 1300.0, "lantern at a distance snap"), "and snaps with the distant Pose");
+	}
+
+	{
+		cAvatarPoseModel model;
+		model.AddPose(PitchPose(5000.0, 0.0f), 1000.0);
+		model.AddPose(PitchPose(5100.0, 20.0f), 1100.0);
+		Expect(Near(RenderedPitch(model, 1100.0, "pitch at a sample"), 0.0f),
+			"camera pitch renders 100 ms behind the newest sample, in the sender's time");
+		Expect(Near(RenderedPitch(model, 1150.0, "pitch interpolates"), 10.0f),
+			"camera pitch interpolates linearly between the samples around the render time");
+	}
+
+	{
+		cAvatarPoseModel model;
+		model.AddPose(PitchPose(5000.0, 0.0f), 1000.0);
+		model.AddPose(PitchPose(5100.0, 20.0f), 1100.0);
+		Expect(Near(RenderedPitch(model, 1300.0, "pitch hold"), 20.0f),
+			"camera pitch holds the last Pose when the buffer runs dry instead of extrapolating");
+		Expect(Near(RenderedPitch(model, 60000.0, "pitch hold"), 20.0f),
+			"camera pitch keeps holding for as long as no Pose arrives");
+	}
+
+	{
+		cAvatarPoseModel model;
+		model.AddPose(PitchPose(5000.0, 0.0f, 7), 1000.0);
+		model.AddPose(PitchPose(5100.0, 30.0f, 8), 1100.0);
+		Expect(Near(RenderedPitch(model, 1199.0, "pitch before a teleport"), 0.0f),
+			"camera pitch is held with the Pose before a teleport instead of gliding across it");
+		Expect(Near(RenderedPitch(model, 1200.0, "pitch at a teleport"), 30.0f),
+			"and snaps with the teleported Pose");
 	}
 
 	std::cout << "Avatar Pose model cases passed\n";
