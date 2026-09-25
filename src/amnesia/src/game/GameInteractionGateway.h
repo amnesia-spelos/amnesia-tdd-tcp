@@ -6,12 +6,101 @@
 #include <string>
 #include <vector>
 
+struct cGameInteractionPosition
+{
+	cGameInteractionPosition(float afX = 0.0f, float afY = 0.0f, float afZ = 0.0f)
+		: mfX(afX), mfY(afY), mfZ(afZ) {}
+	float mfX;
+	float mfY;
+	float mfZ;
+};
+
+struct cGameInteractionVector
+{
+	cGameInteractionVector(float afX = 0.0f, float afY = 0.0f, float afZ = 0.0f)
+		: mfX(afX), mfY(afY), mfZ(afZ) {}
+	float mfX;
+	float mfY;
+	float mfZ;
+};
+
+struct cGameInteractionQuaternion
+{
+	cGameInteractionQuaternion(float afX = 0.0f, float afY = 0.0f, float afZ = 0.0f, float afW = 1.0f)
+		: mfX(afX), mfY(afY), mfZ(afZ), mfW(afW) {}
+	float mfX;
+	float mfY;
+	float mfZ;
+	float mfW;
+};
+
+// Where a body is and how it moves, all in world space.
+struct cGameInteractionBodyState
+{
+	cGameInteractionPosition mPosition;
+	cGameInteractionQuaternion mOrientation;
+	// World units per second.
+	cGameInteractionVector mLinearVelocity;
+	// Degrees per second.
+	cGameInteractionVector mAngularVelocity;
+};
+
+// A body of a map-placed entity, named by the entity's ID in its map file and the body's ID in its
+// entity file.
+struct cGameInteractionBodySample
+{
+	cGameInteractionBodySample() : mlEntityId(0), mlBodyId(0) {}
+	int mlEntityId;
+	int mlBodyId;
+	cGameInteractionBodyState mState;
+};
+
+// The local report, as a reportedbodies State Update carries it, or a Peer's batch of samples, as an
+// entitybodies Command carries it.
+struct cGameInteractionBodySamples
+{
+	cGameInteractionBodySamples() : mlTimeMs(0) {}
+	// Milliseconds on the sending game's monotonic clock.
+	unsigned long long mlTimeMs;
+	std::vector<cGameInteractionBodySample> mvBodies;
+	std::string msMapFile;
+};
+
 enum eGameInteractionEventType
 {
 	eGameInteractionEvent_MapChanged,
 	eGameInteractionEvent_ScriptCallObserved,
 	eGameInteractionEvent_LocalChatSubmitted,
-	eGameInteractionEvent_CustomStoryStarted
+	eGameInteractionEvent_CustomStoryStarted,
+	// The interactions Events, which only a Session granted that Capability receives.
+	eGameInteractionEvent_InteractionStarted,
+	eGameInteractionEvent_InteractionEnded,
+	eGameInteractionEvent_ReportContact,
+	eGameInteractionEvent_ReportSettled,
+	eGameInteractionEvent_ReportBroke
+};
+
+// How the local player's interaction with an entity ended.
+enum eGameInteractionEnding
+{
+	eGameInteractionEnding_Released,
+	eGameInteractionEnding_Thrown,
+	// The body moved out of reach and was dropped.
+	eGameInteractionEnding_TooFar,
+	eGameInteractionEnding_Destroyed
+};
+
+// What an interactions Event reports. The body and ending apply to interaction Events, and the state
+// to a break.
+struct cGameInteractionEntityEvent
+{
+	cGameInteractionEntityEvent()
+		: mlEntityId(0), mlBodyId(0), mEnding(eGameInteractionEnding_Released) {}
+	int mlEntityId;
+	int mlBodyId;
+	eGameInteractionEnding mEnding;
+	cGameInteractionBodyState mState;
+	std::string msMapFile;
 };
 
 class cGameInteractionEvent
@@ -22,11 +111,14 @@ public:
 	cGameInteractionEvent(eGameInteractionEventType aType, const std::wstring& asChatAuthor,
 		const std::wstring& asChatMessage);
 	cGameInteractionEvent(eGameInteractionEventType aType, const std::wstring& asCustomStoryIdentifier);
+	cGameInteractionEvent(eGameInteractionEventType aType, const cGameInteractionEntityEvent& aEntityEvent);
 	eGameInteractionEventType GetType() const { return mType; }
+	bool IsInteractionsEvent() const;
 	const std::string& GetData() const { return msData; }
 	const std::wstring& GetChatAuthor() const { return msChatAuthor; }
 	const std::wstring& GetChatMessage() const { return msChatMessage; }
 	const std::wstring& GetCustomStoryIdentifier() const { return msCustomStoryIdentifier; }
+	const cGameInteractionEntityEvent& GetEntityEvent() const { return mEntityEvent; }
 
 private:
 	eGameInteractionEventType mType;
@@ -34,6 +126,7 @@ private:
 	std::wstring msChatAuthor;
 	std::wstring msChatMessage;
 	std::wstring msCustomStoryIdentifier;
+	cGameInteractionEntityEvent mEntityEvent;
 };
 
 enum eGameInteractionCommandType
@@ -53,23 +146,21 @@ enum eGameInteractionCommandType
 	eGameInteractionCommand_AvatarRemove,
 	eGameInteractionCommand_AvatarCollision,
 	eGameInteractionCommand_AvatarPose,
-	eGameInteractionCommand_LocalPose
+	eGameInteractionCommand_LocalPose,
+	eGameInteractionCommand_ReportedBodies,
+	eGameInteractionCommand_EntityDrive,
+	eGameInteractionCommand_EntityBodies,
+	eGameInteractionCommand_EntityInteracting,
+	eGameInteractionCommand_EntityBreak,
+	eGameInteractionCommand_EntityRelease
 };
 
 enum eGameInteractionCapability
 {
 	eGameInteractionCapability_None = 0,
 	eGameInteractionCapability_Avatars = 1 << 0,
-	eGameInteractionCapability_LocalPose = 1 << 1
-};
-
-struct cGameInteractionPosition
-{
-	cGameInteractionPosition(float afX = 0.0f, float afY = 0.0f, float afZ = 0.0f)
-		: mfX(afX), mfY(afY), mfZ(afZ) {}
-	float mfX;
-	float mfY;
-	float mfZ;
+	eGameInteractionCapability_LocalPose = 1 << 1,
+	eGameInteractionCapability_Interactions = 1 << 2
 };
 
 struct cGameInteractionRotation
@@ -114,12 +205,27 @@ struct cGameInteractionAvatarRequest
 	bool mbCollides;
 };
 
-// What a localpose Command asks for. Invalid means the line was malformed.
-enum eGameInteractionLocalPoseRequest
+// What a localpose or reportedbodies Command asks for. Invalid means the line was malformed.
+enum eGameInteractionSubscriptionRequest
 {
-	eGameInteractionLocalPoseRequest_Invalid,
-	eGameInteractionLocalPoseRequest_Subscribe,
-	eGameInteractionLocalPoseRequest_Unsubscribe
+	eGameInteractionSubscriptionRequest_Invalid,
+	eGameInteractionSubscriptionRequest_Subscribe,
+	eGameInteractionSubscriptionRequest_Unsubscribe
+};
+
+// What a Peer-Driven Entity Command asks for. Every one names the map the Peer means; entitybodies
+// names its entities in its samples instead of the entity field.
+struct cGameInteractionEntityRequest
+{
+	cGameInteractionEntityRequest() : mbValid(false), mlEntityId(0), mbInteracting(false) {}
+	bool mbValid;
+	int mlEntityId;
+	// Whether an entityinteracting Command marks the entity as being interacted with.
+	bool mbInteracting;
+	// The final state an entitybreak Command snaps the entity to.
+	cGameInteractionBodyState mState;
+	cGameInteractionBodySamples mBodies;
+	std::string msMapFile;
 };
 
 enum eGameInteractionCommandClassification
@@ -140,10 +246,12 @@ public:
 	// Capabilities are the recognized requested ones, as a set of eGameInteractionCapability flags.
 	cGameInteractionCommand(eGameInteractionCommandType aType, unsigned int alProtocolVersion,
 		unsigned int alCapabilities);
-	// A localpose Command. The rate is the requested State Update rate in Hz before clamping.
-	cGameInteractionCommand(eGameInteractionCommandType aType, eGameInteractionLocalPoseRequest aRequest,
-		unsigned int alLocalPoseRate);
+	// A localpose or reportedbodies Command. The rate is the requested State Update rate in Hz before
+	// clamping.
+	cGameInteractionCommand(eGameInteractionCommandType aType, eGameInteractionSubscriptionRequest aRequest,
+		unsigned int alSubscriptionRate);
 	cGameInteractionCommand(eGameInteractionCommandType aType, const cGameInteractionAvatarRequest& aAvatarRequest);
+	cGameInteractionCommand(eGameInteractionCommandType aType, const cGameInteractionEntityRequest& aEntityRequest);
 	eGameInteractionCommandType GetType() const { return mType; }
 	eGameInteractionCommandClassification GetClassification() const;
 	const std::string& GetData() const { return msData; }
@@ -152,9 +260,10 @@ public:
 	const std::wstring& GetCustomStoryIdentifier() const { return msCustomStoryIdentifier; }
 	unsigned int GetProtocolVersion() const { return mlProtocolVersion; }
 	unsigned int GetCapabilities() const { return mlCapabilities; }
-	eGameInteractionLocalPoseRequest GetLocalPoseRequest() const { return mLocalPoseRequest; }
-	unsigned int GetLocalPoseRate() const { return mlLocalPoseRate; }
+	eGameInteractionSubscriptionRequest GetSubscriptionRequest() const { return mSubscriptionRequest; }
+	unsigned int GetSubscriptionRate() const { return mlSubscriptionRate; }
 	const cGameInteractionAvatarRequest& GetAvatarRequest() const { return mAvatarRequest; }
+	const cGameInteractionEntityRequest& GetEntityRequest() const { return mEntityRequest; }
 
 private:
 	eGameInteractionCommandType mType;
@@ -164,9 +273,10 @@ private:
 	std::wstring msCustomStoryIdentifier;
 	unsigned int mlProtocolVersion;
 	unsigned int mlCapabilities;
-	eGameInteractionLocalPoseRequest mLocalPoseRequest;
-	unsigned int mlLocalPoseRate;
+	eGameInteractionSubscriptionRequest mSubscriptionRequest;
+	unsigned int mlSubscriptionRate;
 	cGameInteractionAvatarRequest mAvatarRequest;
+	cGameInteractionEntityRequest mEntityRequest;
 };
 
 enum eGameInteractionResponseType
@@ -181,8 +291,9 @@ enum eGameInteractionResponseType
 	eGameInteractionResponse_CustomStories,
 	eGameInteractionResponse_CustomStoryStarting,
 	eGameInteractionResponse_ProtocolNegotiated,
-	eGameInteractionResponse_LocalPoseSubscription,
+	eGameInteractionResponse_Subscription,
 	eGameInteractionResponse_Avatar,
+	eGameInteractionResponse_Entity,
 	eGameInteractionResponse_Rejected,
 	// The Command is not answered, such as a successful avatarpose.
 	eGameInteractionResponse_None
@@ -206,7 +317,22 @@ enum eGameInteractionCommandOutcome
 	eGameInteractionCommandOutcome_AvatarExists,
 	eGameInteractionCommandOutcome_AvatarLimitReached,
 	eGameInteractionCommandOutcome_AvatarModelNotFound,
-	eGameInteractionCommandOutcome_AvatarNotFound
+	eGameInteractionCommandOutcome_AvatarNotFound,
+	// The Command names a map other than the current one, or no map is loaded.
+	eGameInteractionCommandOutcome_WrongMap,
+	eGameInteractionCommandOutcome_EntityNotFound,
+	eGameInteractionCommandOutcome_EntityNotHoldable
+};
+
+// What the game did with a Peer-Driven Entity operation on the current map.
+enum eGameInteractionEntityOutcome
+{
+	eGameInteractionEntityOutcome_Success,
+	// Driving: the map has no such entity. Otherwise: the Session does not drive it, or it has no such
+	// body.
+	eGameInteractionEntityOutcome_NotFound,
+	// The entity was created at runtime or is not a type a player holds.
+	eGameInteractionEntityOutcome_NotHoldable
 };
 
 enum eGameInteractionCustomStoryAvailability
@@ -264,6 +390,21 @@ public:
 	virtual void PoseAvatar(const std::string& asIdentifier, const cGameInteractionPose& aPose) = 0;
 	// Whether the local player collides with the Avatar while it is awake. It is on until turned off.
 	virtual void SetAvatarCollision(const std::string& asIdentifier, bool abCollides) = 0;
+	// The bodies whose motion the local player decides, on the current map. Called only while the
+	// local Pose is available.
+	virtual cGameInteractionBodySamples GetReportedBodies() const = 0;
+	// Peer-Driven Entities are the game's to track, because it ends them itself on a map change or save
+	// load. The gateway calls these only for the current map.
+	virtual eGameInteractionEntityOutcome DriveEntity(int alEntityId) = 0;
+	// Applies every sample it can. On failure, names the entity of the first sample it could not apply.
+	virtual eGameInteractionEntityOutcome DriveEntityBodies(const cGameInteractionBodySamples& aSamples,
+		int& alFailedEntityId) = 0;
+	virtual eGameInteractionEntityOutcome SetDrivenEntityInteracting(int alEntityId, bool abInteracting) = 0;
+	virtual eGameInteractionEntityOutcome BreakDrivenEntity(int alEntityId,
+		const cGameInteractionBodyState& aFinalState) = 0;
+	virtual eGameInteractionEntityOutcome ReleaseDrivenEntity(int alEntityId) = 0;
+	// Called when a Session that drove an entity ends, whatever map is loaded.
+	virtual void ReleaseDrivenEntities() = 0;
 };
 
 class cGameInteractionResponse
@@ -279,8 +420,8 @@ public:
 	const std::string& GetMapFile() const { return msMapFile; }
 	const std::vector<cGameInteractionCustomStory>& GetCustomStories() const { return mvCustomStories; }
 	unsigned int GetCapabilities() const { return mlCapabilities; }
-	eGameInteractionLocalPoseRequest GetLocalPoseRequest() const { return mLocalPoseRequest; }
-	unsigned int GetLocalPoseRate() const { return mlLocalPoseRate; }
+	eGameInteractionSubscriptionRequest GetSubscriptionRequest() const { return mSubscriptionRequest; }
+	unsigned int GetSubscriptionRate() const { return mlSubscriptionRate; }
 	void SetPosition(const cGameInteractionPosition& aPosition) { mPosition = aPosition; }
 	void SetRotation(const cGameInteractionRotation& aRotation) { mRotation = aRotation; }
 	void SetMapFile(const std::string& asMapFile) { msMapFile = asMapFile; }
@@ -289,14 +430,22 @@ public:
 		mvCustomStories = avCustomStories;
 	}
 	void SetCapabilities(unsigned int alCapabilities) { mlCapabilities = alCapabilities; }
-	void SetLocalPoseSubscription(eGameInteractionLocalPoseRequest aRequest, unsigned int alRate)
+	void SetSubscription(eGameInteractionSubscriptionRequest aRequest, unsigned int alRate)
 	{
-		mLocalPoseRequest = aRequest;
-		mlLocalPoseRate = alRate;
+		mSubscriptionRequest = aRequest;
+		mlSubscriptionRate = alRate;
 	}
 	// The Avatar a Response names, or empty when it names none.
 	const std::string& GetAvatarIdentifier() const { return msAvatarIdentifier; }
 	void SetAvatarIdentifier(const std::string& asIdentifier) { msAvatarIdentifier = asIdentifier; }
+	// The entity a Response names, if it names one.
+	bool NamesEntity() const { return mbNamesEntity; }
+	int GetEntityId() const { return mlEntityId; }
+	void SetEntityId(int alEntityId)
+	{
+		mbNamesEntity = true;
+		mlEntityId = alEntityId;
+	}
 
 private:
 	eGameInteractionCommandType mCommandType;
@@ -307,9 +456,11 @@ private:
 	std::string msMapFile;
 	std::vector<cGameInteractionCustomStory> mvCustomStories;
 	unsigned int mlCapabilities;
-	eGameInteractionLocalPoseRequest mLocalPoseRequest;
-	unsigned int mlLocalPoseRate;
+	eGameInteractionSubscriptionRequest mSubscriptionRequest;
+	unsigned int mlSubscriptionRate;
 	std::string msAvatarIdentifier;
+	bool mbNamesEntity;
+	int mlEntityId;
 };
 
 class cGameInteractionGateway

@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iostream>
 #include <locale>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -139,7 +140,140 @@ namespace
 		virtual void RemoveAvatar(const std::string&) {}
 		virtual void PoseAvatar(const std::string&, const cGameInteractionPose&) {}
 		virtual void SetAvatarCollision(const std::string&, bool) {}
+		virtual cGameInteractionBodySamples GetReportedBodies() const
+		{
+			cGameInteractionBodySamples report;
+			report.mlTimeMs = 123456;
+			report.msMapFile = "maps/main/level01.map";
+			cGameInteractionBodySample held;
+			held.mlEntityId = 12;
+			held.mlBodyId = 3;
+			held.mState.mPosition = cGameInteractionPosition(1.25f, -2.5f, 3.75f);
+			held.mState.mOrientation = cGameInteractionQuaternion(0.0f, 0.70710678f, 0.0f, 0.70710678f);
+			held.mState.mLinearVelocity = cGameInteractionVector(0.5f, 0.0f, -1.0f);
+			held.mState.mAngularVelocity = cGameInteractionVector(0.0f, 90.0f, 0.0f);
+			report.mvBodies.push_back(held);
+			cGameInteractionBodySample resting;
+			resting.mlEntityId = -7;
+			report.mvBodies.push_back(resting);
+			return report;
+		}
+		virtual eGameInteractionEntityOutcome DriveEntity(int alEntityId)
+		{
+			if (alEntityId == 404) return eGameInteractionEntityOutcome_NotFound;
+			if (alEntityId == 405) return eGameInteractionEntityOutcome_NotHoldable;
+			msetDrivenEntities.insert(alEntityId);
+			return eGameInteractionEntityOutcome_Success;
+		}
+		virtual eGameInteractionEntityOutcome DriveEntityBodies(const cGameInteractionBodySamples& aSamples,
+			int& alFailedEntityId)
+		{
+			for (size_t index = 0; index < aSamples.mvBodies.size(); ++index)
+			{
+				const cGameInteractionBodySample& sample = aSamples.mvBodies[index];
+				if (msetDrivenEntities.count(sample.mlEntityId) != 0 && sample.mlBodyId != 99) continue;
+				alFailedEntityId = sample.mlEntityId;
+				return eGameInteractionEntityOutcome_NotFound;
+			}
+			return eGameInteractionEntityOutcome_Success;
+		}
+		virtual eGameInteractionEntityOutcome SetDrivenEntityInteracting(int alEntityId, bool)
+		{
+			return msetDrivenEntities.count(alEntityId) != 0 ? eGameInteractionEntityOutcome_Success :
+				eGameInteractionEntityOutcome_NotFound;
+		}
+		virtual eGameInteractionEntityOutcome BreakDrivenEntity(int alEntityId, const cGameInteractionBodyState&)
+		{
+			return ReleaseDrivenEntity(alEntityId);
+		}
+		virtual eGameInteractionEntityOutcome ReleaseDrivenEntity(int alEntityId)
+		{
+			return msetDrivenEntities.erase(alEntityId) != 0 ? eGameInteractionEntityOutcome_Success :
+				eGameInteractionEntityOutcome_NotFound;
+		}
+		virtual void ReleaseDrivenEntities() { msetDrivenEntities.clear(); }
+
+	private:
+		std::set<int> msetDrivenEntities;
 	};
+
+	cGameInteractionBodyState ReadBodyState(std::istringstream& aFields)
+	{
+		double values[13] = {};
+		for (int index = 0; index < 13; ++index) aFields >> values[index];
+		cGameInteractionBodyState state;
+		state.mPosition = cGameInteractionPosition(static_cast<float>(values[0]), static_cast<float>(values[1]),
+			static_cast<float>(values[2]));
+		state.mOrientation = cGameInteractionQuaternion(static_cast<float>(values[3]), static_cast<float>(values[4]),
+			static_cast<float>(values[5]), static_cast<float>(values[6]));
+		state.mLinearVelocity = cGameInteractionVector(static_cast<float>(values[7]),
+			static_cast<float>(values[8]), static_cast<float>(values[9]));
+		state.mAngularVelocity = cGameInteractionVector(static_cast<float>(values[10]),
+			static_cast<float>(values[11]), static_cast<float>(values[12]));
+		return state;
+	}
+
+	// Fixture numbers are read with the classic locale; see ReadClassicNumber.
+	std::istringstream ClassicStream(const std::string& text)
+	{
+		std::istringstream stream(text);
+		stream.imbue(std::locale::classic());
+		return stream;
+	}
+
+	std::string FormatSamples(const cGameInteractionBodySamples& aSamples)
+	{
+		char clockFields[64];
+		sprintf(clockFields, "%llu %u", aSamples.mlTimeMs, static_cast<unsigned int>(aSamples.mvBodies.size()));
+		std::string text = clockFields;
+		for (size_t index = 0; index < aSamples.mvBodies.size(); ++index)
+		{
+			const cGameInteractionBodySample& sample = aSamples.mvBodies[index];
+			text += " " + cGameInteractionProtocolVersion2::FormatEntityIdentifier(sample.mlEntityId) + " " +
+				cGameInteractionProtocolVersion2::FormatEntityIdentifier(sample.mlBodyId) + " " +
+				cGameInteractionProtocolVersion2::FormatBodyState(sample.mState);
+		}
+		return text;
+	}
+
+	// Writes a parsed Peer-Driven Entity Command back in its own grammar, so a fixture shows every
+	// field it was read into.
+	std::string DescribeEntityCommand(const cGameInteractionCommand& aCommand)
+	{
+		const cGameInteractionEntityRequest& request = aCommand.GetEntityRequest();
+		if (!request.mbValid) return "invalid";
+		const std::string entity = cGameInteractionProtocolVersion2::FormatEntityIdentifier(request.mlEntityId);
+		switch (aCommand.GetType())
+		{
+		case eGameInteractionCommand_EntityDrive: return "entitydrive " + entity + " " + request.msMapFile;
+		case eGameInteractionCommand_EntityRelease: return "entityrelease " + entity + " " + request.msMapFile;
+		case eGameInteractionCommand_EntityInteracting:
+			return "entityinteracting " + entity + (request.mbInteracting ? " 1 " : " 0 ") + request.msMapFile;
+		case eGameInteractionCommand_EntityBreak:
+			return "entitybreak " + entity + " " + cGameInteractionProtocolVersion2::FormatBodyState(request.mState) +
+				" " + request.msMapFile;
+		case eGameInteractionCommand_EntityBodies:
+			return "entitybodies " + FormatSamples(request.mBodies) + " " + request.msMapFile;
+		default: return "not an entity Command";
+		}
+	}
+
+	eGameInteractionEventType InteractionEventTypeNamed(const std::string& name)
+	{
+		if (name == "interactionstart") return eGameInteractionEvent_InteractionStarted;
+		if (name == "interactionend") return eGameInteractionEvent_InteractionEnded;
+		if (name == "reportcontact") return eGameInteractionEvent_ReportContact;
+		if (name == "reportsettled") return eGameInteractionEvent_ReportSettled;
+		return eGameInteractionEvent_ReportBroke;
+	}
+
+	eGameInteractionEnding EndingNamed(const std::string& name)
+	{
+		if (name == "thrown") return eGameInteractionEnding_Thrown;
+		if (name == "too-far") return eGameInteractionEnding_TooFar;
+		if (name == "destroyed") return eGameInteractionEnding_Destroyed;
+		return eGameInteractionEnding_Released;
+	}
 
 	std::string Receive(SOCKET peer, long microseconds)
 	{
@@ -303,6 +437,46 @@ int main(int argc, char** argv)
 			actual = cGameInteractionProtocolVersion2::IsValidAvatarIdentifier(ReadString(line, "text")) ?
 				"valid" : "invalid";
 			expected = ReadBool(line, "valid") ? "valid" : "invalid";
+		}
+		else if (kind == "entity_identifier")
+		{
+			int value = 0;
+			const bool valid = cGameInteractionProtocolVersion2::TryParseEntityIdentifier(ReadString(line, "text"), value);
+			actual = valid ? cGameInteractionProtocolVersion2::FormatEntityIdentifier(value) : "invalid";
+			expected = ReadBool(line, "valid") ? ReadString(line, "expected_value") : "invalid";
+		}
+		else if (kind == "entity_command")
+		{
+			actual = DescribeEntityCommand(cGameInteractionProtocolVersion2::ParseCommand(ReadString(line, "line")));
+			expected = ReadBool(line, "valid") ? ReadString(line, "expected_text") : "invalid";
+		}
+		else if (kind == "reported_bodies")
+		{
+			cGameInteractionBodySamples report;
+			std::istringstream(ReadString(line, "time_ms")) >> report.mlTimeMs;
+			report.msMapFile = ReadString(line, "map");
+			std::istringstream entries = ClassicStream(ReadString(line, "entries"));
+			cGameInteractionBodySample sample;
+			while (entries >> sample.mlEntityId >> sample.mlBodyId)
+			{
+				sample.mState = ReadBodyState(entries);
+				report.mvBodies.push_back(sample);
+			}
+			actual = cGameInteractionProtocolVersion2::SerializeReportedBodies(report);
+			expected = ReadString(line, "expected_text");
+		}
+		else if (kind == "interaction_event")
+		{
+			cGameInteractionEntityEvent entityEvent;
+			std::istringstream(ReadString(line, "entity_id")) >> entityEvent.mlEntityId;
+			std::istringstream(ReadString(line, "body_id")) >> entityEvent.mlBodyId;
+			entityEvent.mEnding = EndingNamed(ReadString(line, "ending"));
+			std::istringstream state = ClassicStream(ReadString(line, "state"));
+			entityEvent.mState = ReadBodyState(state);
+			entityEvent.msMapFile = ReadString(line, "map");
+			actual = cGameInteractionProtocolVersion2::SerializeEvent(
+				cGameInteractionEvent(InteractionEventTypeNamed(ReadString(line, "event")), entityEvent));
+			expected = ReadString(line, "expected_text");
 		}
 		else
 		{

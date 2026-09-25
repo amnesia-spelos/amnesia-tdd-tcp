@@ -1,6 +1,8 @@
 #include "GameInteractionProtocolVersion2.h"
 #include "LegacyGameInteractionProtocol.h"
 
+#include <cfloat>
+#include <cmath>
 #include <cstdio>
 
 namespace
@@ -15,9 +17,14 @@ namespace
 	const char* const kNegotiationKeyword = "protocol";
 	const std::string kNegotiationPrefix = std::string(kNegotiationKeyword) + " ";
 	const unsigned long long kMaximumProtocolVersion = 0xFFFFFFFFu;
-	const unsigned long long kLargestParsedLocalPoseRate = 0xFFFFFFFFu;
+	const unsigned long long kLargestParsedSubscriptionRate = 0xFFFFFFFFu;
 	const unsigned long long kMaximumTimeMs = 0xFFFFFFFFFFFFFFFFull;
 	const unsigned long long kMaximumTeleportCounter = 0xFFFFFFFFu;
+	const unsigned long long kLargestEntityIdentifier = 2147483647ull;
+	const unsigned long long kLargestNegatedEntityIdentifier = 2147483648ull;
+	const unsigned long long kMaximumBodyCount = 32;
+	const double kMaximumBodyStateMagnitude = 1.0e9;
+	const double kOrientationLengthTolerance = 0.01;
 
 	struct cCapabilityName
 	{
@@ -29,7 +36,8 @@ namespace
 	const cCapabilityName kCapabilityNames[] =
 	{
 		{ eGameInteractionCapability_Avatars, "avatars" },
-		{ eGameInteractionCapability_LocalPose, "localpose" }
+		{ eGameInteractionCapability_LocalPose, "localpose" },
+		{ eGameInteractionCapability_Interactions, "interactions" }
 	};
 	const int kCapabilityNameCount = sizeof(kCapabilityNames) / sizeof(kCapabilityNames[0]);
 
@@ -46,7 +54,13 @@ namespace
 		{ eGameInteractionCommand_AvatarRemove, "avatarremove" },
 		{ eGameInteractionCommand_AvatarCollision, "avatarcollision" },
 		{ eGameInteractionCommand_AvatarPose, "avatarpose" },
-		{ eGameInteractionCommand_LocalPose, "localpose" }
+		{ eGameInteractionCommand_LocalPose, "localpose" },
+		{ eGameInteractionCommand_ReportedBodies, "reportedbodies" },
+		{ eGameInteractionCommand_EntityDrive, "entitydrive" },
+		{ eGameInteractionCommand_EntityBodies, "entitybodies" },
+		{ eGameInteractionCommand_EntityInteracting, "entityinteracting" },
+		{ eGameInteractionCommand_EntityBreak, "entitybreak" },
+		{ eGameInteractionCommand_EntityRelease, "entityrelease" }
 	};
 	const int kCommandKeywordCount = sizeof(kCommandKeywords) / sizeof(kCommandKeywords[0]);
 
@@ -82,7 +96,21 @@ namespace
 		case eGameInteractionCommandOutcome_AvatarLimitReached: return "limit";
 		case eGameInteractionCommandOutcome_AvatarModelNotFound: return "model-not-found";
 		case eGameInteractionCommandOutcome_AvatarNotFound: return "not-found";
+		case eGameInteractionCommandOutcome_WrongMap: return "wrong-map";
+		case eGameInteractionCommandOutcome_EntityNotFound: return "not-found";
+		case eGameInteractionCommandOutcome_EntityNotHoldable: return "not-holdable";
 		default: return "invalid";
+		}
+	}
+
+	const char* EndingToken(eGameInteractionEnding aEnding)
+	{
+		switch (aEnding)
+		{
+		case eGameInteractionEnding_Thrown: return "thrown";
+		case eGameInteractionEnding_TooFar: return "too-far";
+		case eGameInteractionEnding_Destroyed: return "destroyed";
+		default: return "released";
 		}
 	}
 
@@ -114,31 +142,30 @@ namespace
 	}
 
 	// Any decimal integer is a rate; the gateway clamps it, so rates beyond 32 bits saturate.
-	bool TryParseLocalPoseRate(const std::string& asText, unsigned int& alRate)
+	bool TryParseSubscriptionRate(const std::string& asText, unsigned int& alRate)
 	{
 		if (asText.empty() || asText.find_first_not_of("0123456789") != std::string::npos) return false;
-		unsigned long long rate = kLargestParsedLocalPoseRate;
-		cGameInteractionProtocolVersion2::TryParseUnsignedInteger(asText, kLargestParsedLocalPoseRate, rate);
+		unsigned long long rate = kLargestParsedSubscriptionRate;
+		cGameInteractionProtocolVersion2::TryParseUnsignedInteger(asText, kLargestParsedSubscriptionRate, rate);
 		alRate = static_cast<unsigned int>(rate);
 		return true;
 	}
 
-	cGameInteractionCommand ParseLocalPose(const std::string& asLine)
+	// localpose and reportedbodies: subscribe <hz> or unsubscribe.
+	cGameInteractionCommand ParseSubscription(eGameInteractionCommandType aType, const std::string& asLine)
 	{
 		cGameInteractionFieldReader reader(asLine);
 		std::string keyword;
 		reader.TryReadField(keyword);
 		std::string request;
 		if (reader.TryReadField(request) && request == "unsubscribe" && reader.IsAtEnd())
-			return cGameInteractionCommand(eGameInteractionCommand_LocalPose,
-				eGameInteractionLocalPoseRequest_Unsubscribe, 0);
+			return cGameInteractionCommand(aType, eGameInteractionSubscriptionRequest_Unsubscribe, 0);
 		std::string rateField;
 		unsigned int rate = 0;
 		if (request == "subscribe" && reader.TryReadField(rateField) && reader.IsAtEnd() &&
-			TryParseLocalPoseRate(rateField, rate))
-			return cGameInteractionCommand(eGameInteractionCommand_LocalPose,
-				eGameInteractionLocalPoseRequest_Subscribe, rate);
-		return cGameInteractionCommand(eGameInteractionCommand_LocalPose, eGameInteractionLocalPoseRequest_Invalid, 0);
+			TryParseSubscriptionRate(rateField, rate))
+			return cGameInteractionCommand(aType, eGameInteractionSubscriptionRequest_Subscribe, rate);
+		return cGameInteractionCommand(aType, eGameInteractionSubscriptionRequest_Invalid, 0);
 	}
 
 	// Keeps the Avatar Identifier on the request whenever its field is valid.
@@ -209,6 +236,139 @@ namespace
 		}
 		request.mbValid = valid && reader.IsAtEnd();
 		return cGameInteractionCommand(aType, request);
+	}
+
+	bool TryReadEntityIdentifier(cGameInteractionFieldReader& aReader, int& alIdentifier)
+	{
+		std::string field;
+		return aReader.TryReadField(field) &&
+			cGameInteractionProtocolVersion2::TryParseEntityIdentifier(field, alIdentifier);
+	}
+
+	bool TryReadBoundedNumber(cGameInteractionFieldReader& aReader, double& afValue)
+	{
+		std::string field;
+		return aReader.TryReadField(field) && cGameInteractionProtocolVersion2::TryParseNumber(field, afValue) &&
+			afValue >= -kMaximumBodyStateMagnitude && afValue <= kMaximumBodyStateMagnitude;
+	}
+
+	bool TryReadBoundedVector(cGameInteractionFieldReader& aReader, float& afX, float& afY, float& afZ)
+	{
+		double x = 0.0, y = 0.0, z = 0.0;
+		if (!TryReadBoundedNumber(aReader, x) || !TryReadBoundedNumber(aReader, y) || !TryReadBoundedNumber(aReader, z))
+			return false;
+		afX = static_cast<float>(x);
+		afY = static_cast<float>(y);
+		afZ = static_cast<float>(z);
+		return true;
+	}
+
+	// The orientation is kept as sent; only its length is checked.
+	bool TryReadOrientation(cGameInteractionFieldReader& aReader, cGameInteractionQuaternion& aOrientation)
+	{
+		double x = 0.0, y = 0.0, z = 0.0, w = 0.0;
+		if (!TryReadBoundedNumber(aReader, x) || !TryReadBoundedNumber(aReader, y) ||
+			!TryReadBoundedNumber(aReader, z) || !TryReadBoundedNumber(aReader, w))
+			return false;
+		const double length = sqrt(x * x + y * y + z * z + w * w);
+		if (length < 1.0 - kOrientationLengthTolerance || length > 1.0 + kOrientationLengthTolerance) return false;
+		aOrientation = cGameInteractionQuaternion(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z),
+			static_cast<float>(w));
+		return true;
+	}
+
+	// <x> <y> <z> <qx> <qy> <qz> <qw> <vx> <vy> <vz> <wx> <wy> <wz>
+	bool TryReadBodyState(cGameInteractionFieldReader& aReader, cGameInteractionBodyState& aState)
+	{
+		cGameInteractionPosition& position = aState.mPosition;
+		cGameInteractionVector& linear = aState.mLinearVelocity;
+		cGameInteractionVector& angular = aState.mAngularVelocity;
+		return TryReadBoundedVector(aReader, position.mfX, position.mfY, position.mfZ) &&
+			TryReadOrientation(aReader, aState.mOrientation) &&
+			TryReadBoundedVector(aReader, linear.mfX, linear.mfY, linear.mfZ) &&
+			TryReadBoundedVector(aReader, angular.mfX, angular.mfY, angular.mfZ);
+	}
+
+	// <timeMs> <count> followed by <count> entries of <entityId> <bodyId> <state>.
+	bool TryReadBodySamples(cGameInteractionFieldReader& aReader, cGameInteractionBodySamples& aSamples)
+	{
+		unsigned long long count = 0;
+		if (!TryReadUnsignedInteger(aReader, kMaximumTimeMs, aSamples.mlTimeMs) ||
+			!TryReadUnsignedInteger(aReader, kMaximumBodyCount, count))
+			return false;
+		for (unsigned long long index = 0; index < count; ++index)
+		{
+			cGameInteractionBodySample sample;
+			if (!TryReadEntityIdentifier(aReader, sample.mlEntityId) || !TryReadEntityIdentifier(aReader, sample.mlBodyId) ||
+				!TryReadBodyState(aReader, sample.mState))
+				return false;
+			aSamples.mvBodies.push_back(sample);
+		}
+		return true;
+	}
+
+	// entitydrive <entityId> <map>, entitybodies <timeMs> <count> [<entry>...] <map>,
+	// entityinteracting <entityId> <0|1> <map>, entitybreak <entityId> <state> <map>, and
+	// entityrelease <entityId> <map>.
+	cGameInteractionCommand ParseEntityCommand(eGameInteractionCommandType aType, const std::string& asLine)
+	{
+		cGameInteractionFieldReader reader(asLine);
+		std::string keyword;
+		reader.TryReadField(keyword);
+		cGameInteractionEntityRequest request;
+		bool valid = aType == eGameInteractionCommand_EntityBodies ? TryReadBodySamples(reader, request.mBodies) :
+			TryReadEntityIdentifier(reader, request.mlEntityId);
+		if (valid && aType == eGameInteractionCommand_EntityInteracting)
+			valid = TryReadFlag(reader, request.mbInteracting);
+		else if (valid && aType == eGameInteractionCommand_EntityBreak)
+			valid = TryReadBodyState(reader, request.mState);
+		valid = valid && reader.TryReadRest(request.msMapFile);
+		request.mBodies.msMapFile = request.msMapFile;
+		request.mbValid = valid && reader.IsAtEnd();
+		return cGameInteractionCommand(aType, request);
+	}
+
+	// A writer keeps every number finite and within the reader's bound.
+	double BoundedNumber(float afValue)
+	{
+		const double value = afValue;
+		if (value != value || value > DBL_MAX || value < -DBL_MAX) return 0.0;
+		if (value > kMaximumBodyStateMagnitude) return kMaximumBodyStateMagnitude;
+		if (value < -kMaximumBodyStateMagnitude) return -kMaximumBodyStateMagnitude;
+		return value;
+	}
+
+	std::string FormatBoundedVector(float afX, float afY, float afZ)
+	{
+		return cGameInteractionProtocolVersion2::FormatNumber(BoundedNumber(afX)) + " " +
+			cGameInteractionProtocolVersion2::FormatNumber(BoundedNumber(afY)) + " " +
+			cGameInteractionProtocolVersion2::FormatNumber(BoundedNumber(afZ));
+	}
+
+	// Normalized, so a reader never rejects it; one without a direction is written as the identity.
+	std::string FormatOrientation(const cGameInteractionQuaternion& aOrientation)
+	{
+		double components[4] = { aOrientation.mfX, aOrientation.mfY, aOrientation.mfZ, aOrientation.mfW };
+		double lengthSquared = 0.0;
+		for (int index = 0; index < 4; ++index) lengthSquared += components[index] * components[index];
+		const double length = sqrt(lengthSquared);
+		const bool hasDirection = length > 0.0 && length <= DBL_MAX;
+		std::string text;
+		for (int index = 0; index < 4; ++index)
+		{
+			const double identity = index == 3 ? 1.0 : 0.0;
+			text += (index == 0 ? "" : " ") +
+				cGameInteractionProtocolVersion2::FormatNumber(hasDirection ? components[index] / length : identity);
+		}
+		return text;
+	}
+
+	std::string FormatEntityEvent(const char* apKeyword, const cGameInteractionEntityEvent& aEvent,
+		const std::string& asFields)
+	{
+		return std::string("EVENT ") + apKeyword + " " +
+			cGameInteractionProtocolVersion2::FormatEntityIdentifier(aEvent.mlEntityId) + asFields + " " +
+			aEvent.msMapFile;
 	}
 }
 
@@ -294,6 +454,32 @@ bool cGameInteractionProtocolVersion2::IsValidAvatarIdentifier(const std::string
 	return true;
 }
 
+std::string cGameInteractionProtocolVersion2::FormatEntityIdentifier(int alIdentifier)
+{
+	char formatted[16];
+	sprintf(formatted, "%d", alIdentifier);
+	return formatted;
+}
+
+bool cGameInteractionProtocolVersion2::TryParseEntityIdentifier(const std::string& asText, int& alIdentifier)
+{
+	const bool negative = !asText.empty() && asText[0] == '-';
+	unsigned long long magnitude = 0;
+	if (!TryParseUnsignedInteger(asText.substr(negative ? 1 : 0),
+		negative ? kLargestNegatedEntityIdentifier : kLargestEntityIdentifier, magnitude))
+		return false;
+	alIdentifier = static_cast<int>(negative ? -static_cast<long long>(magnitude) : static_cast<long long>(magnitude));
+	return true;
+}
+
+std::string cGameInteractionProtocolVersion2::FormatBodyState(const cGameInteractionBodyState& aState)
+{
+	return FormatBoundedVector(aState.mPosition.mfX, aState.mPosition.mfY, aState.mPosition.mfZ) + " " +
+		FormatOrientation(aState.mOrientation) + " " +
+		FormatBoundedVector(aState.mLinearVelocity.mfX, aState.mLinearVelocity.mfY, aState.mLinearVelocity.mfZ) + " " +
+		FormatBoundedVector(aState.mAngularVelocity.mfX, aState.mAngularVelocity.mfY, aState.mAngularVelocity.mfZ);
+}
+
 bool cGameInteractionProtocolVersion2::TryParseUnsignedInteger(const std::string& asText,
 	unsigned long long alMaximum, unsigned long long& alValue)
 {
@@ -325,7 +511,12 @@ cGameInteractionCommand cGameInteractionProtocolVersion2::ParseCommand(const std
 	const eGameInteractionCommandType type = reader.TryReadField(keyword) ? CommandTypeFor(keyword) :
 		eGameInteractionCommand_Unknown;
 	if (type == eGameInteractionCommand_Unknown) return cLegacyGameInteractionProtocol::ParseCommand(asLine);
-	if (type == eGameInteractionCommand_LocalPose) return ParseLocalPose(asLine);
+	if (type == eGameInteractionCommand_LocalPose || type == eGameInteractionCommand_ReportedBodies)
+		return ParseSubscription(type, asLine);
+	if (type == eGameInteractionCommand_EntityDrive || type == eGameInteractionCommand_EntityBodies ||
+		type == eGameInteractionCommand_EntityInteracting || type == eGameInteractionCommand_EntityBreak ||
+		type == eGameInteractionCommand_EntityRelease)
+		return ParseEntityCommand(type, asLine);
 	if (type == eGameInteractionCommand_AvatarCreate || type == eGameInteractionCommand_AvatarRemove ||
 		type == eGameInteractionCommand_AvatarCollision || type == eGameInteractionCommand_AvatarPose)
 		return ParseAvatarCommand(type, asLine);
@@ -342,6 +533,8 @@ std::string cGameInteractionProtocolVersion2::SerializeResponse(const cGameInter
 	std::string response = std::string("RESPONSE ") + keyword + " " + OutcomeToken(aResponse.GetOutcome());
 	if (aResponse.GetType() == eGameInteractionResponse_Avatar)
 		return aResponse.GetAvatarIdentifier().empty() ? response : response + " " + aResponse.GetAvatarIdentifier();
+	if (aResponse.GetType() == eGameInteractionResponse_Entity)
+		return aResponse.NamesEntity() ? response + " " + FormatEntityIdentifier(aResponse.GetEntityId()) : response;
 	if (aResponse.GetOutcome() != eGameInteractionCommandOutcome_Success) return response;
 	if (aResponse.GetType() == eGameInteractionResponse_ProtocolNegotiated)
 	{
@@ -350,15 +543,53 @@ std::string cGameInteractionProtocolVersion2::SerializeResponse(const cGameInter
 			if (aResponse.GetCapabilities() & kCapabilityNames[index].mCapability)
 				response += std::string(" ") + kCapabilityNames[index].mpName;
 	}
-	else if (aResponse.GetType() == eGameInteractionResponse_LocalPoseSubscription)
+	else if (aResponse.GetType() == eGameInteractionResponse_Subscription)
 	{
-		if (aResponse.GetLocalPoseRequest() == eGameInteractionLocalPoseRequest_Unsubscribe)
+		if (aResponse.GetSubscriptionRequest() == eGameInteractionSubscriptionRequest_Unsubscribe)
 			return response + " unsubscribe";
 		char rate[16];
-		sprintf(rate, " subscribe %u", aResponse.GetLocalPoseRate());
+		sprintf(rate, " subscribe %u", aResponse.GetSubscriptionRate());
 		response += rate;
 	}
 	return response;
+}
+
+// The report never exceeds the entry limit, but a writer keeps to it regardless.
+std::string cGameInteractionProtocolVersion2::SerializeReportedBodies(const cGameInteractionBodySamples& aBodies)
+{
+	const size_t count = aBodies.mvBodies.size() < kMaximumBodyCount ? aBodies.mvBodies.size() :
+		static_cast<size_t>(kMaximumBodyCount);
+	char clockFields[64];
+	sprintf(clockFields, "STATE reportedbodies %llu %u", aBodies.mlTimeMs, static_cast<unsigned int>(count));
+	std::string stateUpdate = clockFields;
+	for (size_t index = 0; index < count; ++index)
+	{
+		const cGameInteractionBodySample& sample = aBodies.mvBodies[index];
+		stateUpdate += " " + FormatEntityIdentifier(sample.mlEntityId) + " " + FormatEntityIdentifier(sample.mlBodyId) +
+			" " + FormatBodyState(sample.mState);
+	}
+	return stateUpdate + " " + aBodies.msMapFile;
+}
+
+std::string cGameInteractionProtocolVersion2::SerializeEvent(const cGameInteractionEvent& aEvent)
+{
+	const cGameInteractionEntityEvent& entityEvent = aEvent.GetEntityEvent();
+	const std::string body = " " + FormatEntityIdentifier(entityEvent.mlBodyId);
+	switch (aEvent.GetType())
+	{
+	case eGameInteractionEvent_InteractionStarted:
+		return FormatEntityEvent("interactionstart", entityEvent, body);
+	case eGameInteractionEvent_InteractionEnded:
+		return FormatEntityEvent("interactionend", entityEvent, body + " " + EndingToken(entityEvent.mEnding));
+	case eGameInteractionEvent_ReportContact:
+		return FormatEntityEvent("reportcontact", entityEvent, std::string());
+	case eGameInteractionEvent_ReportSettled:
+		return FormatEntityEvent("reportsettled", entityEvent, std::string());
+	case eGameInteractionEvent_ReportBroke:
+		return FormatEntityEvent("reportbroke", entityEvent, " " + FormatBodyState(entityEvent.mState));
+	default:
+		return std::string();
+	}
 }
 
 std::string cGameInteractionProtocolVersion2::SerializeLocalPose(const cGameInteractionPose& aPose)
