@@ -50,7 +50,9 @@ void cLevelEditorWindowMapScript::OnInitLayout()
 	iEditorWindowPopUp::OnInitLayout();
 	mpWindow->SetText(_W("Map Script"));
 
-	mpTextArea = mpSet->CreateWidgetTextArea(cVector3f(10,35,0.1f), mvSize-cVector2f(20,45), mpWindow);
+	// The text area draws its background and text up to 0.5 below its own Z,
+	// so it sits well above the window's background to stay visible
+	mpTextArea = mpSet->CreateWidgetTextArea(cVector3f(10,35,1), mvSize-cVector2f(20,45), mpWindow);
 }
 
 //------------------------------------------------------------------
