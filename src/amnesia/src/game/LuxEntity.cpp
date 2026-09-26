@@ -57,6 +57,7 @@ iLuxEntity::iLuxEntity(const tString &asName, int alID, cLuxMap *apMap, eLuxEnti
 	mbIsLookedAt = false;
 
 	mbInteractionDisabled = false;
+	mbCreatedAtRuntime = false;
 }
 
 //-----------------------------------------------------------------------
@@ -456,6 +457,7 @@ kSerializeVar(mlID,eSerializeType_Int32)
 kSerializeVar(mfMaxFocusDistance, eSerializeType_Float32)
 
 kSerializeVar(mbInteractionDisabled, eSerializeType_Bool)
+kSerializeVar(mbCreatedAtRuntime, eSerializeType_Bool)
 
 kSerializeVar(msCallbackFunc, eSerializeType_String)
 kSerializeVar(msConnectionStateChangeCallback, eSerializeType_String)
@@ -483,6 +485,7 @@ void iLuxEntity::SaveToSaveData(iLuxEntity_SaveData* apSaveData)
 	kCopyToVar(apSaveData, mbActive);
 	kCopyToVar(apSaveData, mlID);
 	kCopyToVar(apSaveData, mbInteractionDisabled);
+	kCopyToVar(apSaveData, mbCreatedAtRuntime);
 
 	kCopyToVar(apSaveData, mfMaxFocusDistance);
 
@@ -521,6 +524,7 @@ void iLuxEntity::LoadFromSaveData(iLuxEntity_SaveData* apSaveData)
 	SetActive(apSaveData->mbActive);
 	kCopyFromVar(apSaveData, mlID);
 	kCopyFromVar(apSaveData, mbInteractionDisabled);
+	kCopyFromVar(apSaveData, mbCreatedAtRuntime);
 
 	kCopyFromVar(apSaveData, mfMaxFocusDistance);
 

@@ -243,6 +243,8 @@ private:
 	tLuxEnemyList mlstEnemies;
 	tLuxEntityList mlstToBeDestroyedEntities;
 	iLuxEntity *mpLatestAddedEntity;
+	// Above zero while CreateEntity creates an entity at runtime.
+	int mlRuntimeCreationDepth;
 	tLuxArea_StickyList mlstStickyAreas;
 
 	tLuxPlayerStartMap m_mapPlayerStartNodes;

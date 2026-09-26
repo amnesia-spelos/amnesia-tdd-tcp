@@ -1,5 +1,6 @@
 #include "LuxSocketServer.h"
 #include "LuxAvatarHandler.h"
+#include "LuxInteractionReportHandler.h"
 #include "LuxMap.h"
 #include "LuxMapHandler.h"
 #include "LuxPlayer.h"
@@ -146,13 +147,14 @@ namespace
 			if(gpBase->mpAvatarHandler) gpBase->mpAvatarHandler->SetAvatarCollision(asIdentifier, abCollides);
 		}
 
-		// The game neither reports interactions nor drives entities yet, so no entity is holdable and
-		// none is ever driven.
 		virtual cGameInteractionBodySamples GetReportedBodies() const
 		{
-			return cGameInteractionBodySamples();
+			if(gpBase->mpInteractionReportHandler==NULL) return cGameInteractionBodySamples();
+			return gpBase->mpInteractionReportHandler->GetReportedBodies();
 		}
 
+		// The game does not drive entities yet, so it refuses every entity as not holdable and
+		// never has one driven.
 		virtual eGameInteractionEntityOutcome DriveEntity(int alEntityId)
 		{
 			return eGameInteractionEntityOutcome_NotHoldable;
