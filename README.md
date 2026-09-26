@@ -51,6 +51,16 @@ The check that an Avatar faces where its posing player looks links the engine's 
 
 You can also open `src/amnesia/src/game/Lux.sln` in Visual Studio, select `Release` and `Win32`, and build the solution after extracting `src/HPL2/dependencies.zip` into `src/HPL2`.
 
+### Building the Level Editor
+
+The Level Editor builds with the same Visual Studio 2026 / `v145` / Win32 toolchain as the game, but it is not part of `build-windows.ps1` since most changes don't touch it. Build it separately:
+
+```powershell
+.\scripts\build-windows-level-editor.ps1
+```
+
+The script builds HPL2 first if its library is missing, then builds the Level Editor. The executable is written to `artifacts/Release/LevelEditor.exe`. To run it, copy it into an existing Amnesia install alongside the game's data files; the editor loads its GUI skin and other assets from there, not from this repository.
+
 ### Manual testing with the Controller
 
 To exercise the Game Interaction Protocol against a running `Amnesia.exe`, use [amnesia-csharp-controller](https://github.com/amnesia-spelos/amnesia-csharp-controller), an internal development tool cloned next to this repository. It sends every typed line to the game unchanged and prints every received line with a timestamp. It needs the .NET 10 SDK:

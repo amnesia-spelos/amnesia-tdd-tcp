@@ -19,6 +19,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v145</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -38,6 +39,8 @@
     <_ProjectFileVersion>10.0.40219.1</_ProjectFileVersion>
     <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Debug\</OutDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Debug\</IntDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(MSBuildProjectDirectory)\..\..\..\..\..\artifacts\$(Configuration)\</OutDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">LevelEditor</TargetName>
     <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</LinkIncremental>
     <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</LinkIncremental>
     <CodeAnalysisRuleSet Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">AllRules.ruleset</CodeAnalysisRuleSet>
@@ -83,8 +86,7 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>HPL2_2010.lib;fltk.lib;wsock32.lib;comctl32.lib;xinput.lib;fbxsdk-2012.2-md.lib;zlibwapi.lib;Wininet.lib;dbghelp.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <OutputFile>../../../redist/LevelEditor.exe</OutputFile>
+      <AdditionalDependencies>HPL2_2010.lib;fltk.lib;wsock32.lib;comctl32.lib;xinput.lib;zlibwapi.lib;Wininet.lib;dbghelp.lib;legacy_stdio_definitions.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>..\..\..\lib; ..\..\..\dependencies\lib\win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>
@@ -93,11 +95,10 @@
       <TargetMachine>MachineX86</TargetMachine>
     </Link>
     <PreBuildEvent>
-      <Command>
-      </Command>
+      <Command>if not exist "$(ProjectDir)..\..\..\_temp\LevelEditor\Release" mkdir "$(ProjectDir)..\..\..\_temp\LevelEditor\Release"</Command>
     </PreBuildEvent>
     <PreLinkEvent>
-      <Command>cl $(ProjectDir)BuildID_LevelEditor_Win32.cpp /O2 /I "..\..\..\core\include" /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /D "MEMORY_MANAGER_ACTIVE" /D "_MBCS" /FD /EHsc /MD /GS /Fo"..\..\..\_temp\LevelEditor\Release/" /Fd"..\..\..\_temp\LevelEditor\Release/vc70.pdb" /W3 /nologo /c /Wp64 /Zi /TP</Command>
+      <Command>cl $(ProjectDir)BuildID_LevelEditor_Win32.cpp /O2 /I "..\..\..\core\include" /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /D "MEMORY_MANAGER_ACTIVE" /D "_MBCS" /FD /EHsc /MD /GS /Fo"..\..\..\_temp\LevelEditor\Release/" /Fd"..\..\..\_temp\LevelEditor\Release/vc70.pdb" /W3 /nologo /c /Zi /TP</Command>
     </PreLinkEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
