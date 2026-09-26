@@ -380,6 +380,38 @@ namespace
 		model.EndInteraction(eGameInteractionEnding_Released, 10000.0);
 		Expect(TakeEvents(model).empty(), "clearing forgets the interaction");
 	}
+
+	void TestADrivenEntityLeavesTheReportWithoutEvents()
+	{
+		cFakeWorld world;
+		world.Place(12);
+		world.Place(13);
+		cLocalInteractionReportModel model;
+		model.StartInteraction(12, 0, false, 1);
+		model.EndInteraction(eGameInteractionEnding_Released, 0.0);
+		model.StartInteraction(13, 0, false, 1);
+		model.Update(world, 0.0);
+		TakeEvents(model);
+
+		model.StopReporting(12);
+		model.Update(world, 16.0);
+		Expect(!Reports(model, 12), "a settling entity leaves the report when it is no longer the local game's");
+		Expect(Reports(model, 13), "other reported entities stay");
+		Expect(TakeEvents(model).empty(), "leaving the report this way raises nothing");
+		model.Update(world, 10000.0);
+		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
+		Expect(vEvents.empty(), "the held entity never settles and the stopped one raises nothing later");
+
+		model.StopReporting(13);
+		model.Update(world, 10016.0);
+		Expect(model.GetReportedBodies().empty(), "a held entity leaves the report too");
+		model.EndInteraction(eGameInteractionEnding_Released, 10016.0);
+		vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_InteractionEnded, 13),
+			"its interaction still ends");
+		model.Update(world, 20000.0);
+		Expect(TakeEvents(model).empty(), "and it does not come back to settle");
+	}
 }
 
 int main()
@@ -399,6 +431,7 @@ int main()
 	TestRuntimeCreatedEntitiesNeverEnterTheReport();
 	TestAnEntityWhoseBodiesDoNotFitIsNotReported();
 	TestClearingEmptiesTheReportWithoutEvents();
+	TestADrivenEntityLeavesTheReportWithoutEvents();
 	std::cout << "Local interaction report model cases passed\n";
 	return 0;
 }

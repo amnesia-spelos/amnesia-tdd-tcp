@@ -173,6 +173,13 @@ public:
 	void SetCreatedAtRuntime(bool abX){ mbCreatedAtRuntime = abX; }
 	bool IsCreatedAtRuntime(){ return mbCreatedAtRuntime; }
 
+	// Whether a Peer drives the entity's motion (ADR 0005). Unlike the script's interaction-disabled
+	// flag, it is not saved: a Peer-Driven Entity ends with its Session, map, or save load.
+	void SetPeerDriven(bool abX){ mbPeerDriven = abX; }
+	bool IsPeerDriven(){ return mbPeerDriven; }
+	// Whether a script or a Peer keeps the local player from interacting with the entity.
+	bool IsLocalInteractionBlocked(){ return mbInteractionDisabled || mbPeerDriven; }
+
 	float GetMaxFocusDistance(){ return mfMaxFocusDistance;}
 	virtual eLuxFocusCrosshair GetFocusCrosshair(iPhysicsBody *apBody, const cVector3f &avPos)=0;
 
@@ -240,6 +247,7 @@ protected:
 
 	bool mbInteractionDisabled;
 	bool mbCreatedAtRuntime;
+	bool mbPeerDriven;
 
 	tLuxCollideCallbackContainerList mlstCollideCallbackParents;
 

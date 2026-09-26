@@ -1,6 +1,7 @@
 #include "LuxSocketServer.h"
 #include "LuxAvatarHandler.h"
 #include "LuxInteractionReportHandler.h"
+#include "LuxPeerDrivenEntityHandler.h"
 #include "LuxMap.h"
 #include "LuxMapHandler.h"
 #include "LuxPlayer.h"
@@ -153,26 +154,26 @@ namespace
 			return gpBase->mpInteractionReportHandler->GetReportedBodies();
 		}
 
-		// The game does not drive entities yet, so it refuses every entity as not holdable and
-		// never has one driven.
 		virtual eGameInteractionEntityOutcome DriveEntity(int alEntityId)
 		{
-			return eGameInteractionEntityOutcome_NotHoldable;
+			if(gpBase->mpPeerDrivenEntityHandler==NULL) return eGameInteractionEntityOutcome_NotHoldable;
+			return gpBase->mpPeerDrivenEntityHandler->DriveEntity(alEntityId);
 		}
 
 		virtual eGameInteractionEntityOutcome DriveEntityBodies(const cGameInteractionBodySamples& aSamples,
 			int& alFailedEntityId)
 		{
-			if(aSamples.mvBodies.empty()) return eGameInteractionEntityOutcome_Success;
-			alFailedEntityId = aSamples.mvBodies[0].mlEntityId;
-			return eGameInteractionEntityOutcome_NotFound;
+			if(gpBase->mpPeerDrivenEntityHandler==NULL) return eGameInteractionEntityOutcome_NotFound;
+			return gpBase->mpPeerDrivenEntityHandler->DriveEntityBodies(aSamples, alFailedEntityId);
 		}
 
 		virtual eGameInteractionEntityOutcome SetDrivenEntityInteracting(int alEntityId, bool abInteracting)
 		{
-			return eGameInteractionEntityOutcome_NotFound;
+			if(gpBase->mpPeerDrivenEntityHandler==NULL) return eGameInteractionEntityOutcome_NotFound;
+			return gpBase->mpPeerDrivenEntityHandler->SetEntityInteracting(alEntityId, abInteracting);
 		}
 
+		// The game does not break Peer-Driven Entities yet, so it has none to break.
 		virtual eGameInteractionEntityOutcome BreakDrivenEntity(int alEntityId,
 			const cGameInteractionBodyState& aFinalState)
 		{
@@ -181,11 +182,13 @@ namespace
 
 		virtual eGameInteractionEntityOutcome ReleaseDrivenEntity(int alEntityId)
 		{
-			return eGameInteractionEntityOutcome_NotFound;
+			if(gpBase->mpPeerDrivenEntityHandler==NULL) return eGameInteractionEntityOutcome_NotFound;
+			return gpBase->mpPeerDrivenEntityHandler->ReleaseEntity(alEntityId);
 		}
 
 		virtual void ReleaseDrivenEntities()
 		{
+			if(gpBase->mpPeerDrivenEntityHandler) gpBase->mpPeerDrivenEntityHandler->ReleaseEntities();
 		}
 
 	private:

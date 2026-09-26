@@ -57,6 +57,10 @@ public:
 	virtual void LoadFromSaveDataBeforeEnter(cLuxMap *apMap, iLuxPlayerState_SaveData* apSaveData);
 	virtual void LoadFromSaveDataAfterEnter(cLuxMap *apMap, iLuxPlayerState_SaveData* apSaveData);
 
+	iLuxProp* GetCurrentProp(){ return mpCurrentProp; }
+	// Lets go of the prop, as the player releasing it does.
+	void EndInteraction();
+
 protected:
 	void SetupInteractVars();
 	void ResetInteractVars();

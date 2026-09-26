@@ -4,10 +4,6 @@
 
 namespace
 {
-	// A Pose whose clock disagrees with the alignment by more than this starts a new alignment.
-	const double kClockResyncMs = 1000.0;
-	// How much of the latency above the alignment each Pose adopts.
-	const double kClockDriftRate = 0.05;
 	const size_t kMaxBufferedPoses = 256;
 	const float kPi = 3.14159265358979323846f;
 
@@ -54,7 +50,7 @@ namespace
 const double cAvatarPoseModel::kRenderDelayMs = 100.0;
 const float cAvatarPoseModel::kSnapDistanceMeters = 3.0f;
 
-cAvatarPoseModel::cAvatarPoseModel() : mfClockOffsetMs(0.0)
+cAvatarPoseModel::cAvatarPoseModel()
 {
 }
 
@@ -66,20 +62,13 @@ void cAvatarPoseModel::AddPose(const cAvatarPoseSample& aPose, double afLocalTim
 		// Poses from different maps are never interpolated between, and a clock far behind the
 		// newest Pose has started over, as when the sender restarts or a recording is replayed.
 		if (aPose.msMapFile != newest.msMapFile ||
-			newest.mfSenderTimeMs - aPose.mfSenderTimeMs > kClockResyncMs)
+			newest.mfSenderTimeMs - aPose.mfSenderTimeMs > cSenderClock::kResyncMs)
 			mvPoses.clear();
 		// Out-of-order and duplicate Poses.
 		else if (aPose.mfSenderTimeMs <= newest.mfSenderTimeMs) return;
 	}
 
-	// The least delayed Pose is the closest to the sender's clock; later ones only add latency, and
-	// the alignment drifts towards them slowly, so that a lasting rise in latency is adopted.
-	// A Pose far later than that means the sender's clock stood still, so it is aligned anew.
-	const double fClockOffsetMs = afLocalTimeMs - aPose.mfSenderTimeMs;
-	if (mvPoses.empty() || fClockOffsetMs < mfClockOffsetMs || fClockOffsetMs - mfClockOffsetMs > kClockResyncMs)
-		mfClockOffsetMs = fClockOffsetMs;
-	else
-		mfClockOffsetMs += (fClockOffsetMs - mfClockOffsetMs) * kClockDriftRate;
+	mClock.Align(aPose.mfSenderTimeMs, afLocalTimeMs, mvPoses.empty());
 	mvPoses.push_back(aPose);
 	// Sampling trims the buffer, but nothing samples it while the game is not updating.
 	if (mvPoses.size() > kMaxBufferedPoses) mvPoses.pop_front();
@@ -95,7 +84,7 @@ bool cAvatarPoseModel::Sample(double afLocalTimeMs, const std::string& asCurrent
 		return false;
 	}
 
-	const double fRenderTimeMs = afLocalTimeMs - mfClockOffsetMs - kRenderDelayMs;
+	const double fRenderTimeMs = afLocalTimeMs - mClock.GetOffsetMs() - kRenderDelayMs;
 	// Only the latest Pose the render time has reached, and those after it, are still needed.
 	while (mvPoses.size() > 1 && mvPoses[1].mfSenderTimeMs <= fRenderTimeMs) mvPoses.pop_front();
 

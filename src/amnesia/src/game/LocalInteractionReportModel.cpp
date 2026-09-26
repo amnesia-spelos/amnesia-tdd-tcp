@@ -46,6 +46,21 @@ void cLocalInteractionReportModel::EndInteraction(eGameInteractionEnding aEnding
 	}
 }
 
+void cLocalInteractionReportModel::StopReporting(int alEntityId)
+{
+	for (size_t i = 0; i < mvReported.size(); ++i)
+	{
+		if (mvReported[i].mlEntityId != alEntityId) continue;
+		mvReported.erase(mvReported.begin() + i);
+		break;
+	}
+	for (size_t i = 0; i < mvReportedBodies.size();)
+	{
+		if (mvReportedBodies[i].mlEntityId == alEntityId) mvReportedBodies.erase(mvReportedBodies.begin() + i);
+		else ++i;
+	}
+}
+
 void cLocalInteractionReportModel::Update(const iLocalInteractionWorld& aWorld, double afTimeMs)
 {
 	mvReportedBodies.clear();

@@ -58,6 +58,7 @@ iLuxEntity::iLuxEntity(const tString &asName, int alID, cLuxMap *apMap, eLuxEnti
 
 	mbInteractionDisabled = false;
 	mbCreatedAtRuntime = false;
+	mbPeerDriven = false;
 }
 
 //-----------------------------------------------------------------------

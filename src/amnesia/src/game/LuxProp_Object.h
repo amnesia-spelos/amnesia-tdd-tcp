@@ -97,6 +97,8 @@ public:
 	//General
 	bool CanInteract(iPhysicsBody *apBody);
 	bool OnInteract(iPhysicsBody *apBody, const cVector3f &avPos);
+
+	eLuxObjectType GetObjectType(){ return mObjectType; }
 	
 	void OnSetupAfterLoad(cWorld *apWorld);
 

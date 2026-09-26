@@ -1,6 +1,8 @@
 #ifndef AVATAR_POSE_MODEL_H
 #define AVATAR_POSE_MODEL_H
 
+#include "SenderClock.h"
+
 #include <deque>
 #include <string>
 
@@ -65,8 +67,7 @@ public:
 
 private:
 	std::deque<cAvatarPoseSample> mvPoses;
-	// Local time minus sender time.
-	double mfClockOffsetMs;
+	cSenderClock mClock;
 };
 
 #endif // AVATAR_POSE_MODEL_H

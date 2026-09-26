@@ -56,6 +56,10 @@ public:
 	// leaves it.
 	void EndInteraction(eGameInteractionEnding aEnding, double afTimeMs);
 
+	// The entity leaves the report without an Event, as when a Peer drives it. An interaction with it
+	// still ends as usual, but the entity does not return to the report to settle.
+	void StopReporting(int alEntityId);
+
 	// Reads every reported entity's bodies, and settles the released ones whose bodies all sleep or
 	// that reached the Settling cap. An entity the world no longer has leaves the report.
 	void Update(const iLocalInteractionWorld& aWorld, double afTimeMs);

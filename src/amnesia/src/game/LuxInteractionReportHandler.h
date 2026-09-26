@@ -18,6 +18,8 @@ public:
 
 	void OnLocalInteractionStarted(iLuxProp *apProp, iPhysicsBody *apBody);
 	void OnLocalInteractionEnded(eGameInteractionEnding aEnding);
+	// The entity is no longer the local game's to report, because a Peer drives it.
+	void StopReporting(int alEntityId);
 
 	// The bodies the latest update read, stamped with its game time and the current map.
 	cGameInteractionBodySamples GetReportedBodies() const;

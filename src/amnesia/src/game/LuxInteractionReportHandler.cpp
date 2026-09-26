@@ -65,6 +65,11 @@ void cLuxInteractionReportHandler::OnLocalInteractionEnded(eGameInteractionEndin
 	PublishEvents();
 }
 
+void cLuxInteractionReportHandler::StopReporting(int alEntityId)
+{
+	mModel.StopReporting(alEntityId);
+}
+
 cGameInteractionBodySamples cLuxInteractionReportHandler::GetReportedBodies() const
 {
 	cGameInteractionBodySamples samples;

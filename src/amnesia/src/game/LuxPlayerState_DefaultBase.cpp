@@ -180,7 +180,7 @@ cGuiGfxElement* iLuxPlayerState_DefaultBase::GetCrosshair()
 	if(mpEntityInFocus && mfFocusDistance < mpEntityInFocus->GetMaxFocusDistance())
 	{
 		eLuxFocusCrosshair crossHair = mpEntityInFocus->GetFocusCrosshair(mpBodyInFocus, mvFocusPos);
-		if(mpEntityInFocus->GetInteractionDisabled()) crossHair = eLuxFocusCrosshair_Default;
+		if(mpEntityInFocus->IsLocalInteractionBlocked()) crossHair = eLuxFocusCrosshair_Default;
 
 		if(	crossHair == eLuxFocusCrosshair_LastEnum ||
 			crossHair == eLuxFocusCrosshair_Default)
@@ -228,7 +228,7 @@ bool iLuxPlayerState_DefaultBase::ShowOutlineOnEntity(iLuxEntity *apEntity, iPhy
 
 	iLuxProp *pProp = static_cast<iLuxProp*>(apEntity);
 
-	return pProp->GetPropType()==eLuxPropType_Item && apEntity->CanInteract(apBody) && apEntity->GetInteractionDisabled()==false;
+	return pProp->GetPropType()==eLuxPropType_Item && apEntity->CanInteract(apBody) && apEntity->IsLocalInteractionBlocked()==false;
 }
 
 //-----------------------------------------------------------------------
@@ -236,7 +236,7 @@ bool iLuxPlayerState_DefaultBase::ShowOutlineOnEntity(iLuxEntity *apEntity, iPhy
 bool iLuxPlayerState_DefaultBase::CanInteractWithEntity()
 {
 	if(	mpEntityInFocus && mfFocusDistance < mpEntityInFocus->GetMaxFocusDistance() && 
-		mpEntityInFocus->CanInteract(mpBodyInFocus) && mpEntityInFocus->GetInteractionDisabled()==false)
+		mpEntityInFocus->CanInteract(mpBodyInFocus) && mpEntityInFocus->IsLocalInteractionBlocked()==false)
 	{
 		return true;
 	}

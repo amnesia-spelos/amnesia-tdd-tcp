@@ -60,6 +60,11 @@ void iLuxPlayerState_Interact::OnDestroyEntity(iLuxEntity *apEntity)
 	}
 }
 
+void iLuxPlayerState_Interact::EndInteraction()
+{
+	gpBase->mpPlayer->ChangeState(mPreviousState);
+}
+
 void iLuxPlayerState_Interact::OnAttachBodyToStickyArea(iPhysicsBody *apBody)
 {
 	bool bBodyInProp = false;
