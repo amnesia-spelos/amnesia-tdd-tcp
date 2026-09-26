@@ -42,6 +42,7 @@ class iEditorWorld;
 
 class cEditorWindowEntitySearch;
 class cLevelEditorWindowGroup;
+class cLevelEditorWindowMapScript;
 
 class iEditorWindowLowerToolbar;
 class iEditorWindowEditModeSidebar;
@@ -159,6 +160,10 @@ protected:
 	cWidgetMainMenu* CreateMainMenu();
 	void UpdateEditMenu();
 
+	tWString GetMapScriptFilename();
+	void Command_ViewMapScript();
+	void CloseMapScriptWindow();
+
 	///////////////////////////
 	// Implemented functions
 	void OnSetUpDirectories();
@@ -208,6 +213,9 @@ protected:
 	cWidgetMenuItem* mpMainMenuOptions;
 	cWidgetMenuItem* mpMainMenuCompound;
 
+	// Script menu
+	cWidgetMenuItem* mpMainMenuScriptView;
+
 
 	
 	////////////////////////////////
@@ -217,6 +225,7 @@ protected:
 	cEditorWindowTextureBrowser* mpWindowTextureBrowser;
 
 	cLevelEditorWindowGroup* mpWindowGroup;
+	cLevelEditorWindowMapScript* mpWindowMapScript;
 
 
 	////////////////////////////////

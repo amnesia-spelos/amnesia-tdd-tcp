@@ -208,6 +208,7 @@
     <ClCompile Include="LevelEditorWindow.cpp" />
     <ClCompile Include="LevelEditorWindowGroup.cpp" />
     <ClCompile Include="LevelEditorWindowLevelSettings.cpp" />
+    <ClCompile Include="LevelEditorWindowMapScript.cpp" />
     <ClCompile Include="LevelEditorWorld.cpp" />
     <ClCompile Include="..\common\DirectoryHandler.cpp" />
     <ClCompile Include="..\common\Editor.cpp" />
@@ -323,6 +324,7 @@
     <ClInclude Include="LevelEditorWindow.h" />
     <ClInclude Include="LevelEditorWindowGroup.h" />
     <ClInclude Include="LevelEditorWindowLevelSettings.h" />
+    <ClInclude Include="LevelEditorWindowMapScript.h" />
     <ClInclude Include="LevelEditorWorld.h" />
     <ClInclude Include="..\common\DirectoryHandler.h" />
     <ClInclude Include="..\common\EditMode.h" />

@@ -64,6 +64,7 @@ using namespace hpl;
 
 #include "LevelEditorWindowGroup.h"
 #include "LevelEditorWindowLevelSettings.h"
+#include "LevelEditorWindowMapScript.h"
 #include "LevelEditorWorld.h"
 #include "LevelEditorActions.h"
 
@@ -128,6 +129,7 @@ void cLevelEditorGroup::SetVisibility(bool abX)
 
 cLevelEditor::cLevelEditor() : iEditorBase(_W("Maps"), _W("*.map"))
 {
+	mpWindowMapScript = NULL;
 }
 
 cLevelEditor::~cLevelEditor()
@@ -165,6 +167,11 @@ void cLevelEditor::AppSpecificReset()
 	cLevelEditorGroup group(this,0,"None");
 	group.SetVisibility(true);
 	mmapGroups.insert(pair<unsigned int, cLevelEditorGroup>(0,group));
+
+	///////////////////////////////////////
+	// Map Script
+	// The shown script belongs to the map being replaced.
+	CloseMapScriptWindow();
 }
 
 //--------------------------------------------------------------------
@@ -346,6 +353,12 @@ bool cLevelEditor::MainMenu_ItemClick(iWidget* apWidget, const cGuiMessageData& 
 		mpWindowOptions->SetActive(true);
 		AddWindow(mpWindowOptions);
 	}
+	///////////////////////////////////////////////
+	// Menu Item "Script.View"
+	else if(apWidget==mpMainMenuScriptView)
+	{
+		Command_ViewMapScript();
+	}
 
 
 	return true;
@@ -494,6 +507,76 @@ void cLevelEditor::UpdateEditMenu()
 	mpMainMenuDelete->SetEnabled(bHasSelectedObjects && mpSelection->IsDeletable());
 	mpMainMenuClone->SetEnabled(bHasSelectedObjects && mpSelection->IsCloneable());
 	mpMainMenuCompound->SetEnabled(mpSelection->GetNumEntities()>0);
+
+	tWString sMapScript = GetMapScriptFilename();
+	mpMainMenuScriptView->SetEnabled(sMapScript!=_W("") && cPlatform::FileExists(sMapScript));
+}
+
+//--------------------------------------------------------------------
+
+tWString cLevelEditor::GetMapScriptFilename()
+{
+	if(msSaveFilename==_W(""))
+		return _W("");
+
+	return cString::SetFileExtW(msSaveFilename, _W("hps"));
+}
+
+//--------------------------------------------------------------------
+
+static bool ReadTextDocument(const tWString& asFilename, cTextDocument& aDocument)
+{
+	FILE* pFile = cPlatform::OpenFile(asFilename, _W("rb"));
+	if(pFile==NULL)
+		return false;
+
+	std::vector<char> vBytes;
+	char vBuffer[4096];
+	size_t lRead;
+	while((lRead = fread(vBuffer, 1, sizeof(vBuffer), pFile)) > 0)
+		vBytes.insert(vBytes.end(), vBuffer, vBuffer+lRead);
+
+	bool bFailed = ferror(pFile)!=0;
+	fclose(pFile);
+	if(bFailed)
+		return false;
+
+	aDocument.SetBytes(vBytes.empty() ? NULL : &vBytes[0], vBytes.size());
+	return true;
+}
+
+//--------------------------------------------------------------------
+
+void cLevelEditor::Command_ViewMapScript()
+{
+	tWString sMapScript = GetMapScriptFilename();
+
+	cTextDocument document;
+	if(sMapScript==_W("") || ReadTextDocument(sMapScript, document)==false)
+	{
+		ShowMessageBox(_W("Error"), _W("Could not read the Map Script ") + sMapScript, _W("OK"), _W(""), NULL, NULL);
+		// Re-check the Script menu now that the file is known to be gone
+		SetLayoutNeedsUpdate(true);
+		return;
+	}
+
+	if(mpWindowMapScript==NULL)
+	{
+		mpWindowMapScript = hplNew(cLevelEditorWindowMapScript,(this, mpSet->GetVirtualSize()*0.7f));
+		mpWindowMapScript->Init();
+		AddWindow(mpWindowMapScript);
+	}
+
+	mpWindowMapScript->SetScript(sMapScript, document);
+	mpWindowMapScript->SetActive(true);
+}
+
+//--------------------------------------------------------------------
+
+void cLevelEditor::CloseMapScriptWindow()
+{
+	if(mpWindowMapScript && mpWindowMapScript->IsActive())
+		mpWindowMapScript->SetActive(false);
 }
 
 //--------------------------------------------------------------------
@@ -902,6 +985,13 @@ cWidgetMainMenu* cLevelEditor::CreateMainMenu()
 	// Options
 	mpMainMenuOptions = pItem->AddMenuItem(_W("Options"));
 	mpMainMenuOptions->AddCallback(eGuiMessage_ButtonPressed,this,kGuiCallback(MainMenu_ItemClick));
+
+	///////////////////////////////////////////////////////////////
+	// Script
+	pItem = mpMainMenu->AddMenuItem(_W("Script"));
+
+	mpMainMenuScriptView = pItem->AddMenuItem(_W("View"));
+	mpMainMenuScriptView->AddCallback(eGuiMessage_ButtonPressed,this,kGuiCallback(MainMenu_ItemClick));
 
 	return mpMainMenu;
 }
