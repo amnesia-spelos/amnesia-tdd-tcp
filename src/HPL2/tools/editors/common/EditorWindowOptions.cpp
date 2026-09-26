@@ -146,7 +146,7 @@ void cEditorWindowOptions::OnInitLayout()
 	vPos.x = 15;
 	vPos.y += mpInpRotateSnap->GetSize().y + 10;
 
-	mpInpNativeCursor = CreateInputBool(vPos, _W("Use native OS cursor"), "", pTab);
+	mpInpSoftwareCursor = CreateInputBool(vPos, _W("Use software cursor rendering"), "", pTab);
 }
 
 //-----------------------------------------------------------------
@@ -187,7 +187,7 @@ void cEditorWindowOptions::OnUpdate(float afTimeStep)
 	mpInpMouseWheelZoom->SetValue(cString::ToFloat(mpEditor->GetSetting("MouseWheelZoom").c_str(), 0.1f), false);
 	mpInpRotateSnap->SetValue(cMath::ToDeg(cEditorSelection::GetRotateSnap()), false);
 	mpInpScaleSnap->SetValue(cEditorSelection::GetScaleSnap(), false);
-	mpInpNativeCursor->SetValue(cString::ToBool(mpEditor->GetSetting("NativeCursor").c_str(), false), false);
+	mpInpSoftwareCursor->SetValue(cString::ToBool(mpEditor->GetSetting("SoftwareCursor").c_str(), false), false);
 }
 
 //-----------------------------------------------------------------
@@ -254,9 +254,9 @@ bool cEditorWindowOptions::WindowSpecificInputCallback(iEditorInput* apInput)
 	else if(apInput==mpInpScaleSnap)
 		cEditorSelection::SetScaleSnap(mpInpScaleSnap->GetValue());
 
-	else if(apInput==mpInpNativeCursor)
+	else if(apInput==mpInpSoftwareCursor)
 	{
-		mpEditor->SetSettingValue("NativeCursor", mpInpNativeCursor->GetValue() ? "true" : "false");
+		mpEditor->SetSettingValue("SoftwareCursor", mpInpSoftwareCursor->GetValue() ? "true" : "false");
 		mpEditor->ApplyCursorMode();
 	}
 	

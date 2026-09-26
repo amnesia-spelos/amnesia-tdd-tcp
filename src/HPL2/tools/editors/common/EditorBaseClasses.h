@@ -356,7 +356,7 @@ public:
 	const tString& GetSetting(const tString& asSetting) { return mmapEditorSettings[asSetting]; }
 
 	/**
-	 * Shows the OS cursor or the GUI-drawn pointer, from the "NativeCursor" setting.
+	 * Shows the OS cursor or the GUI-drawn pointer, from the "SoftwareCursor" setting.
 	 */
 	void ApplyCursorMode();
 
