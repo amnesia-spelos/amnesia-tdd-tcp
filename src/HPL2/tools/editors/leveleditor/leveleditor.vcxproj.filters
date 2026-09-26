@@ -357,6 +357,9 @@
     <ClCompile Include="LevelEditorWindowLevelSettings.cpp">
       <Filter>LevelEditor</Filter>
     </ClCompile>
+    <ClCompile Include="LevelEditorWindowMapScript.cpp">
+      <Filter>LevelEditor</Filter>
+    </ClCompile>
     <ClCompile Include="LevelEditorWorld.cpp">
       <Filter>LevelEditor</Filter>
     </ClCompile>
@@ -696,6 +699,9 @@
       <Filter>LevelEditor</Filter>
     </ClInclude>
     <ClInclude Include="LevelEditorWindowLevelSettings.h">
+      <Filter>LevelEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="LevelEditorWindowMapScript.h">
       <Filter>LevelEditor</Filter>
     </ClInclude>
     <ClInclude Include="LevelEditorWorld.h">
