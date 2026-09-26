@@ -526,15 +526,21 @@ namespace hpl {
 	{
 		if(mpSetInFocus==NULL) return false;
 
-		cVector2f vVirtualPos = cVector2f( (float)avPos.x, (float)avPos.y) / mpGraphics->GetLowLevel()->GetScreenSizeFloat();
+		cVector2f vVirtualPos = ScreenToSetInFocusPos(avPos);
 		cVector2f vVirtualRel = cVector2f( (float)avRel.x, (float)avRel.y) / mpGraphics->GetLowLevel()->GetScreenSizeFloat();
-		
-        vVirtualPos *= mpSetInFocus->GetVirtualSize();
-		vVirtualPos -= mpSetInFocus->GetVirtualSizeOffset();
-		
+
 		vVirtualRel *= mpSetInFocus->GetVirtualSize();
 
 		return mpSetInFocus->SendMessage(eGuiMessage_MouseMove, cGuiMessageData(vVirtualPos, vVirtualRel));
+	}
+
+	//-----------------------------------------------------------------------
+
+	void cGui::SendMouseDrawPos(const cVector2l &avPos)
+	{
+		if(mpSetInFocus==NULL) return;
+
+		mpSetInFocus->SetMouseDrawPos(ScreenToSetInFocusPos(avPos));
 	}
 	
 	bool cGui::SendMouseClickDown(eGuiMouseButton aButton, int alKeyModifiers)
@@ -691,6 +697,18 @@ namespace hpl {
 	//////////////////////////////////////////////////////////////////////////
 	// PRIVATE METHODS
 	//////////////////////////////////////////////////////////////////////////
+
+	//-----------------------------------------------------------------------
+
+	cVector2f cGui::ScreenToSetInFocusPos(const cVector2l &avPos)
+	{
+		cVector2f vVirtualPos = cVector2f( (float)avPos.x, (float)avPos.y) / mpGraphics->GetLowLevel()->GetScreenSizeFloat();
+
+		vVirtualPos *= mpSetInFocus->GetVirtualSize();
+		vVirtualPos -= mpSetInFocus->GetVirtualSizeOffset();
+
+		return vVirtualPos;
+	}
 
 	//-----------------------------------------------------------------------
 

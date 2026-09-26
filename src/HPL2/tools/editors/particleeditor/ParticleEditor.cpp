@@ -484,6 +484,7 @@ void cParticleEditor::OnLoadConfig()
 	SetSettingValue("TrackFactor", mpLocalConfig->GetString("Input", "TrackFactor", "0.01"));
 	SetSettingValue("ZoomFactor", mpLocalConfig->GetString("Input", "ZoomFactor", "0.001"));
 	SetSettingValue("MouseWheelZoom", mpLocalConfig->GetString("Input", "MouseWheelZoom", "0.1"));
+	SetSettingValue("NativeCursor", mpLocalConfig->GetString("Input", "NativeCursor", "false"));
 
 	SetSettingValue("RotateSnap", mpLocalConfig->GetString("Options","RotateSnap", cString::ToString(kPi2f/3)));
 	SetSettingValue("ScaleSnap",  mpLocalConfig->GetString("Options","ScaleSnap", "0.5"));
@@ -529,6 +530,7 @@ void cParticleEditor::OnSaveConfig()
 	mpLocalConfig->SetString("Input", "TrackFactor", GetSetting("TrackFactor"));
 	mpLocalConfig->SetString("Input", "ZoomFactor", GetSetting("ZoomFactor"));
 	mpLocalConfig->SetString("Input", "MouseWheelZoom", GetSetting("MouseWheelZoom"));
+	mpLocalConfig->SetString("Input", "NativeCursor", GetSetting("NativeCursor"));
 
 	mpLocalConfig->SetString("Options", "RotateSnap", GetSetting("RotateSnap"));
 	mpLocalConfig->SetString("Options", "ScaleSnap", GetSetting("ScaleSnap"));

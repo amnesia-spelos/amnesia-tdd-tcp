@@ -131,6 +131,8 @@ namespace hpl {
 		///////////////////////////////
 		// Input sending TODO (need some other way to pass key modifiers, but this will do now)
 		bool SendMousePos(const cVector2l &avPos, const cVector2l &avRel);
+		// Moves only the drawn pointer of the set in focus; sends no GUI messages.
+		void SendMouseDrawPos(const cVector2l &avPos);
 		bool SendMouseClickDown(eGuiMouseButton aButton, int alKeyModifiers=0);
 		bool SendMouseClickUp(eGuiMouseButton aButton, int alKeyModifiers=0);
 		bool SendMouseDoubleClick(eGuiMouseButton aButton, int alKeyModifiers=0);
@@ -161,6 +163,7 @@ namespace hpl {
 
 	private:
 		void GenerateSkinTypeStrings();
+		cVector2f ScreenToSetInFocusPos(const cVector2l &avPos);
 
 		cResources *mpResources;
 		cGraphics *mpGraphics;

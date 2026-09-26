@@ -658,6 +658,7 @@ void cLevelEditor::OnLoadConfig()
 	SetSettingValue("TrackFactor", mpLocalConfig->GetString("Input", "TrackFactor", "0.01"));
 	SetSettingValue("ZoomFactor", mpLocalConfig->GetString("Input", "ZoomFactor", "0.001"));
 	SetSettingValue("MouseWheelZoom", mpLocalConfig->GetString("Input", "MouseWheelZoom", "0.1"));
+	SetSettingValue("NativeCursor", mpLocalConfig->GetString("Input", "NativeCursor", "false"));
 
 	cEditorSelection::SetRotateSnap(mpLocalConfig->GetFloat("Options","RotateSnap", kPi2f/6));
 	cEditorSelection::SetScaleSnap(mpLocalConfig->GetFloat("Options","ScaleSnap", 0.25f));
@@ -748,6 +749,7 @@ void cLevelEditor::OnSaveConfig()
 	mpLocalConfig->SetString("Input", "TrackFactor", GetSetting("TrackFactor"));
 	mpLocalConfig->SetString("Input", "ZoomFactor", GetSetting("ZoomFactor"));
 	mpLocalConfig->SetString("Input", "MouseWheelZoom", GetSetting("MouseWheelZoom"));
+	mpLocalConfig->SetString("Input", "NativeCursor", GetSetting("NativeCursor"));
 
 	mpLocalConfig->SetFloat("Options", "RotateSnap", cEditorSelection::GetRotateSnap());
 	mpLocalConfig->SetFloat("Options", "ScaleSnap", cEditorSelection::GetScaleSnap());

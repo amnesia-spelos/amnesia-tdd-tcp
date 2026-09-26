@@ -391,6 +391,12 @@ namespace hpl {
 		void SetDrawMouse(bool abX);
 		bool GetDrawMouse(){ return mbDrawMouse;}
 
+		// Hides only the pointer graphic. Unlike SetDrawMouse(false), mouse-over
+		// behavior (such as menu item highlighting) stays active, for when the
+		// OS cursor is shown instead.
+		void SetMousePointerHidden(bool abX){ mbMousePointerHidden = abX;}
+		bool GetMousePointerHidden(){ return mbMousePointerHidden;}
+
 		void SetMouseZ(float afZ){mfMouseZ = afZ;}
 		float GetMouseZ(){ return mfMouseZ;}
 
@@ -398,6 +404,10 @@ namespace hpl {
 		bool GetMouseMovementEnabled() { return mbMouseMovementEnabled; }
 
 		const cVector2f& GetMousePos(){ return mvMousePos;}
+
+		// Where the pointer is drawn. Follows mouse moves, and can be set more often
+		// than input is sent to draw a smoother pointer. Does not affect input handling.
+		void SetMouseDrawPos(const cVector2f& avPos){ mvMouseDrawPos = avPos;}
 
 		void SetRootWidgetClips(bool abX);
 		bool GetRootWidgetClips();
@@ -564,11 +574,13 @@ namespace hpl {
 		
 		bool mbActive;
 		bool mbDrawMouse;
+		bool mbMousePointerHidden;
 		float mfMouseZ;
 		cGuiGfxElement *mpGfxCurrentPointer;
 				
 		tBoolVec mvMouseDown;
 		cVector2f mvMousePos;
+		cVector2f mvMouseDrawPos;
 		bool mbMouseMovementEnabled;
 
 		tGuiPopUpList mlstPopUps;

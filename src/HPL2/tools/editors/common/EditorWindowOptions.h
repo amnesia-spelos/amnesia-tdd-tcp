@@ -58,6 +58,8 @@ protected:
 	cEditorInputNumber* mpInpRotateSnap;
 	cEditorInputNumber* mpInpScaleSnap;
 
+	cEditorInputBool* mpInpNativeCursor;
+
 	// Performance
 	cEditorInputBool* mpInpLightsActive;
 	cEditorInputBool* mpInpPSActive;

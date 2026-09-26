@@ -290,6 +290,7 @@ namespace hpl {
 
 		mbActive = true;
 		mbDrawMouse = true;
+		mbMousePointerHidden = false;
 		mfMouseZ =mfVirtualMaxZ;
 
 		mbIs3D = false;
@@ -1751,6 +1752,7 @@ namespace hpl {
 		///////////////////////////
 		//Set up variables
 		mvMousePos = aData.mvPos;
+		mvMouseDrawPos = aData.mvPos;
 		
 		iWidget* pOldToolTipWidget = mpCurrentToolTipWidget;
 		iWidget* pNewToolTipWidget = NULL;
@@ -2440,9 +2442,9 @@ namespace hpl {
 
 	bool cGuiSet::DrawMouse(iWidget* apWidget, const cGuiMessageData& aData)
 	{	
-		if(HasFocus() && mbDrawMouse && mpGfxCurrentPointer)
+		if(HasFocus() && mbDrawMouse && mbMousePointerHidden==false && mpGfxCurrentPointer)
 		{
-			DrawGfx(mpGfxCurrentPointer,cVector3f(mvMousePos.x,mvMousePos.y, mfMouseZ),
+			DrawGfx(mpGfxCurrentPointer,cVector3f(mvMouseDrawPos.x,mvMouseDrawPos.y, mfMouseZ),
 				mpGfxCurrentPointer->GetImageSize(),cColor(1,1));
 		}
 		

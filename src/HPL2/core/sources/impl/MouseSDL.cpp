@@ -186,7 +186,20 @@ namespace hpl {
 	{
 		return mvMouseAbsPos;
 	}
-	
+
+	//-----------------------------------------------------------------------
+
+	cVector2l cMouseSDL::SampleAbsPosition()
+	{
+		// Pumping only moves OS events into SDL's queue, so the next input update
+		// still receives them. It also refreshes the state SDL_GetMouseState reads.
+		SDL_PumpEvents();
+
+		int lX,lY;
+		SDL_GetMouseState(&lX, &lY);
+		return cVector2l(lX,lY);
+	}
+
 	//-----------------------------------------------------------------------
 
 	cVector2l cMouseSDL::GetRelPosition()
