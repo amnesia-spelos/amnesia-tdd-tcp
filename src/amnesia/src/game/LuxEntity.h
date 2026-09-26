@@ -52,6 +52,8 @@ class iLuxEntity_SaveData : public iSerializable
 {
 	kSerializableClassInit(iLuxEntity_SaveData)
 public:
+	// Saves from before the field was added load it as false.
+	iLuxEntity_SaveData() : mbCreatedAtRuntime(false){}
 	virtual ~iLuxEntity_SaveData(){}
 
 	tString msName;
@@ -63,6 +65,7 @@ public:
 	float mfMaxFocusDistance;
 
 	bool mbInteractionDisabled;
+	bool mbCreatedAtRuntime;
 
 	tString msCallbackFunc;
 	tString msConnectionStateChangeCallback;
@@ -165,6 +168,11 @@ public:
 	void SetInteractionDisabled(bool abX){ mbInteractionDisabled = abX; }
 	bool GetInteractionDisabled(){ return mbInteractionDisabled; }
 
+	// Whether a script or a break created the entity, rather than the map file placing it. Only
+	// map-placed entities are named across games by the ID they have in the map file.
+	void SetCreatedAtRuntime(bool abX){ mbCreatedAtRuntime = abX; }
+	bool IsCreatedAtRuntime(){ return mbCreatedAtRuntime; }
+
 	float GetMaxFocusDistance(){ return mfMaxFocusDistance;}
 	virtual eLuxFocusCrosshair GetFocusCrosshair(iPhysicsBody *apBody, const cVector3f &avPos)=0;
 
@@ -231,6 +239,7 @@ protected:
 	int mlID;
 
 	bool mbInteractionDisabled;
+	bool mbCreatedAtRuntime;
 
 	tLuxCollideCallbackContainerList mlstCollideCallbackParents;
 

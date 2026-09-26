@@ -74,6 +74,7 @@ cLuxMap::cLuxMap(const tString& asName)
 	msName = asName;
 
 	mpLatestAddedEntity = NULL;
+	mlRuntimeCreationDepth = 0;
 
 	mpScript = NULL;
 
@@ -554,7 +555,11 @@ void cLuxMap::CreateEntity(const tString& asName, const tString& asFile, const c
 	
 	if(bSetCurrentMapLoading)	gpBase->mpCurrentMapLoading = this;
 
+	// Every entity a script or a break creates comes through here, and AddEntity marks it and any it
+	// attaches, so none is taken for one the map file placed. Its ID fills a gap in the map file's IDs.
+	++mlRuntimeCreationDepth;
 	mpWorld->CreateEntity(asName, a_mtxTransform, asFile,GetFreeEntityID() , true, avScale);
+	--mlRuntimeCreationDepth;
 
 	if(bSetCurrentMapLoading)	gpBase->mpCurrentMapLoading = NULL;
 }
@@ -587,6 +592,7 @@ void cLuxMap::AddEntity(iLuxEntity *apEntity)
 	m_mapEntitiesByName.insert(tLuxEntityNameMap::value_type(cString::ToLowerCase(apEntity->GetName()), apEntity));
 	m_mapEntitiesByID.insert(tLuxEntityIDMap::value_type(apEntity->GetID(), apEntity));
 	mlstEntities.push_back(apEntity);
+	if(mlRuntimeCreationDepth > 0) apEntity->SetCreatedAtRuntime(true);
 
 	mpLatestAddedEntity = apEntity;
 

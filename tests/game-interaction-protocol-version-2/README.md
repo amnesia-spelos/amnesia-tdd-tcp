@@ -128,7 +128,7 @@ EVENT reportbroke <entityId> <state> <map>
 ```
 
 - `interactionstart`: the local player started to grab, push, slide, swing, or spin body `<bodyId>` of a holdable entity. The entity enters the report.
-- `interactionend`: that interaction ended. `<ending>` is `released` (the player let go, or a Peer drove the entity), `thrown`, `too-far` (the body moved out of reach and was dropped), or `destroyed` (the entity was destroyed or broke while held). A released or thrown entity stays in the report until it settles.
+- `interactionend`: that interaction ended. `<ending>` is `released` (the player let go, or a Peer drove the entity), `thrown`, `too-far` (the body moved out of reach and was dropped), or `destroyed` (the entity was destroyed or broke while held). After `released`, `thrown`, or `too-far` the entity stays in the report until it settles. After `destroyed` it leaves the report without another Event.
 - `reportcontact`: a free holdable entity entered the report by contact.
 - `reportsettled`: a reported entity came to rest, because its bodies went to sleep or it reached the Settling cap of about 3 seconds, and left the report.
 - `reportbroke`: a reported entity broke and left the report. `<state>` is the final state of the body whose transform the entity follows.
