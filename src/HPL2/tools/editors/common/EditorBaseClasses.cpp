@@ -1620,10 +1620,10 @@ kGuiCallbackDeclaredFuncEnd(iEditorBase, EscapeKeyHandlerCallback);
 
 void iEditorBase::ApplyCursorMode()
 {
-	bool bNativeCursor = cString::ToBool(GetSetting("NativeCursor").c_str(), false);
+	bool bSoftwareCursor = cString::ToBool(GetSetting("SoftwareCursor").c_str(), false);
 
-	mpEngine->GetGraphics()->GetLowLevel()->ShowCursor(bNativeCursor);
-	mpSet->SetMousePointerHidden(bNativeCursor);
+	mpEngine->GetGraphics()->GetLowLevel()->ShowCursor(bSoftwareCursor==false);
+	mpSet->SetMousePointerHidden(bSoftwareCursor==false);
 }
 
 //----------------------------------------------------------------------------
