@@ -119,3 +119,7 @@ _Avoid_: Remote hold, locked entity, puppet prop
 **Dormant Avatar**:
 An Avatar whose latest Pose belongs to a different map than the local one, and which is therefore neither visible nor collidable until a Pose for the local map arrives.
 _Avoid_: Hidden avatar, inactive avatar
+
+**Map Script**:
+The script file with the same name as a map, stored beside it, that the game runs for that map.
+_Avoid_: Level script, map code, hps
