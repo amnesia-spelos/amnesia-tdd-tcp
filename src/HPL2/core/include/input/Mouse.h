@@ -44,6 +44,13 @@ namespace hpl {
 		 */
 		virtual cVector2l GetAbsPosition()=0;
 		/**
+		 * Read the OS mouse position right now, between input updates, without
+		 * consuming queued input events. Meant for drawing a pointer every frame;
+		 * input handling should keep using GetAbsPosition().
+		 * \return
+		 */
+		virtual cVector2l SampleAbsPosition()=0;
+		/**
 		 * Get the relative movement.
 		 * \return 
 		 */

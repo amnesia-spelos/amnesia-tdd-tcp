@@ -765,6 +765,7 @@ cEngine* iEditorBase::Init(cEngine* apEngine, const char* asName, const char* as
 
 	mpSet->SetDrawMouse(true);
 	mpSet->SetMouseZ(1000);
+	ApplyCursorMode();
 
 	//If the engine was already created, we are inside another app and to not want to set focus
 	if(bEngineWasCreated==false)
@@ -1614,6 +1615,30 @@ bool iEditorBase::EscapeKeyHandlerCallback(iWidget* apWidget, const cGuiMessageD
 	return true;
 }
 kGuiCallbackDeclaredFuncEnd(iEditorBase, EscapeKeyHandlerCallback);
+
+//----------------------------------------------------------------------------
+
+void iEditorBase::ApplyCursorMode()
+{
+	bool bNativeCursor = cString::ToBool(GetSetting("NativeCursor").c_str(), false);
+
+	mpEngine->GetGraphics()->GetLowLevel()->ShowCursor(bNativeCursor);
+	mpSet->SetMousePointerHidden(bNativeCursor);
+}
+
+//----------------------------------------------------------------------------
+
+void iEditorBase::OnPostBufferSwap()
+{
+	///////////////////////////////////////////////
+	// Input only updates at the logic rate, so move the drawn pointer
+	// to where the mouse is now, every frame. This runs after the logic
+	// update and before the GUI draws (the GUI's OnDraw runs before ours).
+	if(mpSet->GetMousePointerHidden()) return;
+
+	cVector2l vMousePos = mpEngine->GetInput()->GetMouse()->SampleAbsPosition();
+	mpEngine->GetGui()->SendMouseDrawPos(vMousePos);
+}
 
 //----------------------------------------------------------------------------
 

@@ -43,7 +43,9 @@ namespace hpl {
 		* \return 
 		*/
 		cVector2l GetAbsPosition();
-		
+
+		cVector2l SampleAbsPosition();
+
 		/**
 		 * \todo Fix so it works and handles screen size
 		 * \return 

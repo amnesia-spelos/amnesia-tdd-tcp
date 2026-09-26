@@ -355,6 +355,11 @@ public:
 	void SetSettingValue(const tString& asSetting, const tString& asValue) { mmapEditorSettings[asSetting] = asValue; }
 	const tString& GetSetting(const tString& asSetting) { return mmapEditorSettings[asSetting]; }
 
+	/**
+	 * Shows the OS cursor or the GUI-drawn pointer, from the "NativeCursor" setting.
+	 */
+	void ApplyCursorMode();
+
 
 	///////////////////////////////////
 	// Execution Control
@@ -393,6 +398,7 @@ public:
 	void Update(float afTimeStep);
 
 	void OnDraw(float afFrameTime){}
+	void OnPostBufferSwap();
 	void OnStart(){}
 	void OnExit(){}
 

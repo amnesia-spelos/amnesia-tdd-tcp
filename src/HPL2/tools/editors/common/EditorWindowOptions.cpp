@@ -142,6 +142,11 @@ void cEditorWindowOptions::OnInitLayout()
 	mpInpScaleSnap = CreateInputNumber(vPos, _W("Scale snap"), "", pTab, 50, 0.25f);
 	mpInpScaleSnap->SetLowerBound(true,0);
 	mpInpRotateSnap->SetDecimals(3);
+
+	vPos.x = 15;
+	vPos.y += mpInpRotateSnap->GetSize().y + 10;
+
+	mpInpNativeCursor = CreateInputBool(vPos, _W("Use native OS cursor"), "", pTab);
 }
 
 //-----------------------------------------------------------------
@@ -182,6 +187,7 @@ void cEditorWindowOptions::OnUpdate(float afTimeStep)
 	mpInpMouseWheelZoom->SetValue(cString::ToFloat(mpEditor->GetSetting("MouseWheelZoom").c_str(), 0.1f), false);
 	mpInpRotateSnap->SetValue(cMath::ToDeg(cEditorSelection::GetRotateSnap()), false);
 	mpInpScaleSnap->SetValue(cEditorSelection::GetScaleSnap(), false);
+	mpInpNativeCursor->SetValue(cString::ToBool(mpEditor->GetSetting("NativeCursor").c_str(), false), false);
 }
 
 //-----------------------------------------------------------------
@@ -247,6 +253,12 @@ bool cEditorWindowOptions::WindowSpecificInputCallback(iEditorInput* apInput)
 
 	else if(apInput==mpInpScaleSnap)
 		cEditorSelection::SetScaleSnap(mpInpScaleSnap->GetValue());
+
+	else if(apInput==mpInpNativeCursor)
+	{
+		mpEditor->SetSettingValue("NativeCursor", mpInpNativeCursor->GetValue() ? "true" : "false");
+		mpEditor->ApplyCursorMode();
+	}
 	
 
 	tEditorViewportVec& vViewports = mpEditor->GetViewports();
