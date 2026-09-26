@@ -53,6 +53,7 @@ namespace hpl {
 	class cWidgetImage;
 	class cWidgetListBox;
 	class cWidgetMultiPropertyListBox;
+	class cWidgetTextArea;
 	class cWidgetComboBox;
 	class cWidgetMenuItem;
 	class cWidgetContextMenu;
@@ -287,6 +288,11 @@ namespace hpl {
 																		const cVector2f& avSize=0,
 																		iWidget* apParent=NULL,
 																		const tString& asName = "");
+
+		cWidgetTextArea* CreateWidgetTextArea(const cVector3f &avLocalPos=0,
+											const cVector2f &avSize=0,
+											iWidget *apParent=NULL,
+											const tString& asName = "" );
 
 		cWidgetComboBox* CreateWidgetComboBox(const cVector3f &avLocalPos=0,
 												const cVector2f &avSize=0,

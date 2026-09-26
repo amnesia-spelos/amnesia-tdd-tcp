@@ -1020,7 +1020,13 @@
     <ClInclude Include="include\gui\WidgetTabFrame.h">
       <Filter>Gui</Filter>
     </ClInclude>
+    <ClInclude Include="include\gui\TextDocument.h">
+      <Filter>Gui</Filter>
+    </ClInclude>
     <ClInclude Include="include\gui\WidgetTextBox.h">
+      <Filter>Gui</Filter>
+    </ClInclude>
+    <ClInclude Include="include\gui\WidgetTextArea.h">
       <Filter>Gui</Filter>
     </ClInclude>
     <ClInclude Include="include\gui\WidgetWindow.h">
@@ -1896,7 +1902,13 @@
     <ClCompile Include="sources\gui\WidgetTabFrame.cpp">
       <Filter>Gui</Filter>
     </ClCompile>
+    <ClCompile Include="sources\gui\TextDocument.cpp">
+      <Filter>Gui</Filter>
+    </ClCompile>
     <ClCompile Include="sources\gui\WidgetTextBox.cpp">
+      <Filter>Gui</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\gui\WidgetTextArea.cpp">
       <Filter>Gui</Filter>
     </ClCompile>
     <ClCompile Include="sources\gui\WidgetWindow.cpp">

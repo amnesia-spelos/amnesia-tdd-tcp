@@ -472,7 +472,9 @@
     <ClInclude Include="include\gui\WidgetMultiPropertyListBox.h" />
     <ClInclude Include="include\gui\WidgetSlider.h" />
     <ClInclude Include="include\gui\WidgetTabFrame.h" />
+    <ClInclude Include="include\gui\TextDocument.h" />
     <ClInclude Include="include\gui\WidgetTextBox.h" />
+    <ClInclude Include="include\gui\WidgetTextArea.h" />
     <ClInclude Include="include\gui\WidgetWindow.h" />
     <ClInclude Include="include\generate\Generate.h" />
     <ClInclude Include="include\generate\GenerateTypes.h" />
@@ -765,7 +767,9 @@
     <ClCompile Include="sources\gui\WidgetMultiPropertyListBox.cpp" />
     <ClCompile Include="sources\gui\WidgetSlider.cpp" />
     <ClCompile Include="sources\gui\WidgetTabFrame.cpp" />
+    <ClCompile Include="sources\gui\TextDocument.cpp" />
     <ClCompile Include="sources\gui\WidgetTextBox.cpp" />
+    <ClCompile Include="sources\gui\WidgetTextArea.cpp" />
     <ClCompile Include="sources\gui\WidgetWindow.cpp" />
     <ClCompile Include="sources\generate\Generate.cpp" />
     <ClCompile Include="sources\generate\GenerateTypes.cpp" />

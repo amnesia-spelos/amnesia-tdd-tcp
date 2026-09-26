@@ -122,6 +122,7 @@ namespace hpl {
 		eWidgetType_TabLabel,
 		eWidgetType_TabFrame,
 		eWidgetType_Group,
+		eWidgetType_TextArea,
 
 		eWidgetType_User,
 		eWidgetType_LastEnum,

@@ -68,6 +68,7 @@
 #include "gui/WidgetMainMenu.h"
 #include "gui/WidgetTabFrame.h"
 #include "gui/WidgetGroup.h"
+#include "gui/WidgetTextArea.h"
 #include "gui/WidgetDummy.h"
 
 #include <stdarg.h>
@@ -884,6 +885,19 @@ namespace hpl {
 		pListBox->SetName(asName);
 		AddWidget(pListBox,apParent);
 		return pListBox;
+	}
+
+	cWidgetTextArea* cGuiSet::CreateWidgetTextArea(const cVector3f &avLocalPos,
+												const cVector2f &avSize,
+												iWidget *apParent,
+												const tString& asName)
+	{
+		cWidgetTextArea *pTextArea = hplNew( cWidgetTextArea,(this,mpSkin) );
+		pTextArea->SetPosition(avLocalPos);
+		pTextArea->SetSize(avSize);
+		pTextArea->SetName(asName);
+		AddWidget(pTextArea,apParent);
+		return pTextArea;
 	}
 
 	cWidgetComboBox* cGuiSet::CreateWidgetComboBox(	const cVector3f &avLocalPos,

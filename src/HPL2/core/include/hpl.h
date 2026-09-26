@@ -200,6 +200,7 @@
 #include "gui/WidgetMenuItem.h"
 #include "gui/WidgetTabFrame.h"
 #include "gui/WidgetGroup.h"
+#include "gui/WidgetTextArea.h"
 #include "gui/GuiPopUpFilePicker.h"
 #include "gui/GuiPopUpMessageBox.h"
 #include "gui/GuiPopUpColorPicker.h"
