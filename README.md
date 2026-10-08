@@ -31,6 +31,8 @@ From a PowerShell prompt at the repository root, run:
 
 The script extracts `src/HPL2/dependencies.zip` when needed, builds the HPL2 static library in Release configuration, and then builds the Amnesia game with the same toolchain. The executable is written to `artifacts/Release/Amnesia.exe`; it is not copied into a Steam installation automatically.
 
+Builds are incremental. After you add, remove, or reorder a class's data members in a header, run `.\scripts\build-windows.ps1 -Rebuild`. Otherwise objects compiled against the old layout can stay in the build, and the game crashes at runtime even though the build succeeds.
+
 The legacy Game Interaction Protocol contract can be exercised without an interactive game session:
 
 ```powershell
