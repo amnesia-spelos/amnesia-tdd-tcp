@@ -281,6 +281,8 @@ public:
 
 	void SetIsInteractedWith(bool abX){  mbIsInteractedWith = abX;}
 	bool IsInteractedWith(){  return mbIsInteractedWith;}
+	// What the prop itself does as the local player or a Peer starts to interact with it.
+	virtual void OnInteractionStart(){}
 
 	bool IsMoving(){ return mbMoving; }
 	

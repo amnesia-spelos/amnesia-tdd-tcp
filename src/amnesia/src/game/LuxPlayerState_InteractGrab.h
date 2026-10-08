@@ -23,7 +23,6 @@
 //----------------------------------------------
 
 #include "LuxPlayerState_Interact.h"
-#include "GameInteractionGateway.h"
 
 //----------------------------------------------
 
@@ -77,8 +76,6 @@ public:
 	void PostUpdate(float afTimeStep);
 
 	bool OnDoAction(eLuxPlayerAction aAction,bool abPressed);
-
-	void OnDestroyEntity(iLuxEntity *apEntity);
 
 	void OnScroll(float afAmount);
 
@@ -134,9 +131,6 @@ protected:
 	float mfDepth;
 	float mfMaxDistance;
 	float mfMassSum;
-
-	// How the grab ends when the state is left, as the local interaction report tells Peers.
-	eGameInteractionEnding mInteractionEnding;
 };
 
 //----------------------------------------------

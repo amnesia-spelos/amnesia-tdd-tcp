@@ -354,6 +354,30 @@ namespace
 			world.mvCalls[2] == "not-interacting 12", "the world mirrors the mark");
 	}
 
+	// Marking a door, lever, or wheel starts an interaction with it in the local game, so a repeated mark
+	// must not start another.
+	void TestOnlyAChangedMarkReachesTheWorld()
+	{
+		cFakeWorld world;
+		world.Place(12);
+		cPeerDrivenEntityModel model;
+		model.Drive(12, world);
+		world.mvCalls.clear();
+
+		Expect(model.SetInteracting(12, false, world) == eGameInteractionEntityOutcome_Success,
+			"clearing a mark never set succeeds");
+		Expect(world.mvCalls.empty(), "and changes nothing");
+
+		model.SetInteracting(12, true, world);
+		Expect(model.SetInteracting(12, true, world) == eGameInteractionEntityOutcome_Success,
+			"marking it again succeeds");
+		model.SetInteracting(12, false, world);
+		Expect(model.SetInteracting(12, false, world) == eGameInteractionEntityOutcome_Success,
+			"clearing it again succeeds");
+		Expect(world.mvCalls.size() == 2 && world.mvCalls[0] == "interacting 12" &&
+			world.mvCalls[1] == "not-interacting 12", "the world hears each change once");
+	}
+
 	void TestReleasingGivesTheEntityBack()
 	{
 		cFakeWorld world;
@@ -446,6 +470,7 @@ int main()
 	TestStaleAndRestartedSamples();
 	TestSeveralEntitiesAndBodiesShareTheStream();
 	TestInteractingIsMirroredOnlyForADrivenEntity();
+	TestOnlyAChangedMarkReachesTheWorld();
 	TestReleasingGivesTheEntityBack();
 	TestReleasingAllEndsEveryDrivenEntity();
 	TestAnEntityTheWorldLostIsForgotten();

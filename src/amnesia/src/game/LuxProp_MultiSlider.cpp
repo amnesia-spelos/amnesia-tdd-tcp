@@ -147,17 +147,24 @@ bool cLuxProp_MultiSlider::OnInteract(iPhysicsBody *apBody, const cVector3f &avP
 		}
 	}
 
-	if(mlStuckState !=0 && mbInteractionDisablesStuck)
-		SetStuckState(-1, true);
+	OnInteractionStart();
 
 	gpBase->mpHintHandler->Add("EntitySlide", kTranslate("Hints", "EntitySlide"), 0);
 
 	cLuxPlayerStateVars::SetupInteraction(apBody, avPos);
 	gpBase->mpPlayer->ChangeState(eLuxPlayerState_InteractSlide);
-
-	mAutoMovePid.Reset();
 	
 	return true;
+}
+
+//-----------------------------------------------------------------------
+
+void cLuxProp_MultiSlider::OnInteractionStart()
+{
+	if(mlStuckState !=0 && mbInteractionDisablesStuck)
+		SetStuckState(-1, true);
+
+	mAutoMovePid.Reset();
 }
 
 //-----------------------------------------------------------------------

@@ -128,6 +128,7 @@ void cLuxPlayerState_InteractSlide::Update(float afTimeStep)
 	float fDistance = cMath::Vector3Dist(pCam->GetPosition(), vWorldInteractPos);
 	if(fDistance > mfMaxDistance)
 	{
+		mInteractionEnding = eGameInteractionEnding_TooFar;
 		mpPlayer->ChangeState(mPreviousState);
 	}
 

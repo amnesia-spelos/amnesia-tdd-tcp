@@ -25,7 +25,6 @@
 #include "LuxMapHelper.h"
 #include "LuxProp.h"
 #include "LuxInputHandler.h"
-#include "LuxInteractionReportHandler.h"
 
 //-----------------------------------------------------------------------
 
@@ -58,8 +57,6 @@ cLuxPlayerState_InteractGrab::cLuxPlayerState_InteractGrab(cLuxPlayer *apPlayer)
 	mSpeedTorquePid.p = 40;
 	mSpeedTorquePid.i = 0;
 	mSpeedTorquePid.d = 0.4f;
-
-	mInteractionEnding = eGameInteractionEnding_Released;
 }
 
 //-----------------------------------------------------------------------
@@ -82,10 +79,6 @@ void cLuxPlayerState_InteractGrab::OnEnterState(eLuxPlayerState aPrevState)
 	/////////////////////////////////
 	//Get the variables
 	SetupInteractVars();
-
-	mInteractionEnding = eGameInteractionEnding_Released;
-	if(gpBase->mpInteractionReportHandler)
-		gpBase->mpInteractionReportHandler->OnLocalInteractionStarted(mpCurrentProp, mpCurrentBody);
 
 	cCamera *pCam = mpPlayer->GetCamera();
 
@@ -274,9 +267,6 @@ void cLuxPlayerState_InteractGrab::OnLeaveState(eLuxPlayerState aNewState)
 		mpPlayer->SetInteractionMoveSpeedMul(1.0f);
 	}
 
-	if(gpBase->mpInteractionReportHandler)
-		gpBase->mpInteractionReportHandler->OnLocalInteractionEnded(mInteractionEnding);
-
 	ResetInteractVars();
 }
 
@@ -457,14 +447,6 @@ bool cLuxPlayerState_InteractGrab::OnDoAction(eLuxPlayerAction aAction,bool abPr
 	}
 	
 	return true;
-}
-
-//-----------------------------------------------------------------------
-
-void cLuxPlayerState_InteractGrab::OnDestroyEntity(iLuxEntity *apEntity)
-{
-	if(apEntity == mpCurrentProp) mInteractionEnding = eGameInteractionEnding_Destroyed;
-	super_class::OnDestroyEntity(apEntity);
 }
 
 //-----------------------------------------------------------------------

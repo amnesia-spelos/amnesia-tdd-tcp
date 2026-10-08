@@ -11,6 +11,7 @@ The game holds no multiplayer policy. It reports the local player's interaction 
 ## Consequences
 
 - A Peer-Driven Entity belongs to its Session, like an Avatar (ADR 0002): the game stops driving it when the Session ends or the map changes, so no prop is left untouchable by a vanished Peer.
+- Setting the interacting mark also runs what the prop itself does as an interaction starts: an unlocked door unlatches, a wheel's auto-move stops, and a stuck lever, wheel, or slider that interaction unsticks comes unstuck. Without it a latched door's hinge would fight the stream. These are the receiving game's own reactions to the mark, not relayed effects.
 - The Peer-driven state is separate from `SetEntityInteractionDisabled`, which map scripts use for story gating. `CanInteractWithEntity` checks both.
 - Driving an entity the local player is interacting with ends that interaction in the same update, which is how a lost contention reaches the player.
 - A Peer-Driven Entity never breaks from its own contacts. Breaking is applied by Command with the breaking game's final transform and velocity, through the engine's own `Break()`. `DisableBreakable` is not usable for this because it still destroys the prop.

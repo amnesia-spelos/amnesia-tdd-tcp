@@ -7,6 +7,16 @@
 
 namespace
 {
+	size_t CountReportedBodies(iLuxProp *apProp)
+	{
+		size_t lCount = 0;
+		for(int i=0; i<apProp->GetBodyNum(); ++i)
+		{
+			if(cLuxInteractionReportHandler::IsReportedBody(apProp->GetBody(i))) ++lCount;
+		}
+		return lCount;
+	}
+
 	// The current map's props, as the report model reads them.
 	class cLuxLocalInteractionWorld : public iLocalInteractionWorld
 	{
@@ -23,6 +33,7 @@ namespace
 			for(int i=0; i<pProp->GetBodyNum(); ++i)
 			{
 				iPhysicsBody *pBody = pProp->GetBody(i);
+				if(!cLuxInteractionReportHandler::IsReportedBody(pBody)) continue;
 				const cMatrixf& mtxWorld = pBody->GetWorldMatrix();
 				const cVector3f vPosition = mtxWorld.GetTranslation();
 				const cQuaternion qOrientation(mtxWorld.GetRotation());
@@ -55,7 +66,7 @@ cLuxInteractionReportHandler::cLuxInteractionReportHandler()
 void cLuxInteractionReportHandler::OnLocalInteractionStarted(iLuxProp *apProp, iPhysicsBody *apBody)
 {
 	mModel.StartInteraction(apProp->GetID(), apBody->GetUniqueID(), apProp->IsCreatedAtRuntime(),
-		static_cast<size_t>(apProp->GetBodyNum()));
+		CountReportedBodies(apProp));
 	PublishEvents();
 }
 
@@ -111,6 +122,11 @@ void cLuxInteractionReportHandler::CreateWorldEntities(cLuxMap *apMap)
 	if(gpBase->mpSocketServer==NULL) return;
 	gpBase->mpSocketServer->PublishEvent(cGameInteractionEvent(eGameInteractionEvent_MapEntered,
 		apMap->GetMapPath()));
+}
+
+bool cLuxInteractionReportHandler::IsReportedBody(iPhysicsBody *apBody)
+{
+	return apBody->GetMass() > 0;
 }
 
 double cLuxInteractionReportHandler::GetGameTimeMs()

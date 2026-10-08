@@ -175,18 +175,25 @@ bool cLuxProp_Lever::OnInteract(iPhysicsBody *apBody, const cVector3f &avPos)
 		}
 	}
 
-	if(mlStuckState !=0 && mbInteractionDisablesStuck)
-		SetStuckState(0, true);
+	OnInteractionStart();
 
 	if(mlStuckState ==0 && mbShowHints)
 		gpBase->mpHintHandler->Add("EntityLever", kTranslate("Hints", "EntityLever"), 0);
 
 	cLuxPlayerStateVars::SetupInteraction(apBody, avPos);
 	gpBase->mpPlayer->ChangeState(eLuxPlayerState_InteractLever);
-
-	mRotatePid.Reset();
 	
 	return true;
+}
+
+//-----------------------------------------------------------------------
+
+void cLuxProp_Lever::OnInteractionStart()
+{
+	if(mlStuckState !=0 && mbInteractionDisablesStuck)
+		SetStuckState(0, true);
+
+	mRotatePid.Reset();
 }
 
 //-----------------------------------------------------------------------

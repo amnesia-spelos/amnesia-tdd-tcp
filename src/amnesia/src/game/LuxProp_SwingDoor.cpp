@@ -182,12 +182,7 @@ bool cLuxProp_SwingDoor::OnInteract(iPhysicsBody *apBody, const cVector3f &avPos
 		mfInteractSoundCount = 0.5f;
 	}
 
-	if(mbLocked==false)
-	{
-		SetClosed(false, true);
-	}
-
-	mbDisableAutoClose = false;
+	OnInteractionStart();
 
 	if(mbLocked == false  && mbShowHints)
 		gpBase->mpHintHandler->Add("EntitySwingDoor", kTranslate("Hints", "EntitySwingDoor"), 0);
@@ -363,6 +358,18 @@ void cLuxProp_SwingDoor::UpdatePropSpecific(float afTimeStep)
 			}
 		}
 	}
+}
+
+//-----------------------------------------------------------------------
+
+void cLuxProp_SwingDoor::OnInteractionStart()
+{
+	if(mbLocked==false)
+	{
+		SetClosed(false, true);
+	}
+
+	mbDisableAutoClose = false;
 }
 
 //-----------------------------------------------------------------------

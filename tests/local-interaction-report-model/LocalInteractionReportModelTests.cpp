@@ -145,6 +145,60 @@ namespace
 		}
 	}
 
+	// The report knows nothing of prop types, so swinging, spinning, pushing, and sliding are reported as a
+	// grab is. Each case is the shape of one type's interaction: the moving body the player holds, how many
+	// moving bodies there are, and a way it ends. A released door, lever, wheel, or slider stays reported
+	// while its own logic moves it, until it sleeps.
+	void TestEachInteractionShapeIsReportedFromStartToSettling()
+	{
+		struct cCase
+		{
+			const char* msType;
+			size_t mlBodyCount;
+			int mlHeldBodyId;
+			eGameInteractionEnding mEnding;
+		};
+		const cCase vCases[] = {
+			{ "SwingDoor", 2, 1, eGameInteractionEnding_Thrown },
+			{ "Wheel", 1, 0, eGameInteractionEnding_Released },
+			{ "Lever", 1, 0, eGameInteractionEnding_TooFar },
+			{ "MultiSlider", 1, 0, eGameInteractionEnding_Released },
+			{ "Push Object", 1, 0, eGameInteractionEnding_Thrown },
+			{ "Slide Object", 1, 0, eGameInteractionEnding_Released },
+		};
+		for (size_t i = 0; i < sizeof(vCases) / sizeof(vCases[0]); ++i)
+		{
+			const cCase& type = vCases[i];
+			const std::string sType(type.msType);
+			cFakeWorld world;
+			world.Place(12, type.mlBodyCount);
+			cLocalInteractionReportModel model;
+
+			model.StartInteraction(12, type.mlHeldBodyId, false, type.mlBodyCount);
+			model.Update(world, 0.0);
+			std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
+			Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_InteractionStarted, 12) &&
+				vEvents[0].mEntityEvent.mlBodyId == type.mlHeldBodyId, sType + ": interactionstart names the held body");
+			Expect(model.GetReportedBodies().size() == type.mlBodyCount, sType + ": every moving body is reported");
+
+			model.EndInteraction(type.mEnding, 100.0);
+			vEvents = TakeEvents(model);
+			Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_InteractionEnded, 12) &&
+				vEvents[0].mEntityEvent.mlBodyId == type.mlHeldBodyId && vEvents[0].mEntityEvent.mEnding == type.mEnding,
+				sType + ": interactionend names the held body and how it ended");
+
+			world.Move(12, 2.0f);
+			model.Update(world, 1000.0);
+			Expect(Reports(model, 12) && TakeEvents(model).empty(), sType + ": it is reported while it still moves");
+
+			world.SetAsleep(12, true);
+			model.Update(world, 1100.0);
+			vEvents = TakeEvents(model);
+			Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_ReportSettled, 12),
+				sType + ": it settles when it sleeps");
+		}
+	}
+
 	void TestEndingWithoutAnInteractionRaisesNothing()
 	{
 		cLocalInteractionReportModel model;
@@ -420,6 +474,7 @@ int main()
 	TestTheReportFollowsTheBodyEveryUpdate();
 	TestAHeldEntityNeverSettles();
 	TestEachEndingIsRaised();
+	TestEachInteractionShapeIsReportedFromStartToSettling();
 	TestEndingWithoutAnInteractionRaisesNothing();
 	TestAThrownEntityIsReportedInFlightUntilItSleeps();
 	TestAnEntitySettlesOnlyWhenEveryBodySleeps();

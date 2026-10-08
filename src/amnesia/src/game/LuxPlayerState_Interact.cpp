@@ -23,6 +23,7 @@
 #include "LuxMapHelper.h"
 #include "LuxMap.h"
 #include "LuxProp.h"
+#include "LuxInteractionReportHandler.h"
 
 //////////////////////////////////////////////////////////////////////////
 // CONSTRUCTORS
@@ -35,6 +36,7 @@ iLuxPlayerState_Interact::iLuxPlayerState_Interact(cLuxPlayer *apPlayer, eLuxPla
 	mpCurrentBody = NULL;
 	mpCurrentProp = NULL;
 	mvCurrentFocusPos = 0;
+	mInteractionEnding = eGameInteractionEnding_Released;
 }
 
 //-----------------------------------------------------------------------
@@ -56,6 +58,7 @@ void iLuxPlayerState_Interact::OnDestroyEntity(iLuxEntity *apEntity)
 	iLuxEntity *pCurrentEntity = mpCurrentProp;
 	if(pCurrentEntity == apEntity)
 	{
+		mInteractionEnding = eGameInteractionEnding_Destroyed;
 		gpBase->mpPlayer->ChangeState(mPreviousState);
 	}
 }
@@ -99,12 +102,19 @@ void iLuxPlayerState_Interact::SetupInteractVars()
 	mvCurrentFocusPos = cLuxPlayerStateVars::mvInteractPos;
 
 	mpCurrentProp->SetIsInteractedWith(true);
+
+	mInteractionEnding = eGameInteractionEnding_Released;
+	if(gpBase->mpInteractionReportHandler)
+		gpBase->mpInteractionReportHandler->OnLocalInteractionStarted(mpCurrentProp, mpCurrentBody);
 }	
 
 //-----------------------------------------------------------------------
 
 void iLuxPlayerState_Interact::ResetInteractVars()
 {
+	if(gpBase->mpInteractionReportHandler)
+		gpBase->mpInteractionReportHandler->OnLocalInteractionEnded(mInteractionEnding);
+
 	mpCurrentProp->SetIsInteractedWith(false);
 }
 

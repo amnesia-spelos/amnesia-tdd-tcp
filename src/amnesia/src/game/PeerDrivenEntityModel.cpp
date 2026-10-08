@@ -131,6 +131,7 @@ eGameInteractionEntityOutcome cPeerDrivenEntityModel::SetInteracting(int alEntit
 {
 	cDrivenEntity* pDriven = FindDriven(alEntityId);
 	if (pDriven == NULL) return eGameInteractionEntityOutcome_NotFound;
+	if (pDriven->mbInteracting == abInteracting) return eGameInteractionEntityOutcome_Success;
 	pDriven->mbInteracting = abInteracting;
 	aWorld.SetInteracting(alEntityId, abInteracting);
 	return eGameInteractionEntityOutcome_Success;

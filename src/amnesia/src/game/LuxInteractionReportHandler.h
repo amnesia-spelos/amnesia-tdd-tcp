@@ -21,6 +21,10 @@ public:
 	// The entity is no longer the local game's to report, because a Peer drives it.
 	void StopReporting(int alEntityId);
 
+	// A door's frame or a lever's base is a static body that never moves, so it is neither reported nor
+	// driven.
+	static bool IsReportedBody(iPhysicsBody *apBody);
+
 	// The bodies the latest update read, stamped with its game time and the current map.
 	cGameInteractionBodySamples GetReportedBodies() const;
 

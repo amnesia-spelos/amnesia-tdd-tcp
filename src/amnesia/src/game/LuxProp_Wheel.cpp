@@ -182,10 +182,7 @@ bool cLuxProp_Wheel::OnInteract(iPhysicsBody *apBody, const cVector3f &avPos)
 	{
 		apBody = mpWheelBody;
 	}
-	ResetAutoMove();
-
-	if(mlStuckState !=0 && mbInteractionDisablesStuck)
-		SetStuckState(0, true);
+	OnInteractionStart();
 	
 	if(mlStuckState ==0 && mbShowHints)
 		gpBase->mpHintHandler->Add("EntityWheel", kTranslate("Hints", "EntityWheel"), 0);
@@ -194,6 +191,16 @@ bool cLuxProp_Wheel::OnInteract(iPhysicsBody *apBody, const cVector3f &avPos)
 	gpBase->mpPlayer->ChangeState(eLuxPlayerState_InteractWheel);
 	
 	return true;
+}
+
+//-----------------------------------------------------------------------
+
+void cLuxProp_Wheel::OnInteractionStart()
+{
+	ResetAutoMove();
+
+	if(mlStuckState !=0 && mbInteractionDisablesStuck)
+		SetStuckState(0, true);
 }
 
 //-----------------------------------------------------------------------

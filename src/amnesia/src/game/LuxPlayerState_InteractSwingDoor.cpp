@@ -91,6 +91,7 @@ void cLuxPlayerState_InteractSwingDoor::OnThrow()
 	if(fForwardDot < 0) vImpulse = vImpulse * -1;
 
 	mpCurrentBody->AddImpulse(vImpulse);
+	mInteractionEnding = eGameInteractionEnding_Thrown;
 }
 
 //-----------------------------------------------------------------------

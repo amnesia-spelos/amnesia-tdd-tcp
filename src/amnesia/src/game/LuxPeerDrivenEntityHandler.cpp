@@ -10,6 +10,23 @@
 
 namespace
 {
+	// The props a player interacts with by moving them: the ones the local interaction report covers.
+	bool IsHoldable(iLuxProp *apProp)
+	{
+		switch(apProp->GetPropType())
+		{
+		case eLuxPropType_SwingDoor:
+		case eLuxPropType_Wheel:
+		case eLuxPropType_Lever:
+		case eLuxPropType_MultiSlider:
+			return true;
+		case eLuxPropType_Object:
+			return static_cast<cLuxProp_Object*>(apProp)->GetObjectType()!=eLuxObjectType_Static;
+		default:
+			return false;
+		}
+	}
+
 	// A map's props, as the Peer-Driven Entity model finds and moves them.
 	class cLuxPeerDrivenEntityWorld : public iPeerDrivenEntityWorld
 	{
@@ -24,12 +41,7 @@ namespace
 			if(pEntity->GetEntityType()!=eLuxEntityType_Prop || pEntity->IsCreatedAtRuntime())
 				return eGameInteractionEntityOutcome_NotHoldable;
 
-			iLuxProp *pProp = static_cast<iLuxProp*>(pEntity);
-			if(pProp->GetPropType()!=eLuxPropType_Object ||
-				static_cast<cLuxProp_Object*>(pProp)->GetObjectType()!=eLuxObjectType_Grab)
-			{
-				return eGameInteractionEntityOutcome_NotHoldable;
-			}
+			if(!IsHoldable(static_cast<iLuxProp*>(pEntity))) return eGameInteractionEntityOutcome_NotHoldable;
 			return eGameInteractionEntityOutcome_Success;
 		}
 
@@ -62,6 +74,7 @@ namespace
 			{
 				iPhysicsBody *pBody = pProp->GetBody(i);
 				vGravity.push_back(pBody->GetGravity());
+				if(!cLuxInteractionReportHandler::IsReportedBody(pBody)) continue;
 				pBody->SetGravity(false);
 				// Until its first sample, the body stays where it was.
 				pBody->SetLinearVelocity(0);
@@ -84,16 +97,21 @@ namespace
 			for(int i=0; i<pProp->GetBodyNum(); ++i)
 			{
 				iPhysicsBody *pBody = pProp->GetBody(i);
+				if(!cLuxInteractionReportHandler::IsReportedBody(pBody)) continue;
 				pBody->SetGravity(static_cast<size_t>(i) < vGravity.size() ? vGravity[i] : true);
 				pBody->Enable();
 			}
 			m_mapBodyGravity.erase(alEntityId);
 		}
 
+		// The prop's own logic sees the Peer's interaction as the local player's: a door unlatches, and a
+		// door, lever, or wheel stops auto-closing, auto-moving, or slowing while it is marked.
 		virtual void SetInteracting(int alEntityId, bool abInteracting)
 		{
 			iLuxProp *pProp = GetProp(alEntityId);
-			if(pProp) pProp->SetIsInteractedWith(abInteracting);
+			if(pProp==NULL) return;
+			pProp->SetIsInteractedWith(abInteracting);
+			if(abInteracting) pProp->OnInteractionStart();
 		}
 
 		virtual void SetBodyState(int alEntityId, int alBodyId, const cGameInteractionBodyState& aState)
@@ -126,7 +144,8 @@ namespace
 			if(pProp==NULL) return NULL;
 			for(int i=0; i<pProp->GetBodyNum(); ++i)
 			{
-				if(pProp->GetBody(i)->GetUniqueID()==alBodyId) return pProp->GetBody(i);
+				iPhysicsBody *pBody = pProp->GetBody(i);
+				if(pBody->GetUniqueID()==alBodyId && cLuxInteractionReportHandler::IsReportedBody(pBody)) return pBody;
 			}
 			return NULL;
 		}

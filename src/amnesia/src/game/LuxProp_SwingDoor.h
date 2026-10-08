@@ -73,6 +73,7 @@ public:
 	//Genera
 	bool CanInteract(iPhysicsBody *apBody);
 	bool OnInteract(iPhysicsBody *apBody, const cVector3f &avPos);
+	void OnInteractionStart();
 	
 	void OnSetupAfterLoad(cWorld *apWorld);
 

@@ -222,6 +222,7 @@ void iLuxPlayerState_InteractRotateBase::Update(float afTimeStep)
 	float fDistance = cMath::Vector3Dist(pCharBody->GetFeetPosition(), mpCurrentJoint->GetPivotPoint());
 	if(fDistance > mfMaxDistance)
 	{
+		mInteractionEnding = eGameInteractionEnding_TooFar;
 		mpPlayer->ChangeState(mPreviousState);
 	}
 

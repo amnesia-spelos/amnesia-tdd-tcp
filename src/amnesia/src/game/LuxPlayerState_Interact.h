@@ -23,6 +23,7 @@
 //----------------------------------------------
 
 #include "LuxPlayerState.h"
+#include "GameInteractionGateway.h"
 
 //----------------------------------------------
 
@@ -62,9 +63,12 @@ public:
 	void EndInteraction();
 
 protected:
+	// Also tell Peers that the interaction started and how it ended.
 	void SetupInteractVars();
 	void ResetInteractVars();
 
+	// How the interaction ends, unless something ends it otherwise: released by default.
+	eGameInteractionEnding mInteractionEnding;
 	iPhysicsBody *mpCurrentBody;
 	iLuxProp *mpCurrentProp;
 	cVector3f mvCurrentFocusPos;

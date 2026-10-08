@@ -167,6 +167,7 @@ void cLuxPlayerState_InteractPush::Update(float afTimeStep)
 													cMath::Vector3Dist(pCharBody->GetFeetPosition(), mpCurrentBody->GetLocalPosition());
 	if(fDistance > mfMaxAttachPointDist)
 	{
+		mInteractionEnding = eGameInteractionEnding_TooFar;
 		mpPlayer->ChangeState(mPreviousState);
 		return;
 	}
@@ -346,6 +347,7 @@ bool cLuxPlayerState_InteractPush::OnDoAction(eLuxPlayerAction aAction,bool abPr
 			{
 				mpCurrentBody->AddImpulse(mvPushDir * mpPushData->mfPushImpulse);
 			}
+			mInteractionEnding = eGameInteractionEnding_Thrown;
 
 			mpPlayer->ChangeState(mPreviousState);	
 			return false;

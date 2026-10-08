@@ -22,7 +22,8 @@ public:
 	// state.
 	virtual void BeginDriving(int alEntityId) = 0;
 	virtual void EndDriving(int alEntityId) = 0;
-	// Marks the entity as being interacted with, or clears the mark.
+	// Marks the entity as being interacted with, starting an interaction with it as the local player's
+	// would, or clears the mark. Told only when the mark changes.
 	virtual void SetInteracting(int alEntityId, bool abInteracting) = 0;
 	virtual void SetBodyState(int alEntityId, int alBodyId, const cGameInteractionBodyState& aState) = 0;
 };
