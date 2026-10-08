@@ -35,7 +35,7 @@ bool cGameInteractionEvent::IsInteractionsEvent() const
 {
 	return mType == eGameInteractionEvent_InteractionStarted || mType == eGameInteractionEvent_InteractionEnded ||
 		mType == eGameInteractionEvent_ReportContact || mType == eGameInteractionEvent_ReportSettled ||
-		mType == eGameInteractionEvent_ReportBroke;
+		mType == eGameInteractionEvent_ReportBroke || mType == eGameInteractionEvent_MapEntered;
 }
 
 cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,

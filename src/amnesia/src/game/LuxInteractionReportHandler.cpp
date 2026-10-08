@@ -104,6 +104,15 @@ void cLuxInteractionReportHandler::DestroyWorldEntities(cLuxMap *apMap)
 	mModel.Clear();
 }
 
+// Sent exactly when a Map Visit starts: on entering a map, and when a save is loaded into the map
+// already loaded. The previous visit's report is already empty and its Peer-Driven Entities released.
+void cLuxInteractionReportHandler::CreateWorldEntities(cLuxMap *apMap)
+{
+	if(gpBase->mpSocketServer==NULL) return;
+	gpBase->mpSocketServer->PublishEvent(cGameInteractionEvent(eGameInteractionEvent_MapEntered,
+		apMap->GetMapPath()));
+}
+
 double cLuxInteractionReportHandler::GetGameTimeMs()
 {
 	return gpBase->mpEngine->GetGameTime() * 1000.0;

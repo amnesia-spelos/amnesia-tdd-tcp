@@ -820,6 +820,7 @@ namespace
 	{
 		aGateway.Report(cGameInteractionEvent(eGameInteractionEvent_InteractionStarted, EntityEvent(12)));
 		aGateway.Report(cGameInteractionEvent(eGameInteractionEvent_MapChanged, "maps/main/level02.map"));
+		aGateway.Report(cGameInteractionEvent(eGameInteractionEvent_MapEntered, "maps/main/level02.map"));
 		aGateway.Report(cGameInteractionEvent(eGameInteractionEvent_InteractionEnded, EntityEvent(12)));
 		aGateway.Report(cGameInteractionEvent(eGameInteractionEvent_ReportContact, EntityEvent(-7)));
 		aGateway.Report(cGameInteractionEvent(eGameInteractionEvent_ReportSettled, EntityEvent(-7)));
@@ -847,9 +848,10 @@ namespace
 
 		SOCKET peer = OpenInteractionsSession(gateway, adapter);
 		ReportAllEvents(gateway, adapter);
-		Expect(ReceiveLines(peer, 6) ==
+		Expect(ReceiveLines(peer, 7) ==
 			"EVENT interactionstart 12 3 maps/main/level01.map\n"
 			"EVENT:MapChanged:maps/main/level02.map\n"
+			"EVENT mapentered maps/main/level02.map\n"
 			"EVENT interactionend 12 3 thrown maps/main/level01.map\n"
 			"EVENT reportcontact -7 maps/main/level01.map\n"
 			"EVENT reportsettled -7 maps/main/level01.map\n"

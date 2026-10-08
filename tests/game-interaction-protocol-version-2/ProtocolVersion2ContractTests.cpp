@@ -465,6 +465,12 @@ int main(int argc, char** argv)
 			actual = cGameInteractionProtocolVersion2::SerializeReportedBodies(report);
 			expected = ReadString(line, "expected_text");
 		}
+		else if (kind == "interaction_event" && ReadString(line, "event") == "mapentered")
+		{
+			actual = cGameInteractionProtocolVersion2::SerializeEvent(
+				cGameInteractionEvent(eGameInteractionEvent_MapEntered, ReadString(line, "map")));
+			expected = ReadString(line, "expected_text");
+		}
 		else if (kind == "interaction_event")
 		{
 			cGameInteractionEntityEvent entityEvent;

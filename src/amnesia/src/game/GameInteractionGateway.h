@@ -77,7 +77,9 @@ enum eGameInteractionEventType
 	eGameInteractionEvent_InteractionEnded,
 	eGameInteractionEvent_ReportContact,
 	eGameInteractionEvent_ReportSettled,
-	eGameInteractionEvent_ReportBroke
+	eGameInteractionEvent_ReportBroke,
+	// A Map Visit started. It carries the Map Path, and precedes every other interactions Event of that visit.
+	eGameInteractionEvent_MapEntered
 };
 
 // How the local player's interaction with an entity ended.

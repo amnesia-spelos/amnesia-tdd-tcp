@@ -13,7 +13,7 @@ Protocol Version 2 (ADR 0004) is a per-Session superset of the [legacy protocol]
 - `entity_identifier`: which Entity and Body Identifiers are valid, and the value read from them.
 - `entity_command`: which Peer-Driven Entity Command lines are well formed, and the Command written back canonically, which shows every field read in order.
 - `reported_bodies`: how a report is written as a `reportedbodies` State Update.
-- `interaction_event`: how each `interactions` Event is written.
+- `interaction_event`: how each `interactions` Event, including `mapentered`, is written.
 
 Run the game-side harness without starting the game:
 
@@ -116,11 +116,12 @@ The game keeps a report of the holdable entities whose motion the local player d
 - entities the player released, until they come to rest;
 - free entities that a reported body or the local player's body touched, from their `reportcontact`. Static bodies, character bodies, Avatars, runtime-created entities, and Peer-Driven Entities never enter by contact.
 
-An entity leaves the report when it settles (`reportsettled`), breaks (`reportbroke`), or is driven by a Peer, and every entity leaves it when the map changes or a save loads. Only settling and breaking send an Event. The report holds at most 32 bodies. An entity whose bodies do not fit is not reported and stays under local physics: it gets no `reportcontact`, or its `interactionstart` is still sent but its bodies stay out of State Updates.
+An entity leaves the report when it settles (`reportsettled`), breaks (`reportbroke`), or is driven by a Peer, and every entity leaves it when its Map Visit ends. Settling and breaking send an Event for that entity; the end of a Map Visit is told by the next `mapentered`. The report holds at most 32 bodies. An entity whose bodies do not fit is not reported and stays under local physics: it gets no `reportcontact`, or its `interactionstart` is still sent but its bodies stay out of State Updates.
 
 A Session granted `interactions` receives these Events:
 
 ```text
+EVENT mapentered <map>
 EVENT interactionstart <entityId> <bodyId> <map>
 EVENT interactionend <entityId> <bodyId> <ending> <map>
 EVENT reportcontact <entityId> <map>
@@ -128,6 +129,7 @@ EVENT reportsettled <entityId> <map>
 EVENT reportbroke <entityId> <state> <map>
 ```
 
+- `mapentered`: a Map Visit started on map `<map>`. A Map Visit starts when the game loads a map, starts a story (a Custom Story, the Main Story, or a restart), or loads a save, including a save of the map already loaded. A death or checkpoint reload, a map change to the map already loaded, and a return to the main menu do not start one, and nothing is sent for them. By the time `mapentered` is sent, the previous visit's report is empty and its Peer-Driven Entities are released. It precedes every other `interactions` Event and every `reportedbodies` State Update of the visit it starts, so a Peer can drop whatever it held for the previous visit on receiving it, even when `<map>` is unchanged.
 - `interactionstart`: the local player started to grab, push, slide, swing, or spin body `<bodyId>` of a holdable entity. The entity enters the report.
 - `interactionend`: that interaction ended. `<ending>` is `released` (the player let go, or a Peer drove the entity), `thrown`, `too-far` (the body moved out of reach and was dropped), or `destroyed` (the entity was destroyed or broke while held). After `released`, `thrown`, or `too-far` the entity stays in the report until it settles. After `destroyed` it leaves the report without another Event.
 - `reportcontact`: a free holdable entity entered the report by contact.
@@ -157,7 +159,7 @@ A Peer-Driven Entity is a map-placed entity whose motion a Peer supplies in plac
 - `entityinteracting`: `1` marks the Peer-Driven Entity as being interacted with, and `0` clears the mark, so that door auto-close, lever auto-move, and interaction-only connections behave as they do for the local player. `not-found` means this Session does not drive that entity.
 - `entitybreak`: snaps the Peer-Driven Entity to `<state>` and breaks it through the game's own break path, with its debris, connected props, contained item, sound, particles, and break callback. The entity is then no longer driven. `not-found` means this Session does not drive that entity.
 - `entityrelease`: ends driving and returns the entity to local physics from its current state, clearing its interacting mark. `not-found` means this Session does not drive that entity.
-- A Peer-Driven Entity belongs to its Session, like an Avatar. The game releases every one when the Session ends, when the map changes, and when a save loads.
+- A Peer-Driven Entity belongs to its Session, like an Avatar. The game releases every one when the Session ends and when its Map Visit ends.
 
 ## Avatars
 

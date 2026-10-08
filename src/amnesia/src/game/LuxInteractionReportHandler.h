@@ -9,8 +9,8 @@
 
 // Reports the local player's interactions to Peers (ADR 0005): it tells the report model when the
 // local player starts and ends an interaction, reads the reported entities' bodies from the current
-// map every update, and publishes the model's Events. The report lives only in the current map, and
-// is emptied when that map is left or a save is loaded into it.
+// map every update, and publishes the model's Events. The report lives only in one Map Visit: it is
+// emptied when that visit ends, and the start of the next one is published as mapentered.
 class cLuxInteractionReportHandler : public iLuxUpdateable
 {
 public:
@@ -26,6 +26,7 @@ public:
 
 	void Update(float afTimeStep);
 	void Reset();
+	void CreateWorldEntities(cLuxMap *apMap);
 	void DestroyWorldEntities(cLuxMap *apMap);
 
 private:
