@@ -6,27 +6,9 @@
 #include "LuxPlayer.h"
 #include "LuxPlayerState_Interact.h"
 #include "LuxProp.h"
-#include "LuxProp_Object.h"
 
 namespace
 {
-	// The props a player interacts with by moving them: the ones the local interaction report covers.
-	bool IsHoldable(iLuxProp *apProp)
-	{
-		switch(apProp->GetPropType())
-		{
-		case eLuxPropType_SwingDoor:
-		case eLuxPropType_Wheel:
-		case eLuxPropType_Lever:
-		case eLuxPropType_MultiSlider:
-			return true;
-		case eLuxPropType_Object:
-			return static_cast<cLuxProp_Object*>(apProp)->GetObjectType()!=eLuxObjectType_Static;
-		default:
-			return false;
-		}
-	}
-
 	// A map's props, as the Peer-Driven Entity model finds and moves them.
 	class cLuxPeerDrivenEntityWorld : public iPeerDrivenEntityWorld
 	{
@@ -41,7 +23,8 @@ namespace
 			if(pEntity->GetEntityType()!=eLuxEntityType_Prop || pEntity->IsCreatedAtRuntime())
 				return eGameInteractionEntityOutcome_NotHoldable;
 
-			if(!IsHoldable(static_cast<iLuxProp*>(pEntity))) return eGameInteractionEntityOutcome_NotHoldable;
+			if(!cLuxInteractionReportHandler::IsHoldable(static_cast<iLuxProp*>(pEntity)))
+				return eGameInteractionEntityOutcome_NotHoldable;
 			return eGameInteractionEntityOutcome_Success;
 		}
 

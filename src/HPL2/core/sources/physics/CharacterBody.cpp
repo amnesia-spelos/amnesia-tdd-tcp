@@ -193,6 +193,8 @@ namespace hpl {
 
 				apBody->AddForceAtPosition(vDir * mpCharBody->GetPushForce(), vMedianPoint);
 			}
+
+			if(mpCharBody->mpCallback) mpCharBody->mpCallback->OnPushBody(mpCharBody, apBody);
 		}
 	}
 

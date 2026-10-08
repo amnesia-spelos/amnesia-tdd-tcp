@@ -24,6 +24,7 @@
 #include "LuxMap.h"
 #include "LuxHelpFuncs.h"
 #include "LuxPlayerHelpers.h"
+#include "LuxInteractionReportHandler.h"
 
 //////////////////////////////////////////////////////////////////////////
 // CHARACTER CALLBACK
@@ -53,6 +54,13 @@ void cLuxMoveState_Normal_Callback::OnGravityCollide(iCharacterBody *apCharBody,
 			mpMoveState->FallDamage(apCharBody->GetForceVelocity().y);
 		}
 	}
+}
+
+//-----------------------------------------------------------------------
+
+void cLuxMoveState_Normal_Callback::OnPushBody(iCharacterBody *apCharBody, iPhysicsBody *apBody)
+{
+	if(gpBase->mpInteractionReportHandler) gpBase->mpInteractionReportHandler->OnLocalPlayerPushed(apBody);
 }
 
 //-----------------------------------------------------------------------

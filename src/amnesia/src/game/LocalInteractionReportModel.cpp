@@ -61,8 +61,15 @@ void cLocalInteractionReportModel::StopReporting(int alEntityId)
 	}
 }
 
+void cLocalInteractionReportModel::RecordContact(const cLocalInteractionContact& aContact)
+{
+	mvContacts.push_back(aContact);
+}
+
 void cLocalInteractionReportModel::Update(const iLocalInteractionWorld& aWorld, double afTimeMs)
 {
+	EnterByContacts(afTimeMs);
+
 	mvReportedBodies.clear();
 	std::vector<cLocalInteractionBody> vBodies;
 	for (size_t i = 0; i < mvReported.size();)
@@ -107,7 +114,44 @@ void cLocalInteractionReportModel::Clear()
 	mvReported.clear();
 	mvReportedBodies.clear();
 	mvEvents.clear();
+	mvContacts.clear();
 	mbInteracting = false;
+}
+
+void cLocalInteractionReportModel::EnterByContacts(double afTimeMs)
+{
+	// A prop knocked in this step may itself have knocked another one, recorded before it, so the
+	// contacts are gone over until none enters anything.
+	bool bEntered = true;
+	while (bEntered)
+	{
+		bEntered = false;
+		for (size_t i = 0; i < mvContacts.size(); ++i)
+		{
+			if (EnterByContact(mvContacts[i], afTimeMs)) bEntered = true;
+		}
+	}
+	mvContacts.clear();
+}
+
+bool cLocalInteractionReportModel::EnterByContact(const cLocalInteractionContact& aContact, double afTimeMs)
+{
+	if (!aContact.mbByLocalPlayer && FindReported(aContact.mlSourceEntityId) == NULL) return false;
+	const cLocalInteractionContactTarget& touched = aContact.mTouched;
+	if (!touched.mbBodyMoving || !touched.mbHoldable || touched.mbCreatedAtRuntime || touched.mbPeerDriven)
+		return false;
+	// A held entity that did not fit stays out of the report until its interaction ends.
+	if (mbInteracting && touched.mlEntityId == mlInteractionEntityId) return false;
+	if (FindReported(touched.mlEntityId) != NULL) return false;
+	if (CountReportedBodies() + touched.mlBodyCount > kMaxBodies) return false;
+
+	cReportedEntity entered;
+	entered.mlEntityId = touched.mlEntityId;
+	entered.mlBodyCount = touched.mlBodyCount;
+	entered.mfEndTimeMs = afTimeMs;
+	mvReported.push_back(entered);
+	Raise(eGameInteractionEvent_ReportContact, touched.mlEntityId);
+	return true;
 }
 
 cLocalInteractionReportModel::cReportedEntity* cLocalInteractionReportModel::FindReported(int alEntityId)

@@ -40,6 +40,8 @@ namespace hpl {
 	public:
 		virtual void OnGravityCollide(iCharacterBody *apCharBody, iPhysicsBody *apBody, cCollideData *apCollideData)=0;
 		virtual void OnHitGround(iCharacterBody *apCharBody,const cVector3f &avVel)=0;
+		// The character walked into a free body and pushed it. Called during the physics update.
+		virtual void OnPushBody(iCharacterBody *apCharBody, iPhysicsBody *apBody){}
 	};
 
 	//------------------------------------------------
@@ -96,6 +98,7 @@ namespace hpl {
 	class iCharacterBody
 	{
 	friend class cCharacterBodyCollideGravity;
+	friend class cCharacterBodyCollidePush;
 	public:
 		iCharacterBody(const tString &asName, iPhysicsWorld *apWorld, const cVector3f avSize);
 		virtual ~iCharacterBody();

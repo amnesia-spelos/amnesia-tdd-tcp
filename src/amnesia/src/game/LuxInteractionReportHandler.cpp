@@ -3,6 +3,7 @@
 #include "LuxMap.h"
 #include "LuxMapHandler.h"
 #include "LuxProp.h"
+#include "LuxProp_Object.h"
 #include "LuxSocketServer.h"
 
 namespace
@@ -15,6 +16,23 @@ namespace
 			if(cLuxInteractionReportHandler::IsReportedBody(apProp->GetBody(i))) ++lCount;
 		}
 		return lCount;
+	}
+
+	// The prop a body belongs to, as a contact touched it. False when the body is not a prop's, as for
+	// a character's or the map's static geometry. Every body the game gives user data has an entity.
+	bool GetContactTarget(iPhysicsBody *apBody, cLocalInteractionContactTarget& aTarget)
+	{
+		iLuxEntity *pEntity = static_cast<iLuxEntity*>(apBody->GetUserData());
+		if(pEntity==NULL || pEntity->GetEntityType()!=eLuxEntityType_Prop) return false;
+
+		iLuxProp *pProp = static_cast<iLuxProp*>(pEntity);
+		aTarget.mlEntityId = pProp->GetID();
+		aTarget.mbBodyMoving = cLuxInteractionReportHandler::IsReportedBody(apBody);
+		aTarget.mbHoldable = cLuxInteractionReportHandler::IsHoldable(pProp);
+		aTarget.mbCreatedAtRuntime = pProp->IsCreatedAtRuntime();
+		aTarget.mbPeerDriven = pProp->IsPeerDriven();
+		aTarget.mlBodyCount = CountReportedBodies(pProp);
+		return true;
 	}
 
 	// The current map's props, as the report model reads them.
@@ -58,8 +76,14 @@ namespace
 	};
 }
 
+void cLuxInteractionContactCallback::OnBodyCollide(iPhysicsBody *apBody, iPhysicsBody *apCollideBody,
+	cPhysicsContactData* apContactData)
+{
+	mpHandler->OnPropBodyContact(apBody, apCollideBody);
+}
+
 cLuxInteractionReportHandler::cLuxInteractionReportHandler()
-	: iLuxUpdateable("LuxInteractionReportHandler"), mfReportTimeMs(0.0)
+	: iLuxUpdateable("LuxInteractionReportHandler"), mfReportTimeMs(0.0), mContactCallback(this)
 {
 }
 
@@ -74,6 +98,34 @@ void cLuxInteractionReportHandler::OnLocalInteractionEnded(eGameInteractionEndin
 {
 	mModel.EndInteraction(aEnding, GetGameTimeMs());
 	PublishEvents();
+}
+
+void cLuxInteractionReportHandler::OnLocalPlayerPushed(iPhysicsBody *apBody)
+{
+	cLocalInteractionContact contact;
+	contact.mbByLocalPlayer = true;
+	if(GetContactTarget(apBody, contact.mTouched)) mModel.RecordContact(contact);
+}
+
+// Every awake holdable prop's moving bodies' contacts arrive here, so the ones that touched no moving
+// body are dropped before the model sees them.
+void cLuxInteractionReportHandler::OnPropBodyContact(iPhysicsBody *apBody, iPhysicsBody *apCollideBody)
+{
+	if(!IsReportedBody(apCollideBody)) return;
+
+	cLocalInteractionContact contact;
+	contact.mlSourceEntityId = static_cast<iLuxEntity*>(apBody->GetUserData())->GetID();
+	if(GetContactTarget(apCollideBody, contact.mTouched)) mModel.RecordContact(contact);
+}
+
+void cLuxInteractionReportHandler::ListenForContacts(iLuxProp *apProp)
+{
+	if(!IsHoldable(apProp)) return;
+	for(int i=0; i<apProp->GetBodyNum(); ++i)
+	{
+		iPhysicsBody *pBody = apProp->GetBody(i);
+		if(IsReportedBody(pBody)) pBody->AddBodyCallback(&mContactCallback);
+	}
 }
 
 void cLuxInteractionReportHandler::StopReporting(int alEntityId)
@@ -127,6 +179,22 @@ void cLuxInteractionReportHandler::CreateWorldEntities(cLuxMap *apMap)
 bool cLuxInteractionReportHandler::IsReportedBody(iPhysicsBody *apBody)
 {
 	return apBody->GetMass() > 0;
+}
+
+bool cLuxInteractionReportHandler::IsHoldable(iLuxProp *apProp)
+{
+	switch(apProp->GetPropType())
+	{
+	case eLuxPropType_SwingDoor:
+	case eLuxPropType_Wheel:
+	case eLuxPropType_Lever:
+	case eLuxPropType_MultiSlider:
+		return true;
+	case eLuxPropType_Object:
+		return static_cast<cLuxProp_Object*>(apProp)->GetObjectType()!=eLuxObjectType_Static;
+	default:
+		return false;
+	}
 }
 
 double cLuxInteractionReportHandler::GetGameTimeMs()

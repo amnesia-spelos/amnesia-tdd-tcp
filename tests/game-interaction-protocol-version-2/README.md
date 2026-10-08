@@ -114,7 +114,7 @@ The game keeps a report of the holdable entities whose motion the local player d
 
 - the entity the local player is interacting with, from its `interactionstart`;
 - entities the player released, until they come to rest;
-- free entities that a reported body or the local player's body touched, from their `reportcontact`. Static bodies, character bodies, Avatars, runtime-created entities, and Peer-Driven Entities never enter by contact.
+- free entities that a reported entity's moving body touched, or that the local player walked into, from their `reportcontact`, until they come to rest. An entity they touch in turn enters as well, so a toppled stack is reported. Static bodies, character bodies, Avatars, runtime-created entities, and Peer-Driven Entities never enter by contact, and a contact by anything else, such as an Avatar or an unreported prop, reports nothing.
 
 An entity leaves the report when it settles (`reportsettled`), breaks (`reportbroke`), or is driven by a Peer, and every entity leaves it when its Map Visit ends. Settling and breaking send an Event for that entity; the end of a Map Visit is told by the next `mapentered`. Only an entity's moving bodies are reported; a static body, such as a door's frame, is not. The report holds at most 32 bodies. An entity whose bodies do not fit is not reported and stays under local physics: it gets no `reportcontact`, or its `interactionstart` is still sent but its bodies stay out of State Updates.
 

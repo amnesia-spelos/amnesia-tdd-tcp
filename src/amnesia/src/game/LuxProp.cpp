@@ -22,6 +22,7 @@
 #include "LuxMap.h"
 #include "LuxPlayer.h"
 #include "LuxInteractConnections.h"
+#include "LuxInteractionReportHandler.h"
 
 
 
@@ -373,6 +374,10 @@ void iLuxProp::SetupAfterLoad(cWorld *apWorld)
 	///////////////////////
 	// Setup implemented 
 	OnSetupAfterLoad(apWorld);
+
+	///////////////////////
+	// Report the props this one knocks
+	if(gpBase->mpInteractionReportHandler) gpBase->mpInteractionReportHandler->ListenForContacts(this);
 }
 
 //-----------------------------------------------------------------------

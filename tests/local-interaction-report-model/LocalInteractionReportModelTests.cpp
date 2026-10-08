@@ -80,6 +80,213 @@ namespace
 		return false;
 	}
 
+	// The local player's character body touched a moving body of a free, map-placed holdable entity.
+	cLocalInteractionContact PlayerTouches(int alEntityId, size_t alBodyCount = 1)
+	{
+		cLocalInteractionContact contact;
+		contact.mbByLocalPlayer = true;
+		contact.mTouched.mlEntityId = alEntityId;
+		contact.mTouched.mlBodyCount = alBodyCount;
+		return contact;
+	}
+
+	// A moving body of entity alSourceEntityId touched a moving body of a free, map-placed holdable entity.
+	cLocalInteractionContact EntityTouches(int alSourceEntityId, int alEntityId, size_t alBodyCount = 1)
+	{
+		cLocalInteractionContact contact;
+		contact.mlSourceEntityId = alSourceEntityId;
+		contact.mTouched.mlEntityId = alEntityId;
+		contact.mTouched.mlBodyCount = alBodyCount;
+		return contact;
+	}
+
+	void TestThePlayerWalkingIntoAPropReportsItUntilItSettles()
+	{
+		cFakeWorld world;
+		world.Place(20);
+		cLocalInteractionReportModel model;
+
+		model.RecordContact(PlayerTouches(20));
+		Expect(TakeEvents(model).empty(), "a contact is acted on only by the next update");
+		model.Update(world, 100.0);
+		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_ReportContact, 20),
+			"a prop the local player touched raises reportcontact");
+		Expect(Reports(model, 20), "a prop the local player touched is reported");
+
+		model.Update(world, 116.0);
+		Expect(TakeEvents(model).empty(), "a contact is acted on once");
+		world.SetAsleep(20, true);
+		model.Update(world, 132.0);
+		vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_ReportSettled, 20),
+			"a prop that entered by contact settles");
+		Expect(!Reports(model, 20), "a settled prop leaves the report");
+	}
+
+	void TestOnlyAReportedBodyKnocksAPropIntoTheReport()
+	{
+		cFakeWorld world;
+		world.Place(10);
+		world.Place(20);
+		world.Place(21);
+		cLocalInteractionReportModel model;
+		model.StartInteraction(10, 0, false, 1);
+		model.EndInteraction(eGameInteractionEnding_Thrown, 0.0);
+		model.Update(world, 0.0);
+		TakeEvents(model);
+
+		// An Avatar, another character, or a prop no one moved is not a reported body.
+		model.RecordContact(EntityTouches(99, 21));
+		model.RecordContact(EntityTouches(10, 20));
+		model.Update(world, 16.0);
+		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_ReportContact, 20),
+			"only the thrown prop's contact raises reportcontact");
+		Expect(Reports(model, 20), "a prop the thrown prop touched is reported");
+		Expect(!Reports(model, 21), "a prop an unreported body touched is not reported");
+	}
+
+	void TestOnlyAFreeMapPlacedHoldablePropEntersByContact()
+	{
+		cFakeWorld world;
+		for (int lEntityId = 20; lEntityId <= 23; ++lEntityId) world.Place(lEntityId);
+		cLocalInteractionReportModel model;
+
+		cLocalInteractionContact staticBody = PlayerTouches(20);
+		staticBody.mTouched.mbBodyMoving = false;
+		cLocalInteractionContact notHoldable = PlayerTouches(21);
+		notHoldable.mTouched.mbHoldable = false;
+		cLocalInteractionContact runtimeCreated = PlayerTouches(22);
+		runtimeCreated.mTouched.mbCreatedAtRuntime = true;
+		cLocalInteractionContact peerDriven = PlayerTouches(23);
+		peerDriven.mTouched.mbPeerDriven = true;
+		model.RecordContact(staticBody);
+		model.RecordContact(notHoldable);
+		model.RecordContact(runtimeCreated);
+		model.RecordContact(peerDriven);
+		model.Update(world, 0.0);
+
+		Expect(TakeEvents(model).empty(), "touching a body that cannot enter raises nothing");
+		Expect(model.GetReportedBodies().empty(),
+			"a static body, an entity that is not holdable, a runtime-created entity, and a Peer-Driven Entity "
+			"never enter by contact");
+	}
+
+	void TestAToppledStackIsReportedPropByProp()
+	{
+		cFakeWorld world;
+		for (int lEntityId = 10; lEntityId <= 23; ++lEntityId) world.Place(lEntityId);
+		cLocalInteractionReportModel model;
+		model.StartInteraction(10, 0, false, 1);
+		model.EndInteraction(eGameInteractionEnding_Thrown, 0.0);
+		model.Update(world, 0.0);
+		TakeEvents(model);
+
+		// In one physics step the thrown prop hits the bottom crate, which knocks the next one.
+		model.RecordContact(EntityTouches(20, 21));
+		model.RecordContact(EntityTouches(10, 20));
+		model.Update(world, 16.0);
+		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 2 && IsEvent(vEvents[0], eGameInteractionEvent_ReportContact, 20) &&
+			IsEvent(vEvents[1], eGameInteractionEvent_ReportContact, 21),
+			"a prop knocked by a knocked prop in the same step is reported after it");
+
+		model.RecordContact(EntityTouches(21, 22));
+		model.Update(world, 32.0);
+		vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_ReportContact, 22),
+			"a prop knocked by a knocked prop in a later step is reported");
+		Expect(Reports(model, 20) && Reports(model, 21) && Reports(model, 22), "the whole toppled stack is reported");
+		Expect(!Reports(model, 23), "an untouched prop is not");
+
+		for (int lEntityId = 10; lEntityId <= 22; ++lEntityId) world.SetAsleep(lEntityId, true);
+		model.Update(world, 48.0);
+		vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 4, "every prop of the stack settles");
+		Expect(model.GetReportedBodies().empty(), "a settled stack leaves the report");
+	}
+
+	void TestAContactThatWouldExceedTheBudgetIsNotReported()
+	{
+		cFakeWorld world;
+		world.Place(10, 30);
+		world.Place(20, 3);
+		world.Place(21, 1);
+		world.Place(22, 2);
+		cLocalInteractionReportModel model;
+		model.StartInteraction(10, 0, false, 30);
+		model.EndInteraction(eGameInteractionEnding_Thrown, 0.0);
+		model.Update(world, 0.0);
+		TakeEvents(model);
+
+		model.RecordContact(EntityTouches(10, 20, 3));
+		model.Update(world, 16.0);
+		Expect(TakeEvents(model).empty(), "a prop whose bodies do not fit raises no reportcontact");
+		Expect(!Reports(model, 20), "a prop whose bodies do not fit stays under local physics");
+
+		model.RecordContact(EntityTouches(20, 21));
+		model.Update(world, 32.0);
+		Expect(!Reports(model, 21), "a prop that did not fit knocks nothing into the report");
+
+		model.RecordContact(EntityTouches(10, 22, 2));
+		model.Update(world, 48.0);
+		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_ReportContact, 22),
+			"a prop that fits exactly into 32 bodies enters by contact");
+		Expect(model.GetReportedBodies().size() == cLocalInteractionReportModel::kMaxBodies,
+			"the report holds at most 32 bodies");
+	}
+
+	void TestAHeldPropThatDidNotFitNeverEntersByContact()
+	{
+		cFakeWorld world;
+		world.Place(10, 30);
+		world.Place(20, 3);
+		cLocalInteractionReportModel model;
+		model.StartInteraction(10, 0, false, 30);
+		model.EndInteraction(eGameInteractionEnding_Thrown, 0.0);
+		model.StartInteraction(20, 0, false, 3);
+		model.Update(world, 0.0);
+		TakeEvents(model);
+		model.StopReporting(10);
+
+		model.RecordContact(PlayerTouches(20, 3));
+		model.Update(world, 16.0);
+		Expect(TakeEvents(model).empty(), "the prop the local player holds raises no reportcontact");
+		Expect(!Reports(model, 20), "the prop the local player holds does not enter by contact");
+	}
+
+	void TestAKnockedPropThatNeverSleepsSettlesAtTheCapFromItsContact()
+	{
+		cFakeWorld world;
+		world.Place(20);
+		cLocalInteractionReportModel model;
+		model.RecordContact(PlayerTouches(20));
+		model.Update(world, 1000.0);
+		TakeEvents(model);
+
+		model.Update(world, 1000.0 + cLocalInteractionReportModel::kSettlingCapMs - 1.0);
+		Expect(TakeEvents(model).empty(), "a knocked prop is reported until the cap");
+		model.Update(world, 1000.0 + cLocalInteractionReportModel::kSettlingCapMs);
+		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_ReportSettled, 20),
+			"a knocked prop settles at the cap counted from its contact");
+	}
+
+	void TestClearingDropsContactsNotYetActedOn()
+	{
+		cFakeWorld world;
+		world.Place(20);
+		cLocalInteractionReportModel model;
+		model.RecordContact(PlayerTouches(20));
+
+		model.Clear();
+		model.Update(world, 0.0);
+		Expect(TakeEvents(model).empty(), "a contact from the previous Map Visit raises nothing");
+		Expect(model.GetReportedBodies().empty(), "a contact from the previous Map Visit reports nothing");
+	}
+
 	void TestStartingAGrabRaisesStartedAndReportsTheHeldBody()
 	{
 		cFakeWorld world;
@@ -487,6 +694,14 @@ int main()
 	TestAnEntityWhoseBodiesDoNotFitIsNotReported();
 	TestClearingEmptiesTheReportWithoutEvents();
 	TestADrivenEntityLeavesTheReportWithoutEvents();
+	TestThePlayerWalkingIntoAPropReportsItUntilItSettles();
+	TestOnlyAReportedBodyKnocksAPropIntoTheReport();
+	TestOnlyAFreeMapPlacedHoldablePropEntersByContact();
+	TestAToppledStackIsReportedPropByProp();
+	TestAContactThatWouldExceedTheBudgetIsNotReported();
+	TestAHeldPropThatDidNotFitNeverEntersByContact();
+	TestAKnockedPropThatNeverSleepsSettlesAtTheCapFromItsContact();
+	TestClearingDropsContactsNotYetActedOn();
 	std::cout << "Local interaction report model cases passed\n";
 	return 0;
 }
