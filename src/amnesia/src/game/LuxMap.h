@@ -70,11 +70,14 @@ friend class cLuxDissolveEntity;
 friend class cLuxSavedMap;
 friend class cLuxSavedGameMap;
 public:	
-	cLuxMap(const tString& asName);
+	cLuxMap(const tString& asName, const tString& asMapPath);
 	~cLuxMap();
 
 	const tString& GetName(){ return msName;}
 	const tString& GetFileName(){ return msFileName;}
+	// The Map Path that names this map to Peers (MapPath.h). GetFileName() stays as the level door or
+	// script wrote it, because saves store and compare it.
+	const tString& GetMapPath(){ return msMapPath;}
 
 	void SetDisplayNameEntry(const tString& asEntry){ msDisplayNameEntry = asEntry;}
 	const tString& GetDisplayNameEntry(){ return msDisplayNameEntry;}
@@ -203,6 +206,7 @@ private:
 
 	tString msName;
 	tString msFileName;
+	tString msMapPath;
 
 	tString msDisplayNameEntry;
 

@@ -78,7 +78,7 @@ cGameInteractionBodySamples cLuxInteractionReportHandler::GetReportedBodies() co
 
 	samples.mlTimeMs = static_cast<unsigned long long>(mfReportTimeMs);
 	samples.mvBodies = mModel.GetReportedBodies();
-	samples.msMapFile = pMap->GetFileName();
+	samples.msMapFile = pMap->GetMapPath();
 	return samples;
 }
 
@@ -118,7 +118,7 @@ void cLuxInteractionReportHandler::PublishEvents()
 	for(size_t i=0; i<vEvents.size(); ++i)
 	{
 		cGameInteractionEntityEvent entityEvent = vEvents[i].mEntityEvent;
-		entityEvent.msMapFile = pMap->GetFileName();
+		entityEvent.msMapFile = pMap->GetMapPath();
 		gpBase->mpSocketServer->PublishEvent(cGameInteractionEvent(vEvents[i].mType, entityEvent));
 	}
 }

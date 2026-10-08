@@ -38,7 +38,7 @@ namespace
 
 		virtual std::string GetMapFile() const
 		{
-			return gpBase->mpMapHandler->GetCurrentMap()->GetFileName();
+			return gpBase->mpMapHandler->GetCurrentMap()->GetMapPath();
 		}
 
 		virtual void RunScript(const std::string& asScript)

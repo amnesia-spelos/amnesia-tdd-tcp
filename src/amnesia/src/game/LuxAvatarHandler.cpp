@@ -85,7 +85,7 @@ void cLuxAvatarHandler::SetAvatarCollision(const tString& asIdentifier, bool abC
 void cLuxAvatarHandler::Update(float afTimeStep)
 {
 	cLuxMap *pCurrentMap = gpBase->mpMapHandler->GetCurrentMap();
-	const tString sCurrentMapFile = pCurrentMap ? pCurrentMap->GetFileName() : "";
+	const tString sCurrentMapFile = pCurrentMap ? pCurrentMap->GetMapPath() : "";
 	const double fLocalTimeMs = GetLocalTimeMs();
 	for(tAvatarMapIt it = m_mapAvatars.begin(); it != m_mapAvatars.end(); ++it)
 	{

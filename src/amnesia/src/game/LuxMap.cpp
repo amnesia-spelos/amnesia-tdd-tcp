@@ -67,11 +67,12 @@ cLuxDissolveEntity::~cLuxDissolveEntity()
 
 //-----------------------------------------------------------------------
 
-cLuxMap::cLuxMap(const tString& asName)
+cLuxMap::cLuxMap(const tString& asName, const tString& asMapPath)
 {
 	mpEngine = gpBase->mpEngine;
 
 	msName = asName;
+	msMapPath = asMapPath;
 
 	mpLatestAddedEntity = NULL;
 	mlRuntimeCreationDepth = 0;

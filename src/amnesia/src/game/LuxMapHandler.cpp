@@ -28,6 +28,7 @@
 #include "LuxSavedGame.h"
 #include "LuxSaveHandler.h"
 #include "LuxConfigHandler.h"
+#include "MapPath.h"
 #include "LuxLoadScreenHandler.h"
 #include "LuxMainMenu.h"
 #include "LuxSocketServer.h"
@@ -411,9 +412,14 @@ void cLuxMapHandler::ChangeMap(const tString& asMapName, const tString& asStartP
 
 cLuxMap* cLuxMapHandler::LoadMap(const tString& asFileName, bool abLoadEntities)
 {
-	cLuxMap *pMap = hplNew( cLuxMap, ( FileToMapName(asFileName)) );
+	const tString sFile = msMapFolder+asFileName;
+	// The engine loads whichever file its searcher resolves, so that file names the map to Peers.
+	const tString sMapPath = MakeMapPath(
+		cString::To8Char(gpBase->mpEngine->GetResources()->GetFileSearcher()->GetFilePath(sFile)),
+		cString::To8Char(cPlatform::GetWorkingDir()), msMapFolder, asFileName);
+	cLuxMap *pMap = hplNew( cLuxMap, ( FileToMapName(asFileName), sMapPath) );
 	
-	pMap->LoadFromFile(msMapFolder+asFileName, abLoadEntities);
+	pMap->LoadFromFile(sFile, abLoadEntities);
 
 	mlstMaps.push_back(pMap);
 
@@ -439,7 +445,7 @@ void cLuxMapHandler::SetCurrentMap(cLuxMap* apMap, bool abRunScript, bool abFirs
 	if (gpBase && gpBase->mpSocketServer && apMap)
 	{
 		gpBase->mpSocketServer->PublishEvent(cGameInteractionEvent(
-			eGameInteractionEvent_MapChanged, apMap->GetFileName()));
+			eGameInteractionEvent_MapChanged, apMap->GetMapPath()));
 	}
 
 	//////////////////////////////////

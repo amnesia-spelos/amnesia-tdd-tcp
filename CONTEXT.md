@@ -120,6 +120,10 @@ _Avoid_: Remote hold, locked entity, puppet prop
 An Avatar whose latest Pose belongs to a different map than the local one, and which is therefore neither visible nor collidable until a Pose for the local map arrives.
 _Avoid_: Hidden avatar, inactive avatar
 
+**Map Path**:
+The path that names a map to Peers: the map file the game loaded, relative to the game's install folder, so it is the same on every installation however the map was entered.
+_Avoid_: Map file, map identifier
+
 **Map Script**:
 The script file with the same name as a map, stored beside it, that the game runs for that map.
 _Avoid_: Level script, map code, hps
