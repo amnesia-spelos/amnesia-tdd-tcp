@@ -124,6 +124,10 @@ _Avoid_: Hidden avatar, inactive avatar
 The path that names a map to Peers: the map file the game loaded, relative to the game's install folder, so it is the same on every installation however the map was entered.
 _Avoid_: Map file, map identifier
 
+**Map Visit**:
+One continuous stretch of play on a loaded map. It starts when the game loads a map, starts a story, or loads a save, even onto the map already loaded, and it ends at the next such start or on a return to the main menu. A death, or a map change to the map already loaded, continues the same Map Visit. Every entity reported to Peers, and every Peer-Driven Entity, belongs to one Map Visit.
+_Avoid_: Map load, level session
+
 **Map Script**:
 The script file with the same name as a map, stored beside it, that the game runs for that map.
 _Avoid_: Level script, map code, hps
