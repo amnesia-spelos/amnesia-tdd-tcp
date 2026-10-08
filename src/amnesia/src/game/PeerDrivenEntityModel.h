@@ -25,6 +25,10 @@ public:
 	// Marks the entity as being interacted with, starting an interaction with it as the local player's
 	// would, or clears the mark. Told only when the mark changes.
 	virtual void SetInteracting(int alEntityId, bool abInteracting) = 0;
+	// Snaps the entity to the final state of its break body and breaks it through the game's own break
+	// path. The entity is not given back to local physics or the local player before it is gone. One
+	// the game cannot break that way is given back instead.
+	virtual void BreakEntity(int alEntityId, const cGameInteractionBodyState& aFinalState) = 0;
 	virtual void SetBodyState(int alEntityId, int alBodyId, const cGameInteractionBodyState& aState) = 0;
 };
 
@@ -54,6 +58,10 @@ public:
 
 	// Gives the entity back to local physics from its current state, clearing any interacting mark.
 	eGameInteractionEntityOutcome Release(int alEntityId, iPeerDrivenEntityWorld& aWorld);
+	// Ends driving the entity by breaking it from the final state the breaking game had, clearing any
+	// interacting mark.
+	eGameInteractionEntityOutcome Break(int alEntityId, const cGameInteractionBodyState& aFinalState,
+		iPeerDrivenEntityWorld& aWorld);
 	// As the Session ends, the map changes, or a save loads.
 	void ReleaseAll(iPeerDrivenEntityWorld& aWorld);
 	// Forgets every entity without touching the world, when the maps holding them are already gone.

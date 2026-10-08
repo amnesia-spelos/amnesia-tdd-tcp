@@ -35,6 +35,25 @@ namespace
 		return true;
 	}
 
+	cGameInteractionBodyState GetBodyState(iPhysicsBody *apBody)
+	{
+		const cMatrixf& mtxWorld = apBody->GetWorldMatrix();
+		const cVector3f vPosition = mtxWorld.GetTranslation();
+		const cQuaternion qOrientation(mtxWorld.GetRotation());
+		const cVector3f vLinear = apBody->GetLinearVelocity();
+		// The engine's angular velocity is in radians per second.
+		const cVector3f vAngular = apBody->GetAngularVelocity();
+
+		cGameInteractionBodyState state;
+		state.mPosition = cGameInteractionPosition(vPosition.x, vPosition.y, vPosition.z);
+		state.mOrientation = cGameInteractionQuaternion(qOrientation.v.x, qOrientation.v.y,
+			qOrientation.v.z, qOrientation.w);
+		state.mLinearVelocity = cGameInteractionVector(vLinear.x, vLinear.y, vLinear.z);
+		state.mAngularVelocity = cGameInteractionVector(cMath::ToDeg(vAngular.x), cMath::ToDeg(vAngular.y),
+			cMath::ToDeg(vAngular.z));
+		return state;
+	}
+
 	// The current map's props, as the report model reads them.
 	class cLuxLocalInteractionWorld : public iLocalInteractionWorld
 	{
@@ -52,21 +71,8 @@ namespace
 			{
 				iPhysicsBody *pBody = pProp->GetBody(i);
 				if(!cLuxInteractionReportHandler::IsReportedBody(pBody)) continue;
-				const cMatrixf& mtxWorld = pBody->GetWorldMatrix();
-				const cVector3f vPosition = mtxWorld.GetTranslation();
-				const cQuaternion qOrientation(mtxWorld.GetRotation());
-				const cVector3f vLinear = pBody->GetLinearVelocity();
-				// The engine's angular velocity is in radians per second.
-				const cVector3f vAngular = pBody->GetAngularVelocity();
-
-				cGameInteractionBodyState state;
-				state.mPosition = cGameInteractionPosition(vPosition.x, vPosition.y, vPosition.z);
-				state.mOrientation = cGameInteractionQuaternion(qOrientation.v.x, qOrientation.v.y,
-					qOrientation.v.z, qOrientation.w);
-				state.mLinearVelocity = cGameInteractionVector(vLinear.x, vLinear.y, vLinear.z);
-				state.mAngularVelocity = cGameInteractionVector(cMath::ToDeg(vAngular.x), cMath::ToDeg(vAngular.y),
-					cMath::ToDeg(vAngular.z));
-				avBodies.push_back(cLocalInteractionBody(pBody->GetUniqueID(), state, !pBody->GetEnabled()));
+				avBodies.push_back(cLocalInteractionBody(pBody->GetUniqueID(), GetBodyState(pBody),
+					!pBody->GetEnabled()));
 			}
 			return true;
 		}
@@ -126,6 +132,14 @@ void cLuxInteractionReportHandler::ListenForContacts(iLuxProp *apProp)
 		iPhysicsBody *pBody = apProp->GetBody(i);
 		if(IsReportedBody(pBody)) pBody->AddBodyCallback(&mContactCallback);
 	}
+}
+
+// The prop is to make its debris from the state its break body has now. Called while the physics step
+// or the map's update runs.
+void cLuxInteractionReportHandler::OnPropBroke(iLuxProp *apProp, iPhysicsBody *apBreakBody)
+{
+	mModel.Break(apProp->GetID(), GetBodyState(apBreakBody));
+	PublishEvents();
 }
 
 void cLuxInteractionReportHandler::StopReporting(int alEntityId)

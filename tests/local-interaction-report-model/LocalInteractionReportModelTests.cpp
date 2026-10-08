@@ -486,6 +486,58 @@ namespace
 		Expect(cLocalInteractionReportModel::kSettlingCapMs == 3000.0, "the Settling cap is about 3 s");
 	}
 
+	void TestAThrownEntityThatBreaksRaisesReportBrokeWithItsFinalState()
+	{
+		cFakeWorld world;
+		world.Place(12);
+		cLocalInteractionReportModel model;
+		model.StartInteraction(12, 0, false, 1);
+		model.EndInteraction(eGameInteractionEnding_Thrown, 100.0);
+		model.Update(world, 200.0);
+		TakeEvents(model);
+
+		cGameInteractionBodyState finalState;
+		finalState.mPosition = cGameInteractionPosition(1.25f, -2.5f, 3.75f);
+		finalState.mLinearVelocity = cGameInteractionVector(0.5f, 0.0f, -1.0f);
+		model.Break(12, finalState);
+		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_ReportBroke, 12),
+			"a reported entity that breaks raises reportbroke");
+		Expect(vEvents[0].mEntityEvent.mState.mPosition.mfY == -2.5f &&
+			vEvents[0].mEntityEvent.mState.mLinearVelocity.mfZ == -1.0f, "reportbroke carries the final state");
+		Expect(!Reports(model, 12), "a broken entity leaves the report at once");
+
+		model.Update(world, 300.0);
+		Expect(!Reports(model, 12) && TakeEvents(model).empty(), "a broken entity does not come back to settle");
+	}
+
+	void TestAHeldEntityThatBreaksEndsItsInteractionAsDestroyedOnly()
+	{
+		cFakeWorld world;
+		world.Place(12);
+		world.Place(13);
+		cLocalInteractionReportModel model;
+		model.StartInteraction(12, 0, false, 1);
+		model.Update(world, 0.0);
+		TakeEvents(model);
+
+		model.Break(12, cGameInteractionBodyState());
+		Expect(TakeEvents(model).empty(), "a held entity that breaks raises no reportbroke");
+		model.EndInteraction(eGameInteractionEnding_Destroyed, 100.0);
+		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_InteractionEnded, 12) &&
+			vEvents[0].mEntityEvent.mEnding == eGameInteractionEnding_Destroyed,
+			"its interaction ends as destroyed");
+		model.Update(world, 150.0);
+		Expect(!Reports(model, 12) && TakeEvents(model).empty(), "and it leaves the report without settling");
+
+		model.StartInteraction(13, 0, false, 1);
+		model.EndInteraction(eGameInteractionEnding_Destroyed, 200.0);
+		TakeEvents(model);
+		model.Break(13, cGameInteractionBodyState());
+		Expect(TakeEvents(model).empty(), "a break after the destroyed ending raises nothing");
+	}
+
 	void TestADestroyedEntityLeavesTheReportWithoutSettling()
 	{
 		cFakeWorld world;
@@ -687,6 +739,8 @@ int main()
 	TestAnEntitySettlesOnlyWhenEveryBodySleeps();
 	TestAnEntityThatNeverSleepsSettlesAtTheCap();
 	TestADestroyedEntityLeavesTheReportWithoutSettling();
+	TestAThrownEntityThatBreaksRaisesReportBrokeWithItsFinalState();
+	TestAHeldEntityThatBreaksEndsItsInteractionAsDestroyedOnly();
 	TestAnEntityTheWorldLostLeavesTheReport();
 	TestSeveralEntitiesAreReportedAtOnce();
 	TestGrabbingASettlingEntityAgainHoldsIt();

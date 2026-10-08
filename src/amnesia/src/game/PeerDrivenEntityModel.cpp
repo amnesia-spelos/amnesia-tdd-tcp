@@ -148,6 +148,21 @@ eGameInteractionEntityOutcome cPeerDrivenEntityModel::Release(int alEntityId, iP
 	return eGameInteractionEntityOutcome_NotFound;
 }
 
+eGameInteractionEntityOutcome cPeerDrivenEntityModel::Break(int alEntityId,
+	const cGameInteractionBodyState& aFinalState, iPeerDrivenEntityWorld& aWorld)
+{
+	for (size_t i = 0; i < mvDriven.size(); ++i)
+	{
+		if (mvDriven[i].mlEntityId != alEntityId) continue;
+		const bool bInteracting = mvDriven[i].mbInteracting;
+		mvDriven.erase(mvDriven.begin() + i);
+		if (bInteracting) aWorld.SetInteracting(alEntityId, false);
+		aWorld.BreakEntity(alEntityId, aFinalState);
+		return eGameInteractionEntityOutcome_Success;
+	}
+	return eGameInteractionEntityOutcome_NotFound;
+}
+
 void cPeerDrivenEntityModel::ReleaseAll(iPeerDrivenEntityWorld& aWorld)
 {
 	while (!mvDriven.empty()) EndDriving(0, aWorld);

@@ -115,6 +115,13 @@ public:
 	void SetStuckState(int alState);
 
 	void Break();
+	// Breaks the prop as another game's broke (ADR 0005): its break body is placed at a_mtxWorld with
+	// these velocities, again just before its debris is made, so the debris starts from that state
+	// however the body moved in between. The angular velocity is in radians per second.
+	void BreakFrom(const cMatrixf& a_mtxWorld, const cVector3f& avLinearVelocity,
+		const cVector3f& avAngularVelocity);
+	// The body the break's debris, contained item, sound, and particles are placed from.
+	iPhysicsBody* GetBreakBody();
 
 	void OnHealthChange();
 	void OnDamage(float afAmount, int alStrength);
@@ -150,6 +157,8 @@ private:
 	void SetInsanityVisionVisability(bool abX);
 
 	void SetJointMinMax(int alIdx, float afMin, float afMax);
+	int GetBreakBodyIndex();
+	void PlaceBreakBody();
 	
 
 	//General
@@ -161,6 +170,11 @@ private:
 	tString msContainedItem;
 	int mlStuckState;
 	bool mbDisableBreakable;
+	// The state BreakFrom places the break body in.
+	bool mbBreakFromState;
+	cMatrixf m_mtxBreakBody;
+	cVector3f mvBreakLinearVelocity;
+	cVector3f mvBreakAngularVelocity;
 
 	bool mbIsInsanityVision;
 	float mfVisionMaxSanity;

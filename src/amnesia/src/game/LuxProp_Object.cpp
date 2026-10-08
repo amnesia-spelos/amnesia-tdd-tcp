@@ -25,6 +25,7 @@
 #include "LuxEnemy.h"
 #include "LuxProp_Item.h"
 #include "LuxHintHandler.h"
+#include "LuxInteractionReportHandler.h"
 
 //////////////////////////////////////////////////////////////////////////
 // LOADER
@@ -200,6 +201,10 @@ static inline cVector3f GetCorrectNormal(const cVector3f& avNormal, const cVecto
 
 void cLuxProp_Object_BodyCallback::OnBodyCollide(iPhysicsBody *apBody, iPhysicsBody *apCollideBody, cPhysicsContactData* apContactData)
 {
+	// The game reporting a Peer-Driven Entity decides its breaking and damage, so its contacts here do
+	// neither. DisableBreakable cannot stand in for this, since it still destroys a broken prop.
+	if(mpObject->IsPeerDriven()) return;
+
 	//////////////////////////////////////
 	// Check breakage
 	if(mpObject->mBreakData.mbActive)
@@ -279,6 +284,7 @@ void cLuxProp_Object_BodyCallback::OnBodyCollide(iPhysicsBody *apBody, iPhysicsB
 cLuxProp_Object::cLuxProp_Object(const tString &asName,int alID, cLuxMap *apMap) : iLuxProp(asName,alID,apMap, eLuxPropType_Object)
 {
 	mbBroken = false;
+	mbBreakFromState = false;
 	mfLifeLengthCount =0;
 	mlStuckState =0;
 
@@ -473,6 +479,8 @@ void cLuxProp_Object::UpdatePropSpecific(float afTimeStep)
 
 void cLuxProp_Object::BeforePropDestruction()
 {
+	if(mbBroken && mbBreakFromState) PlaceBreakBody();
+
 	//////////////////////////////
 	// Check if break should happen and init stuff
 	if(mbBroken == false || mBreakData.mbActive==false || mvBodies.empty() || mbDisableBreakable)
@@ -485,15 +493,7 @@ void cLuxProp_Object::BeforePropDestruction()
 
 	////////////////////////////////
 	// Get the body to use as base for postion
-	int lIdx = 0;
-	if(mBreakData.msEntityAlignBody != "")
-	{
-		lIdx = GetBodyIndexFromName(mBreakData.msEntityAlignBody);
-		if(lIdx < 0){
-			lIdx = 0;
-			Warning("Body '%s' was not found in object '%s'", mBreakData.msEntityAlignBody.c_str(), msName.c_str());
-		}
-	}
+	int lIdx = GetBreakBodyIndex();
 	iPhysicsBody *pBaseBody = mvBodies[lIdx];
 	cEntityBodyExtraData* pBodyData = &mvBodyExtraData[lIdx];
 	mtxCenterTransform = pBaseBody->GetLocalMatrix();
@@ -715,8 +715,59 @@ void  cLuxProp_Object::SetStuckState(int alState)
 
 void cLuxProp_Object::Break()
 {
+	// Told now, because the report drops an entity that is to be destroyed before the map destroys it.
+	// No physics step comes between, so the debris starts from the state told.
+	if(GetDestroyMe()==false && mvBodies.empty()==false && gpBase->mpInteractionReportHandler)
+		gpBase->mpInteractionReportHandler->OnPropBroke(this, GetBreakBody());
 	mbBroken = true;
 	mpMap->DestroyEntity(this);
+}
+
+//-----------------------------------------------------------------------
+
+void cLuxProp_Object::BreakFrom(const cMatrixf& a_mtxWorld, const cVector3f& avLinearVelocity,
+	const cVector3f& avAngularVelocity)
+{
+	if(mvBodies.empty()==false)
+	{
+		mbBreakFromState = true;
+		m_mtxBreakBody = a_mtxWorld;
+		mvBreakLinearVelocity = avLinearVelocity;
+		mvBreakAngularVelocity = avAngularVelocity;
+		PlaceBreakBody();
+	}
+	Break();
+}
+
+//-----------------------------------------------------------------------
+
+iPhysicsBody* cLuxProp_Object::GetBreakBody()
+{
+	if(mvBodies.empty()) return NULL;
+	return mvBodies[GetBreakBodyIndex()];
+}
+
+//-----------------------------------------------------------------------
+
+int cLuxProp_Object::GetBreakBodyIndex()
+{
+	if(mBreakData.msEntityAlignBody == "") return 0;
+
+	int lIdx = GetBodyIndexFromName(mBreakData.msEntityAlignBody);
+	if(lIdx >= 0) return lIdx;
+	Warning("Body '%s' was not found in object '%s'", mBreakData.msEntityAlignBody.c_str(), msName.c_str());
+	return 0;
+}
+
+//-----------------------------------------------------------------------
+
+void cLuxProp_Object::PlaceBreakBody()
+{
+	iPhysicsBody *pBody = GetBreakBody();
+	pBody->SetMatrix(m_mtxBreakBody);
+	pBody->SetLinearVelocity(mvBreakLinearVelocity);
+	pBody->SetAngularVelocity(mvBreakAngularVelocity);
+	pBody->Enable();
 }
 
 //-----------------------------------------------------------------------

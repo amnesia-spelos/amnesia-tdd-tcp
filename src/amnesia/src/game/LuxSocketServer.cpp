@@ -173,11 +173,11 @@ namespace
 			return gpBase->mpPeerDrivenEntityHandler->SetEntityInteracting(alEntityId, abInteracting);
 		}
 
-		// The game does not break Peer-Driven Entities yet, so it has none to break.
 		virtual eGameInteractionEntityOutcome BreakDrivenEntity(int alEntityId,
 			const cGameInteractionBodyState& aFinalState)
 		{
-			return eGameInteractionEntityOutcome_NotFound;
+			if(gpBase->mpPeerDrivenEntityHandler==NULL) return eGameInteractionEntityOutcome_NotFound;
+			return gpBase->mpPeerDrivenEntityHandler->BreakEntity(alEntityId, aFinalState);
 		}
 
 		virtual eGameInteractionEntityOutcome ReleaseDrivenEntity(int alEntityId)

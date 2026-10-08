@@ -6,9 +6,31 @@
 #include "LuxPlayer.h"
 #include "LuxPlayerState_Interact.h"
 #include "LuxProp.h"
+#include "LuxProp_Object.h"
 
 namespace
 {
+	cMatrixf GetWorldMatrix(const cGameInteractionBodyState& aState)
+	{
+		const cQuaternion qOrientation(aState.mOrientation.mfW, aState.mOrientation.mfX, aState.mOrientation.mfY,
+			aState.mOrientation.mfZ);
+		cMatrixf mtxWorld = cMath::MatrixQuaternion(qOrientation);
+		mtxWorld.SetTranslation(cVector3f(aState.mPosition.mfX, aState.mPosition.mfY, aState.mPosition.mfZ));
+		return mtxWorld;
+	}
+
+	cVector3f GetLinearVelocity(const cGameInteractionBodyState& aState)
+	{
+		return cVector3f(aState.mLinearVelocity.mfX, aState.mLinearVelocity.mfY, aState.mLinearVelocity.mfZ);
+	}
+
+	// The engine's angular velocity is in radians per second.
+	cVector3f GetAngularVelocity(const cGameInteractionBodyState& aState)
+	{
+		return cVector3f(cMath::ToRad(aState.mAngularVelocity.mfX), cMath::ToRad(aState.mAngularVelocity.mfY),
+			cMath::ToRad(aState.mAngularVelocity.mfZ));
+	}
+
 	// A map's props, as the Peer-Driven Entity model finds and moves them.
 	class cLuxPeerDrivenEntityWorld : public iPeerDrivenEntityWorld
 	{
@@ -97,19 +119,28 @@ namespace
 			if(abInteracting) pProp->OnInteractionStart();
 		}
 
+		// The prop stays Peer-driven until it is destroyed, so its own contacts neither break it again nor
+		// damage enemies meanwhile. Only an Object breaks by contact, so a Peer has no other prop's break to
+		// relay; any other prop is given back to local physics instead.
+		virtual void BreakEntity(int alEntityId, const cGameInteractionBodyState& aFinalState)
+		{
+			iLuxProp *pProp = GetProp(alEntityId);
+			if(pProp==NULL) return;
+			if(pProp->GetPropType()!=eLuxPropType_Object)
+			{
+				EndDriving(alEntityId);
+				return;
+			}
+			static_cast<cLuxProp_Object*>(pProp)->BreakFrom(GetWorldMatrix(aFinalState),
+				GetLinearVelocity(aFinalState), GetAngularVelocity(aFinalState));
+		}
+
 		virtual void SetBodyState(int alEntityId, int alBodyId, const cGameInteractionBodyState& aState)
 		{
 			iPhysicsBody *pBody = FindBody(alEntityId, alBodyId);
-			const cQuaternion qOrientation(aState.mOrientation.mfW, aState.mOrientation.mfX,
-				aState.mOrientation.mfY, aState.mOrientation.mfZ);
-			cMatrixf mtxWorld = cMath::MatrixQuaternion(qOrientation);
-			mtxWorld.SetTranslation(cVector3f(aState.mPosition.mfX, aState.mPosition.mfY, aState.mPosition.mfZ));
-			pBody->SetMatrix(mtxWorld);
-			pBody->SetLinearVelocity(cVector3f(aState.mLinearVelocity.mfX, aState.mLinearVelocity.mfY,
-				aState.mLinearVelocity.mfZ));
-			// The engine's angular velocity is in radians per second.
-			pBody->SetAngularVelocity(cVector3f(cMath::ToRad(aState.mAngularVelocity.mfX),
-				cMath::ToRad(aState.mAngularVelocity.mfY), cMath::ToRad(aState.mAngularVelocity.mfZ)));
+			pBody->SetMatrix(GetWorldMatrix(aState));
+			pBody->SetLinearVelocity(GetLinearVelocity(aState));
+			pBody->SetAngularVelocity(GetAngularVelocity(aState));
 			pBody->Enable();
 		}
 
@@ -180,6 +211,13 @@ eGameInteractionEntityOutcome cLuxPeerDrivenEntityHandler::SetEntityInteracting(
 {
 	cLuxPeerDrivenEntityWorld world(gpBase->mpMapHandler->GetCurrentMap(), m_mapBodyGravity);
 	return mModel.SetInteracting(alEntityId, abInteracting, world);
+}
+
+eGameInteractionEntityOutcome cLuxPeerDrivenEntityHandler::BreakEntity(int alEntityId,
+	const cGameInteractionBodyState& aFinalState)
+{
+	cLuxPeerDrivenEntityWorld world(gpBase->mpMapHandler->GetCurrentMap(), m_mapBodyGravity);
+	return mModel.Break(alEntityId, aFinalState, world);
 }
 
 eGameInteractionEntityOutcome cLuxPeerDrivenEntityHandler::ReleaseEntity(int alEntityId)

@@ -46,6 +46,15 @@ void cLocalInteractionReportModel::EndInteraction(eGameInteractionEnding aEnding
 	}
 }
 
+void cLocalInteractionReportModel::Break(int alEntityId, const cGameInteractionBodyState& aFinalState)
+{
+	const cReportedEntity* pReported = FindReported(alEntityId);
+	if (pReported == NULL || pReported->mbHeld) return;
+	StopReporting(alEntityId);
+	Raise(eGameInteractionEvent_ReportBroke, alEntityId);
+	mvEvents.back().mEntityEvent.mState = aFinalState;
+}
+
 void cLocalInteractionReportModel::StopReporting(int alEntityId)
 {
 	for (size_t i = 0; i < mvReported.size(); ++i)

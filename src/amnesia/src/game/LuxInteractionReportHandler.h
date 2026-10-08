@@ -44,6 +44,10 @@ public:
 	// Records the contacts of the prop's moving bodies from now on, if it is holdable.
 	void ListenForContacts(iLuxProp *apProp);
 
+	// The prop broke and is to be destroyed, and its break body has the final state its debris starts
+	// from.
+	void OnPropBroke(iLuxProp *apProp, iPhysicsBody *apBreakBody);
+
 	// The entity is no longer the local game's to report, because a Peer drives it.
 	void StopReporting(int alEntityId);
 

@@ -84,6 +84,10 @@ public:
 	// leaves it.
 	void EndInteraction(eGameInteractionEnding aEnding, double afTimeMs);
 
+	// A reported entity that broke raises reportbroke with the final state of its break body, and leaves
+	// the report. One the local player is holding is told by its interaction's end as destroyed instead.
+	void Break(int alEntityId, const cGameInteractionBodyState& aFinalState);
+
 	// The entity leaves the report without an Event, as when a Peer drives it. An interaction with it
 	// still ends as usual, but the entity does not return to the report to settle.
 	void StopReporting(int alEntityId);

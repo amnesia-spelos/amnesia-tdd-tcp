@@ -67,6 +67,12 @@ namespace
 			Log(abInteracting ? "interacting" : "not-interacting", alEntityId);
 		}
 
+		virtual void BreakEntity(int alEntityId, const cGameInteractionBodyState& aFinalState)
+		{
+			Log("break", alEntityId);
+			mBrokenState = aFinalState;
+		}
+
 		virtual void SetBodyState(int alEntityId, int alBodyId, const cGameInteractionBodyState& aState)
 		{
 			m_mapStates[std::make_pair(alEntityId, alBodyId)] = aState;
@@ -98,6 +104,7 @@ namespace
 		int mlLocallyInteractingId;
 		std::vector<std::string> mvCalls;
 		int mlBodyStatesSet;
+		cGameInteractionBodyState mBrokenState;
 
 	private:
 		void Log(const std::string& asCall, int alEntityId)
@@ -405,6 +412,40 @@ namespace
 		Expect(world.mlBodyStatesSet == 0, "driving it again does not replay old samples");
 	}
 
+	void TestBreakingSnapsTheEntityAndEndsDrivingIt()
+	{
+		cFakeWorld world;
+		world.Place(12);
+		cPeerDrivenEntityModel model;
+		Expect(model.Break(12, cGameInteractionBodyState(), world) == eGameInteractionEntityOutcome_NotFound,
+			"an entity that is not driven is not broken");
+		Expect(world.mvCalls.empty(), "the world is left alone");
+
+		model.Drive(12, world);
+		model.SetInteracting(12, true, world);
+		Add(model, world, 1000, 0.0, Body(12, 0, 1.0f));
+		Add(model, world, 1100, 50.0, Body(12, 0, 2.0f));
+		world.mvCalls.clear();
+
+		cGameInteractionBodyState finalState;
+		finalState.mPosition = cGameInteractionPosition(1.25f, -2.5f, 3.75f);
+		finalState.mAngularVelocity = cGameInteractionVector(0.0f, 90.0f, 0.0f);
+		Expect(model.Break(12, finalState, world) == eGameInteractionEntityOutcome_Success, "a driven entity breaks");
+		Expect(world.mvCalls.size() == 2 && world.mvCalls[0] == "not-interacting 12" && world.mvCalls[1] == "break 12",
+			"its mark is cleared and the world breaks it");
+		Expect(world.mBrokenState.mPosition.mfY == -2.5f && world.mBrokenState.mAngularVelocity.mfY == 90.0f,
+			"from the final state");
+		Expect(!model.IsDriving(12), "a broken entity is no longer driven");
+
+		world.ForgetStates();
+		model.Update(200.0, world);
+		Expect(world.mlBodyStatesSet == 0, "its buffered samples are no longer played back");
+		Expect(model.Break(12, finalState, world) == eGameInteractionEntityOutcome_NotFound,
+			"it breaks only once");
+		Expect(model.Release(12, world) == eGameInteractionEntityOutcome_NotFound, "and is not released after");
+		Expect(world.mvCalls.size() == 2, "the world is told nothing more");
+	}
+
 	void TestReleasingAllEndsEveryDrivenEntity()
 	{
 		cFakeWorld world;
@@ -473,6 +514,7 @@ int main()
 	TestOnlyAChangedMarkReachesTheWorld();
 	TestReleasingGivesTheEntityBack();
 	TestReleasingAllEndsEveryDrivenEntity();
+	TestBreakingSnapsTheEntityAndEndsDrivingIt();
 	TestAnEntityTheWorldLostIsForgotten();
 	TestClearingForgetsWithoutTouchingTheWorld();
 	std::cout << "Peer-Driven Entity model cases passed\n";
