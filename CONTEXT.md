@@ -81,7 +81,7 @@ The game's own story, started from the beginning from its configured start map r
 _Avoid_: Main game, base game, campaign, new game
 
 **Custom Story Identifier**:
-The installed folder name that uniquely identifies a Custom Story, as opposed to its possibly duplicated display name.
+The installed folder name that uniquely identifies a Custom Story, as opposed to its possibly duplicated display name. For a Custom Story subscribed through Steam Workshop, this is its Workshop item number.
 _Avoid_: Story name, story title
 
 **Chat Author**:
@@ -121,7 +121,7 @@ An Avatar whose latest Pose belongs to a different map than the local one, and w
 _Avoid_: Hidden avatar, inactive avatar
 
 **Map Path**:
-The path that names a map to Peers: the map file the game loaded, relative to the game's install folder, so it is the same on every installation however the map was entered.
+The path that names a map to Peers: the map file the game loaded, relative to the game's install folder, so it is the same on every installation however the map was entered. A map in a Custom Story subscribed through Steam Workshop is instead named relative to the Workshop folder, under a `workshop/` prefix.
 _Avoid_: Map file, map identifier
 
 **Map Visit**:
