@@ -275,6 +275,10 @@ void cLuxSocketServer::LogNewGatewayDiagnostic()
 
 void cLuxSocketServer::SetConnectionSettings(const tString& host, int port)
 {
+	// Confirming Options applies every option, so keep Sessions alive unless the endpoint changed.
+	// A listener that failed to start is retried even on the same endpoint.
+	if (host == mHost && port == mPort && mGateway.IsListening()) return;
+
     mHost = host;
     mPort = port;
 

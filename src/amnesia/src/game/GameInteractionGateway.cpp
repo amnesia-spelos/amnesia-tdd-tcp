@@ -799,6 +799,11 @@ int cGameInteractionGateway::GetPort() const
 	return mpImplementation->mTransport.GetPort();
 }
 
+bool cGameInteractionGateway::IsListening() const
+{
+	return mpImplementation->mTransport.IsListening();
+}
+
 const std::string& cGameInteractionGateway::GetDiagnostic() const
 {
 	return mpImplementation->mTransport.GetDiagnostic();

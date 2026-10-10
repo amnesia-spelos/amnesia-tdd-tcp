@@ -1131,8 +1131,11 @@ int main()
 	Expect(!blockedGateway.Listen("127.0.0.1", gateway.GetPort()),
 		"a second gateway reports endpoint binding failure");
 	Expect(!blockedGateway.GetDiagnostic().empty(), "binding failure exposes a useful diagnostic");
+	Expect(!blockedGateway.IsListening(), "a gateway that failed to bind is not listening");
+	Expect(gateway.IsListening(), "a bound gateway is listening");
 	blockedGateway.Update(adapter);
 	gateway.Shutdown();
+	Expect(!gateway.IsListening(), "a shut-down gateway is not listening");
 
 	ProtocolVersion2NegotiationGrantsSupportedRequestedCapabilities();
 	ResponseIsDeliveredWithinTheUpdateThatProcessedItsCommand();

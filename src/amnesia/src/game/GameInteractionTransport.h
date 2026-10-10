@@ -27,6 +27,7 @@ public:
 	void DisconnectPeer(const char* apDiagnostic);
 
 	int GetPort() const { return mlPort; }
+	bool IsListening() const { return mListenSocket != INVALID_SOCKET; }
 	bool HasPeer() const { return mPeerSocket != INVALID_SOCKET; }
 	std::string::size_type GetPendingDeliveryByteCount() const { return msOutboundBytes.size() - mlOutboundOffset; }
 	const std::string& GetDiagnostic() const { return msDiagnostic; }

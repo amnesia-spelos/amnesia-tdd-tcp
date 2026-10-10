@@ -480,6 +480,7 @@ public:
 	void Report(const cGameInteractionEvent& aEvent);
 
 	int GetPort() const;
+	bool IsListening() const;
 	const std::string& GetDiagnostic() const;
 
 private:
