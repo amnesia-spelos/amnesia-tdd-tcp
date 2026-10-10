@@ -354,7 +354,6 @@ public:
 	tWString msCrashFlagPath;
 	tWString msFirstStartFlagPath;
 
-	tWString msLogFolderPath;
 	cLogFileNames mLogFileNames;
 
     bool mbSaveConfigAtExit;

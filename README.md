@@ -89,12 +89,12 @@ For example, to watch the local Pose, run it and type `protocol 2 localpose`, th
 
 ### Game logs
 
-Each run of the game writes its own pair of logs to the `logs` folder in its save folder (`Documents/Amnesia/<MainSaveFolder>/logs/`):
+Each run of the game writes its own pair of logs to its save folder (`Documents/Amnesia/<MainSaveFolder>/`):
 
 - `hpl-yyyyMMdd-HHmmss.log`
 - `hpl_update-yyyyMMdd-HHmmss.log`
 
-The timestamp is the local time when the game started. The game no longer writes `hpl.log` or `hpl_update.log` in the save folder. Those files belong to the original Amnesia, which shares the save folder when both run from the same install.
+The timestamp is the local time when the game started. The game no longer writes `hpl.log` or `hpl_update.log`. Those files belong to the original Amnesia, which shares the save folder when both run from the same install. The logs are not kept in a subfolder, because the game lists every folder in the save folder as a profile.
 
 When it starts, the game deletes old logs so that only the newest 10 of each kind remain. A log that can't be deleted, for example because it is open in another program, is left for a later run. To keep a different number, add `LogFilesToKeep` to the `Main` element of `main_settings.cfg` in the save folder:
 

@@ -957,15 +957,13 @@ bool cLuxBase::InitApp()
 	msFirstStartFlagPath = msBaseSavePath + _W("first_start_flag");
 
 	/////////////////////////
-	//Set up log file locations: each run writes its own pair in logs/, and leaves the hpl.log
-	//the original game writes to the shared save folder alone (issue #70)
-	cPlatform::CreateFolder(msBaseSavePath + _W("logs"));
-	msLogFolderPath = msBaseSavePath + _W("logs/");
-
+	//Set up log file locations: each run writes its own pair beside the hpl.log the original game
+	//writes to the shared save folder, and leaves that alone (issue #70). Not in a subfolder, because
+	//the profile menu lists every folder in the save folder as a profile.
 	time_t lStartTime = time(NULL);
 	mLogFileNames = MakeLogFileNames(*localtime(&lStartTime));
-	SetLogFile(msLogFolderPath + mLogFileNames.msLog);
-	SetUpdateLogFile(msLogFolderPath + mLogFileNames.msUpdateLog);
+	SetLogFile(msBaseSavePath + mLogFileNames.msLog);
+	SetUpdateLogFile(msBaseSavePath + mLogFileNames.msUpdateLog);
 
 	return true;
 }
@@ -1178,7 +1176,7 @@ bool cLuxBase::InitUserConfig()
 void cLuxBase::PruneLogFiles(int alNumberToKeep)
 {
 	tWStringList lstFiles;
-	cPlatform::FindFilesInDir(lstFiles, msLogFolderPath, _W("*.log"));
+	cPlatform::FindFilesInDir(lstFiles, msBaseSavePath, _W("*.log"));
 	std::vector<tWString> vFiles(lstFiles.begin(), lstFiles.end());
 
 	std::vector<tWString> vToDelete = ChooseLogFilesToPrune(vFiles, kLogFilePrefix, mLogFileNames.msLog, alNumberToKeep);
@@ -1189,7 +1187,7 @@ void cLuxBase::PruneLogFiles(int alNumberToKeep)
 	//A log that cannot be removed, such as one held open, stays until a later run
 	for(size_t i=0; i<vToDelete.size(); ++i)
 	{
-		cPlatform::RemoveFile(msLogFolderPath + vToDelete[i]);
+		cPlatform::RemoveFile(msBaseSavePath + vToDelete[i]);
 	}
 }
 
