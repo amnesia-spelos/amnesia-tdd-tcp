@@ -173,6 +173,7 @@ namespace
 		}
 		virtual eGameInteractionEntityOutcome ReleaseDrivenEntity(int) { return eGameInteractionEntityOutcome_NotFound; }
 		virtual void ReleaseDrivenEntities() {}
+		virtual void SetPeerConnected(bool) {}
 	};
 
 	SOCKET Connect(cGameInteractionGateway& gateway, cFixtureGameAdapter& adapter)

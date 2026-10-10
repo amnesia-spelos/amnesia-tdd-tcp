@@ -192,6 +192,7 @@ namespace
 				eGameInteractionEntityOutcome_NotFound;
 		}
 		virtual void ReleaseDrivenEntities() { msetDrivenEntities.clear(); }
+		virtual void SetPeerConnected(bool) {}
 
 	private:
 		std::set<int> msetDrivenEntities;

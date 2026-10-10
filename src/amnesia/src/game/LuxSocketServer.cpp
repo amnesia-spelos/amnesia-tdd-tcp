@@ -7,6 +7,7 @@
 #include "LuxPlayer.h"
 #include "LuxPlayerHelpers.h"
 #include "LuxChatHandler.h"
+#include "LuxConfigHandler.h"
 #include "LuxInputHandler.h"
 #include "LuxMainMenu.h"
 #include "LuxMoveState_Normal.h"
@@ -189,6 +190,12 @@ namespace
 		virtual void ReleaseDrivenEntities()
 		{
 			if(gpBase->mpPeerDrivenEntityHandler) gpBase->mpPeerDrivenEntityHandler->ReleaseEntities();
+		}
+
+		virtual void SetPeerConnected(bool abConnected)
+		{
+			// A Peer keeps the game updating while it is out of focus, so Sessions do not stall.
+			gpBase->mpEngine->SetWaitIfAppOutOfFocus(gpBase->mpConfigHandler->mbSleepWhenOutOfFocus && !abConnected);
 		}
 
 	private:

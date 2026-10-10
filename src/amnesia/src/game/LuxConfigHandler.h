@@ -86,6 +86,9 @@ public:
 	int mlSoundStreamBuffers;
 	int mlSoundStreamBufferSize;
 
+	// The player's preference. The engine's effective setting also depends on whether a Peer is connected.
+	bool mbSleepWhenOutOfFocus;
+
 	
 private:
 	bool mbGameNeedsRestart;

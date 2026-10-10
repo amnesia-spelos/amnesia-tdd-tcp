@@ -1316,7 +1316,7 @@ bool cLuxBase::InitEngine()
 	mpEngine->GetGraphics()->GetLowLevel()->SetGammaCorrection(fGamma);
 	
 	mpEngine->SetLimitFPS(mpMainConfig->GetBool("Engine","LimitFPS", false));
-	mpEngine->SetWaitIfAppOutOfFocus(mpMainConfig->GetBool("Engine","SleepWhenOutOfFocus", true));
+	mpEngine->SetWaitIfAppOutOfFocus(mpConfigHandler->mbSleepWhenOutOfFocus);
 
 	cMaterialManager* pMatMgr = mpEngine->GetResources()->GetMaterialManager();
 	pMatMgr->SetTextureSizeDownScaleLevel(mpConfigHandler->mlTextureQuality);

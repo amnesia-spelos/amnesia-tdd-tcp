@@ -32,7 +32,8 @@ namespace
 			mRotation(1.570796325f, -0.7853981625f), msMapFile("maps/main/level01.map"),
 			mbChatAvailable(true), mlDisplayedChatEntries(0), mbInMainMenu(true),
 			mPeer(INVALID_SOCKET), mbResponseDeliveredBeforeStart(false),
-			mLocalPoseAvailability(eGameInteractionLocalPoseAvailability_Live), mlReportReads(0)
+			mLocalPoseAvailability(eGameInteractionLocalPoseAvailability_Live), mlReportReads(0),
+			mbPeerConnected(false)
 		{
 			mLocalPose.mlTimeMs = 1000;
 			mLocalPose.mFeetPosition = cGameInteractionPosition(1.25f, -2.5f, 3.75f);
@@ -146,6 +147,7 @@ namespace
 			mvEntityOperations.push_back("release all");
 			msetDrivenEntities.clear();
 		}
+		virtual void SetPeerConnected(bool abConnected) { mbPeerConnected = abConnected; }
 
 		static std::string Text(int alValue)
 		{
@@ -183,6 +185,7 @@ namespace
 		std::vector<std::string> mvEntityOperations;
 		cGameInteractionBodySamples mLastDrivenBodies;
 		cGameInteractionBodyState mLastBreakState;
+		bool mbPeerConnected;
 	};
 
 	SOCKET Connect(cGameInteractionGateway& aGateway, cFakeGameAdapter& aAdapter)
@@ -997,6 +1000,58 @@ namespace
 		gateway.Shutdown();
 	}
 
+	// Waits until the game is told the Peer is gone, updating the gateway meanwhile.
+	void UpdateUntilPeerIsGone(cGameInteractionGateway& aGateway, cFakeGameAdapter& aAdapter)
+	{
+		for (int update = 0; update < 50 && aAdapter.mbPeerConnected; ++update)
+		{
+			Sleep(10);
+			aGateway.Update(aAdapter);
+		}
+	}
+
+	void GameIsToldWhetherAPeerIsConnected()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		Expect(gateway.Listen("127.0.0.1", 0), "gateway listens");
+		adapter.mbPeerConnected = true;
+		gateway.Update(adapter);
+		Expect(!adapter.mbPeerConnected, "the game is told no Peer is connected before one connects");
+
+		SOCKET peer = Connect(gateway, adapter);
+		Expect(Receive(peer) == "Hello, from Amnesia: The Dark Descent!\n", "a Session starts");
+		Expect(adapter.mbPeerConnected, "the game is told a Peer connected before it negotiates");
+		Expect(Exchange(peer, gateway, adapter, "ping\n") == "RESPONSE:ping:pong\n", "a legacy Session is served");
+		Expect(adapter.mbPeerConnected, "the game is told a legacy Session's Peer is still connected");
+		closesocket(peer);
+		UpdateUntilPeerIsGone(gateway, adapter);
+		Expect(!adapter.mbPeerConnected, "the game is told the Peer is gone after it disconnects");
+
+		SOCKET laterPeer = Connect(gateway, adapter);
+		Expect(Receive(laterPeer) == "Hello, from Amnesia: The Dark Descent!\n", "a new Session starts");
+		Expect(adapter.mbPeerConnected, "the game is told a new Peer connected");
+		Expect(Exchange(laterPeer, gateway, adapter, "protocol 2\n") == "RESPONSE protocol ok 2\n",
+			"the Session negotiates Protocol Version 2");
+		Expect(adapter.mbPeerConnected, "the game is told a negotiated Session's Peer is still connected");
+		const std::string overlong = std::string(64 * 1024 + 1, 'x');
+		Expect(send(laterPeer, overlong.data(), static_cast<int>(overlong.size()), 0) ==
+			static_cast<int>(overlong.size()), "Peer sends an overlong line");
+		UpdateUntilPeerIsGone(gateway, adapter);
+		Expect(!adapter.mbPeerConnected, "the game is told the Peer is gone after a line length disconnect");
+		closesocket(laterPeer);
+
+		SOCKET lastPeer = Connect(gateway, adapter);
+		Expect(Receive(lastPeer) == "Hello, from Amnesia: The Dark Descent!\n", "a third Session starts");
+		Expect(adapter.mbPeerConnected, "the game is told the third Peer connected");
+		gateway.Shutdown();
+		Expect(gateway.Listen("127.0.0.1", 0), "gateway listens again after a shutdown");
+		gateway.Update(adapter);
+		Expect(!adapter.mbPeerConnected, "the game is told the Peer is gone on the first update after a shutdown");
+		closesocket(lastPeer);
+		gateway.Shutdown();
+	}
+
 	void ResponseIsDeliveredWithinTheUpdateThatProcessedItsCommand()
 	{
 		cFakeGameAdapter adapter;
@@ -1139,6 +1194,7 @@ int main()
 
 	ProtocolVersion2NegotiationGrantsSupportedRequestedCapabilities();
 	ResponseIsDeliveredWithinTheUpdateThatProcessedItsCommand();
+	GameIsToldWhetherAPeerIsConnected();
 	OverlongInboundLineDisconnectsThePeerWithAReason();
 	LocalPoseStateUpdatesFollowTheSubscribedRate();
 	LocalPoseRateIsClamped();

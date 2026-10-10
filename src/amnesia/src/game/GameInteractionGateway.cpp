@@ -748,7 +748,11 @@ void cGameInteractionGateway::Update(iGameInteractionGameAdapter& aGameAdapter)
 
 	mpImplementation->CleanUpEndedSessions(aGameAdapter);
 	mpImplementation->PerformPendingCustomStoryStart(aGameAdapter);
-	if (event == eGameInteractionTransportEvent_PeerDisconnected) return;
+	if (event == eGameInteractionTransportEvent_PeerDisconnected)
+	{
+		aGameAdapter.SetPeerConnected(false);
+		return;
+	}
 
 	for (std::vector<std::string>::const_iterator bytes = receivedBytes.begin();
 		bytes != receivedBytes.end(); ++bytes)
@@ -778,6 +782,7 @@ void cGameInteractionGateway::Update(iGameInteractionGameAdapter& aGameAdapter)
 		mpImplementation->EndSession();
 		mpImplementation->CleanUpEndedSessions(aGameAdapter);
 	}
+	aGameAdapter.SetPeerConnected(mpImplementation->mTransport.HasPeer());
 }
 
 void cGameInteractionGateway::Report(const cGameInteractionEvent& aEvent)

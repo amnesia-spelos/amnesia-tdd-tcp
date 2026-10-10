@@ -407,6 +407,9 @@ public:
 	virtual eGameInteractionEntityOutcome ReleaseDrivenEntity(int alEntityId) = 0;
 	// Called when a Session that drove an entity ends, whatever map is loaded.
 	virtual void ReleaseDrivenEntities() = 0;
+	// Whether a Peer is connected, negotiated or not. While one is, the game keeps updating when out of
+	// focus. Told on every update, so it follows every way a Peer can leave.
+	virtual void SetPeerConnected(bool abConnected) = 0;
 };
 
 class cGameInteractionResponse
