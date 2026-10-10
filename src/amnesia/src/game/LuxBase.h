@@ -25,6 +25,7 @@
 #include "StdAfx.h"
 
 #include "LuxTypes.h"
+#include "LogFilesModel.h"
 
 //----------------------------------------------
 
@@ -205,6 +206,7 @@ public:
 	bool CheckFeatureSupport();
 
 	bool InitMainConfig();
+	void PruneLogFiles(int alNumberToKeep);
 	void ExitConfig();
 
 	cConfigFile* LoadConfigFile(const tWString& asDefaultPath, const tWString& asWantedPath, bool abForceLoadDefault=false, bool *abDidLoadDefault = NULL);
@@ -351,6 +353,9 @@ public:
 
 	tWString msCrashFlagPath;
 	tWString msFirstStartFlagPath;
+
+	tWString msLogFolderPath;
+	cLogFileNames mLogFileNames;
 
     bool mbSaveConfigAtExit;
 

@@ -957,9 +957,15 @@ bool cLuxBase::InitApp()
 	msFirstStartFlagPath = msBaseSavePath + _W("first_start_flag");
 
 	/////////////////////////
-	//Set up log file locations
-	SetLogFile(msBaseSavePath + _W("hpl.log"));
-	SetUpdateLogFile(msBaseSavePath + _W("hpl_update.log"));
+	//Set up log file locations: each run writes its own pair in logs/, and leaves the hpl.log
+	//the original game writes to the shared save folder alone (issue #70)
+	cPlatform::CreateFolder(msBaseSavePath + _W("logs"));
+	msLogFolderPath = msBaseSavePath + _W("logs/");
+
+	time_t lStartTime = time(NULL);
+	mLogFileNames = MakeLogFileNames(*localtime(&lStartTime));
+	SetLogFile(msLogFolderPath + mLogFileNames.msLog);
+	SetUpdateLogFile(msLogFolderPath + mLogFileNames.msUpdateLog);
 
 	return true;
 }
@@ -1062,7 +1068,10 @@ bool cLuxBase::InitMainConfig()
 	mbShowMenu = mpMainConfig->GetBool("Main", "ShowMenu",true);
 
 	SetUpdateLogActive(mpMainConfig->GetBool("Main","UpdateLogActive", true));
-	
+
+	//Only read, never set, so main_settings.cfg stays as the original game writes it
+	PruneLogFiles(ParseLogFilesToKeep(mpMainConfig->GetString("Main","LogFilesToKeep","")));
+
 	////////////////////////////////////
 	// Load the game config file
 #ifdef USERDIR_RESOURCES
@@ -1162,7 +1171,29 @@ bool cLuxBase::InitUserConfig()
 	RunModuleMessage(eLuxUpdateableMessage_LoadUserConfig);
 
 	return true;
-}	
+}
+
+//-----------------------------------------------------------------------
+
+void cLuxBase::PruneLogFiles(int alNumberToKeep)
+{
+	tWStringList lstFiles;
+	cPlatform::FindFilesInDir(lstFiles, msLogFolderPath, _W("*.log"));
+	std::vector<tWString> vFiles(lstFiles.begin(), lstFiles.end());
+
+	std::vector<tWString> vToDelete = ChooseLogFilesToPrune(vFiles, kLogFilePrefix, mLogFileNames.msLog, alNumberToKeep);
+	std::vector<tWString> vUpdateLogsToDelete =
+		ChooseLogFilesToPrune(vFiles, kUpdateLogFilePrefix, mLogFileNames.msUpdateLog, alNumberToKeep);
+	vToDelete.insert(vToDelete.end(), vUpdateLogsToDelete.begin(), vUpdateLogsToDelete.end());
+
+	//A log that cannot be removed, such as one held open, stays until a later run
+	for(size_t i=0; i<vToDelete.size(); ++i)
+	{
+		cPlatform::RemoveFile(msLogFolderPath + vToDelete[i]);
+	}
+}
+
+//-----------------------------------------------------------------------
 
 void cLuxBase::ExitConfig()
 {

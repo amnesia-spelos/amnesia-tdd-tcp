@@ -51,6 +51,12 @@ The check that an Avatar faces where its posing player looks links the engine's 
 .\scripts\test-avatar-mesh-offset.ps1
 ```
 
+The rules for naming and pruning the game's logs are checked without building the engine:
+
+```powershell
+.\scripts\test-log-files-model.ps1
+```
+
 You can also open `src/amnesia/src/game/Lux.sln` in Visual Studio, select `Release` and `Win32`, and build the solution after extracting `src/HPL2/dependencies.zip` into `src/HPL2`.
 
 ### Building the Level Editor
@@ -80,6 +86,23 @@ dotnet run --project ..\amnesia-csharp-controller\src\AmnesiaController -- --lin
 For example, to watch the local Pose, run it and type `protocol 2 localpose`, then `localpose subscribe 2`. Legacy Commands such as `exec:SetPlayerPos(0, 0, 0)` still work in a negotiated Session. They help trigger game behavior while you watch its output.
 
 > The bundled Autodesk FBX SDK 2012 library is tied to the Visual Studio 2010 C++ ABI. Modern Windows builds therefore omit the raw `.fbx` mesh importer. Runtime `.msh` and Collada loading, the game, and its TCP interaction remain in the build.
+
+### Game logs
+
+Each run of the game writes its own pair of logs to the `logs` folder in its save folder (`Documents/Amnesia/<MainSaveFolder>/logs/`):
+
+- `hpl-yyyyMMdd-HHmmss.log`
+- `hpl_update-yyyyMMdd-HHmmss.log`
+
+The timestamp is the local time when the game started. The game no longer writes `hpl.log` or `hpl_update.log` in the save folder. Those files belong to the original Amnesia, which shares the save folder when both run from the same install.
+
+When it starts, the game deletes old logs so that only the newest 10 of each kind remain. A log that can't be deleted, for example because it is open in another program, is left for a later run. To keep a different number, add `LogFilesToKeep` to the `Main` element of `main_settings.cfg` in the save folder:
+
+```xml
+<Main LogFilesToKeep="3" ... />
+```
+
+Values below 1 keep 1. The game only reads this key and never writes it, so `main_settings.cfg` stays as the original game would write it.
 
 ## 🚀 Projects using amnesia-tdd-tcp
 

@@ -147,6 +147,7 @@
     <ClCompile Include="AvatarPoseModel.cpp" />
     <ClCompile Include="LocalInteractionReportModel.cpp" />
     <ClCompile Include="PeerDrivenEntityModel.cpp" />
+    <ClCompile Include="LogFilesModel.cpp" />
     <ClCompile Include="MapPath.cpp" />
     <ClCompile Include="ChatModel.cpp" />
     <ClCompile Include="LuxChatHandler.cpp" />
@@ -275,6 +276,7 @@
     <ClInclude Include="AvatarPoseModel.h" />
     <ClInclude Include="LocalInteractionReportModel.h" />
     <ClInclude Include="PeerDrivenEntityModel.h" />
+    <ClInclude Include="LogFilesModel.h" />
     <ClInclude Include="MapPath.h" />
     <ClInclude Include="SenderClock.h" />
     <ClInclude Include="ChatModel.h" />
