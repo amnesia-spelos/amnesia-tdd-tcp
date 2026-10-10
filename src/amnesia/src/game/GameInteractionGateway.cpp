@@ -117,7 +117,6 @@ namespace
 		std::wstring msIdentifier;
 	};
 
-	const unsigned int kSupportedProtocolVersion = 2;
 	const unsigned int kSupportedCapabilities =
 		eGameInteractionCapability_Avatars | eGameInteractionCapability_LocalPose |
 		eGameInteractionCapability_Interactions;
@@ -207,7 +206,7 @@ namespace
 		if (aSession.mbNegotiated) return eGameInteractionCommandOutcome_AlreadyNegotiated;
 		if (aSession.mbCommandProcessed) return eGameInteractionCommandOutcome_NegotiationTooLate;
 		if (aCommand.GetProtocolVersion() == 0) return eGameInteractionCommandOutcome_Invalid;
-		if (aCommand.GetProtocolVersion() != kSupportedProtocolVersion)
+		if (aCommand.GetProtocolVersion() != cGameInteractionGateway::kSupportedProtocolVersion)
 			return eGameInteractionCommandOutcome_UnsupportedProtocolVersion;
 		return eGameInteractionCommandOutcome_Success;
 	}

@@ -102,17 +102,25 @@
 #include "LuxCommentaryIcon.h"
 #include "LuxAchievementHandler.h"
 
+#include "BuildVersion.h"
+
 #include "impl/tinyXML/tinyxml.h"
+
+// Lux.vcxproj generates this header from git describe before compiling (issue #71).
+// Builds that do not generate it report an unknown Build Version.
+#if defined(__has_include)
+	#if __has_include("BuildVersionGenerated.h")
+		#include "BuildVersionGenerated.h"
+	#endif
+#endif
+#ifndef AMNESIA_TDD_TCP_BUILD_VERSION
+	#define AMNESIA_TDD_TCP_BUILD_VERSION "unknown"
+#endif
 
 
 //////////////////////////////////////////////////////////////////////////
 // GLOBAL FUNCTIONS
 //////////////////////////////////////////////////////////////////////////
-
-//-----------------------------------------------------------------------
-
-#define kCurrentVersion_Main 1
-#define kCurrentVersion_Minor 4
 
 //-----------------------------------------------------------------------
 
@@ -504,7 +512,7 @@ bool cLuxBase::Init(const tString &asCommandline)
 	// Load the config files
 	if(InitMainConfig()==false) return false;
 
-	Log("Version %d.%d \n",kCurrentVersion_Main, kCurrentVersion_Minor);
+	Log("%s\n", MakeBuildVersionLogLine(AMNESIA_TDD_TCP_BUILD_VERSION, cGameInteractionGateway::kSupportedProtocolVersion).c_str());
 
 	#ifdef COPY_PROTECTION_ENABLED
 	/////////////////////////////

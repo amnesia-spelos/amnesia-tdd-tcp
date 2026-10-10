@@ -57,6 +57,12 @@ The rules for naming and pruning the game's logs are checked without building th
 .\scripts\test-log-files-model.ps1
 ```
 
+So is the log line that names the game's Build Version:
+
+```powershell
+.\scripts\test-build-version.ps1
+```
+
 You can also open `src/amnesia/src/game/Lux.sln` in Visual Studio, select `Release` and `Win32`, and build the solution after extracting `src/HPL2/dependencies.zip` into `src/HPL2`.
 
 ### Building the Level Editor
@@ -103,6 +109,14 @@ When it starts, the game deletes old logs so that only the newest 10 of each kin
 ```
 
 Values below 1 keep 1. The game only reads this key and never writes it, so `main_settings.cfg` stays as the original game would write it.
+
+Near the top, `hpl-*.log` names the Build Version and the Protocol Versions the game speaks:
+
+```text
+Amnesia TDD TCP v0.2.0-3-gff6db40-dirty (Protocol Versions: legacy, 2)
+```
+
+The Build Version is `git describe --tags --always --dirty` at build time: the release tag, then how many commits follow it and the commit, then `-dirty` if the build had uncommitted changes. A build made without git, or outside a git checkout, says `unknown`.
 
 ## 🚀 Projects using amnesia-tdd-tcp
 

@@ -468,6 +468,9 @@ private:
 class cGameInteractionGateway
 {
 public:
+	// The one Protocol Version a Session can negotiate; Sessions that never negotiate stay on the legacy protocol.
+	static const unsigned int kSupportedProtocolVersion = 2;
+
 	cGameInteractionGateway();
 	~cGameInteractionGateway();
 

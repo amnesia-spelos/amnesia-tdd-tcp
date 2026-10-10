@@ -12,6 +12,10 @@ _Avoid_: TCP protocol, socket protocol
 A compatible edition of the Game Interaction Protocol selected for a Session.
 _Avoid_: Schema version, client version
 
+**Build Version**:
+The version of this game executable, identified by this repository's release tags. Distinct from the Protocol Version and from Frictional Games' Amnesia version.
+_Avoid_: Game version, Amnesia version
+
 **Capability**:
 An optional area of Game Interaction Protocol behavior explicitly selected for a Session.
 _Avoid_: Feature flag, extension
