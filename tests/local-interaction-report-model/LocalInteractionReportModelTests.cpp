@@ -511,23 +511,31 @@ namespace
 		Expect(!Reports(model, 12) && TakeEvents(model).empty(), "a broken entity does not come back to settle");
 	}
 
-	void TestAHeldEntityThatBreaksEndsItsInteractionAsDestroyedOnly()
+	void TestAHeldEntityThatBreaksEndsItsInteractionAsDestroyedThenRaisesReportBroke()
 	{
 		cFakeWorld world;
 		world.Place(12);
 		world.Place(13);
 		cLocalInteractionReportModel model;
-		model.StartInteraction(12, 0, false, 1);
+		model.StartInteraction(12, 3, false, 1);
 		model.Update(world, 0.0);
 		TakeEvents(model);
 
-		model.Break(12, cGameInteractionBodyState());
-		Expect(TakeEvents(model).empty(), "a held entity that breaks raises no reportbroke");
+		cGameInteractionBodyState finalState;
+		finalState.mPosition = cGameInteractionPosition(1.25f, -2.5f, 3.75f);
+		finalState.mLinearVelocity = cGameInteractionVector(0.5f, 0.0f, -1.0f);
+		model.Break(12, finalState);
+		Expect(TakeEvents(model).empty(), "a held entity that breaks raises nothing until its interaction ends");
 		model.EndInteraction(eGameInteractionEnding_Destroyed, 100.0);
 		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
-		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_InteractionEnded, 12) &&
+		Expect(vEvents.size() == 2 && IsEvent(vEvents[0], eGameInteractionEvent_InteractionEnded, 12) &&
+			vEvents[0].mEntityEvent.mlBodyId == 3 &&
 			vEvents[0].mEntityEvent.mEnding == eGameInteractionEnding_Destroyed,
 			"its interaction ends as destroyed");
+		Expect(vEvents.size() == 2 && IsEvent(vEvents[1], eGameInteractionEvent_ReportBroke, 12) &&
+			vEvents[1].mEntityEvent.mState.mPosition.mfY == -2.5f &&
+			vEvents[1].mEntityEvent.mState.mLinearVelocity.mfZ == -1.0f,
+			"then reportbroke carries the final state it broke from");
 		model.Update(world, 150.0);
 		Expect(!Reports(model, 12) && TakeEvents(model).empty(), "and it leaves the report without settling");
 
@@ -536,6 +544,48 @@ namespace
 		TakeEvents(model);
 		model.Break(13, cGameInteractionBodyState());
 		Expect(TakeEvents(model).empty(), "a break after the destroyed ending raises nothing");
+	}
+
+	void TestAHeldEntityTheReportCannotFitStillRaisesReportBrokeWhenItBreaks()
+	{
+		cLocalInteractionReportModel model;
+		model.StartInteraction(12, 0, false, cLocalInteractionReportModel::kMaxBodies + 1);
+		TakeEvents(model);
+
+		model.Break(12, cGameInteractionBodyState());
+		model.EndInteraction(eGameInteractionEnding_Destroyed, 100.0);
+		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 2 && IsEvent(vEvents[0], eGameInteractionEvent_InteractionEnded, 12) &&
+			IsEvent(vEvents[1], eGameInteractionEvent_ReportBroke, 12),
+			"a held entity whose bodies do not fit is still told as broken");
+	}
+
+	void TestAHeldEntityDestroyedWithoutBreakingEndsItsInteractionAsDestroyedOnly()
+	{
+		cLocalInteractionReportModel model;
+		model.StartInteraction(12, 0, false, 1);
+		TakeEvents(model);
+
+		model.EndInteraction(eGameInteractionEnding_Destroyed, 100.0);
+		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_InteractionEnded, 12) &&
+			vEvents[0].mEntityEvent.mEnding == eGameInteractionEnding_Destroyed,
+			"a held entity destroyed without breaking is told only by its interaction's end");
+	}
+
+	void TestABreakInAnEarlierInteractionIsNotToldWhenALaterOneEndsAsDestroyed()
+	{
+		cLocalInteractionReportModel model;
+		model.StartInteraction(12, 0, false, 1);
+		model.Break(12, cGameInteractionBodyState());
+		model.EndInteraction(eGameInteractionEnding_Released, 50.0);
+		model.StartInteraction(12, 0, false, 1);
+		TakeEvents(model);
+
+		model.EndInteraction(eGameInteractionEnding_Destroyed, 100.0);
+		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_InteractionEnded, 12),
+			"a break does not carry over to the next interaction");
 	}
 
 	void TestADestroyedEntityLeavesTheReportWithoutSettling()
@@ -740,7 +790,10 @@ int main()
 	TestAnEntityThatNeverSleepsSettlesAtTheCap();
 	TestADestroyedEntityLeavesTheReportWithoutSettling();
 	TestAThrownEntityThatBreaksRaisesReportBrokeWithItsFinalState();
-	TestAHeldEntityThatBreaksEndsItsInteractionAsDestroyedOnly();
+	TestAHeldEntityThatBreaksEndsItsInteractionAsDestroyedThenRaisesReportBroke();
+	TestAHeldEntityTheReportCannotFitStillRaisesReportBrokeWhenItBreaks();
+	TestAHeldEntityDestroyedWithoutBreakingEndsItsInteractionAsDestroyedOnly();
+	TestABreakInAnEarlierInteractionIsNotToldWhenALaterOneEndsAsDestroyed();
 	TestAnEntityTheWorldLostLeavesTheReport();
 	TestSeveralEntitiesAreReportedAtOnce();
 	TestGrabbingASettlingEntityAgainHoldsIt();

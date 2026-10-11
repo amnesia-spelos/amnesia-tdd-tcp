@@ -81,11 +81,12 @@ public:
 	// not fit is not reported, but its interaction's start and end are.
 	void StartInteraction(int alEntityId, int alBodyId, bool abCreatedAtRuntime, size_t alBodyCount);
 	// A released, thrown, or dropped entity stays in the report until it settles. A destroyed one
-	// leaves it.
+	// leaves it, and one that broke meanwhile raises reportbroke right after its interaction's end.
 	void EndInteraction(eGameInteractionEnding aEnding, double afTimeMs);
 
 	// A reported entity that broke raises reportbroke with the final state of its break body, and leaves
-	// the report. One the local player is holding is told by its interaction's end as destroyed instead.
+	// the report. One the local player is holding raises reportbroke right after its interaction ends as
+	// destroyed instead, whether it is reported or not.
 	void Break(int alEntityId, const cGameInteractionBodyState& aFinalState);
 
 	// The entity leaves the report without an Event, as when a Peer drives it. An interaction with it
@@ -129,6 +130,7 @@ private:
 	size_t CountReportedBodies() const;
 	void Raise(eGameInteractionEventType aType, int alEntityId, int alBodyId = 0,
 		eGameInteractionEnding aEnding = eGameInteractionEnding_Released);
+	void RaiseReportBroke(int alEntityId, const cGameInteractionBodyState& aFinalState);
 
 	std::vector<cReportedEntity> mvReported;
 	std::vector<cGameInteractionBodySample> mvReportedBodies;
@@ -138,6 +140,9 @@ private:
 	bool mbInteracting;
 	int mlInteractionEntityId;
 	int mlInteractionBodyId;
+	// Whether the entity the local player is interacting with broke, and the state it broke from.
+	bool mbInteractionBroke;
+	cGameInteractionBodyState mInteractionBreakState;
 };
 
 #endif // LOCAL_INTERACTION_REPORT_MODEL_H

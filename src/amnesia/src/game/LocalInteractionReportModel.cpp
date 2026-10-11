@@ -3,7 +3,7 @@
 const double cLocalInteractionReportModel::kSettlingCapMs = 3000.0;
 
 cLocalInteractionReportModel::cLocalInteractionReportModel()
-	: mbInteracting(false), mlInteractionEntityId(0), mlInteractionBodyId(0) {}
+	: mbInteracting(false), mlInteractionEntityId(0), mlInteractionBodyId(0), mbInteractionBroke(false) {}
 
 void cLocalInteractionReportModel::StartInteraction(int alEntityId, int alBodyId, bool abCreatedAtRuntime,
 	size_t alBodyCount)
@@ -12,6 +12,7 @@ void cLocalInteractionReportModel::StartInteraction(int alEntityId, int alBodyId
 	if (!mbInteracting) return;
 	mlInteractionEntityId = alEntityId;
 	mlInteractionBodyId = alBodyId;
+	mbInteractionBroke = false;
 	Raise(eGameInteractionEvent_InteractionStarted, alEntityId, alBodyId);
 
 	cReportedEntity* pReported = FindReported(alEntityId);
@@ -31,6 +32,10 @@ void cLocalInteractionReportModel::EndInteraction(eGameInteractionEnding aEnding
 	if (!mbInteracting) return;
 	mbInteracting = false;
 	Raise(eGameInteractionEvent_InteractionEnded, mlInteractionEntityId, mlInteractionBodyId, aEnding);
+	if (aEnding == eGameInteractionEnding_Destroyed && mbInteractionBroke)
+	{
+		RaiseReportBroke(mlInteractionEntityId, mInteractionBreakState);
+	}
 
 	for (size_t i = 0; i < mvReported.size(); ++i)
 	{
@@ -48,11 +53,15 @@ void cLocalInteractionReportModel::EndInteraction(eGameInteractionEnding aEnding
 
 void cLocalInteractionReportModel::Break(int alEntityId, const cGameInteractionBodyState& aFinalState)
 {
-	const cReportedEntity* pReported = FindReported(alEntityId);
-	if (pReported == NULL || pReported->mbHeld) return;
+	if (mbInteracting && alEntityId == mlInteractionEntityId)
+	{
+		mbInteractionBroke = true;
+		mInteractionBreakState = aFinalState;
+		return;
+	}
+	if (FindReported(alEntityId) == NULL) return;
 	StopReporting(alEntityId);
-	Raise(eGameInteractionEvent_ReportBroke, alEntityId);
-	mvEvents.back().mEntityEvent.mState = aFinalState;
+	RaiseReportBroke(alEntityId, aFinalState);
 }
 
 void cLocalInteractionReportModel::StopReporting(int alEntityId)
@@ -187,4 +196,10 @@ void cLocalInteractionReportModel::Raise(eGameInteractionEventType aType, int al
 	event.mEntityEvent.mlBodyId = alBodyId;
 	event.mEntityEvent.mEnding = aEnding;
 	mvEvents.push_back(event);
+}
+
+void cLocalInteractionReportModel::RaiseReportBroke(int alEntityId, const cGameInteractionBodyState& aFinalState)
+{
+	Raise(eGameInteractionEvent_ReportBroke, alEntityId);
+	mvEvents.back().mEntityEvent.mState = aFinalState;
 }

@@ -3353,6 +3353,8 @@ void __stdcall cLuxScriptHandler::SetPropHealth(string& asName, float afHealth)
 	BEGIN_SET_PROPERTY(eLuxEntityType_Prop, -1)
 
 		iLuxProp *pProp = ToProp(pEntity);
+		// The game reporting a Peer-Driven Entity decides its breaking, so a script cannot change its health.
+		if(pProp->IsPeerDriven()) continue;
 		pProp->SetHealth(afHealth);	
 
 	END_SET_PROPERTY
@@ -3363,6 +3365,8 @@ void __stdcall cLuxScriptHandler::AddPropHealth(string& asName, float afHealth)
 	BEGIN_SET_PROPERTY(eLuxEntityType_Prop, -1)
 
 		iLuxProp *pProp = ToProp(pEntity);
+		// The game reporting a Peer-Driven Entity decides its breaking, so a script cannot change its health.
+		if(pProp->IsPeerDriven()) continue;
 		pProp->SetHealth(pProp->GetHealth() + afHealth);	
 
 	END_SET_PROPERTY
