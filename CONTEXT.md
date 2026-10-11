@@ -93,8 +93,12 @@ Display text attributing a Chat Entry, without asserting an authenticated player
 _Avoid_: Username, user identity
 
 **Chat Entry**:
-An ephemeral Chat Author and message pair shown in the game's chat log.
+An ephemeral Chat Author and message pair shown in the game's chat log, each part optionally shown in a Chat Color instead of its default.
 _Avoid_: Stored message, chat history
+
+**Chat Color**:
+A Peer-chosen display color for the Chat Author or the message of a Chat Entry.
+_Avoid_: Player color, name color
 
 **Chat Log**:
 The bounded, transient view of recent Chat Entries for the current menu or game context.

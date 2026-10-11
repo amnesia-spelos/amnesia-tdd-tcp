@@ -32,7 +32,7 @@ Two sibling .NET repositories consume this functionality over TCP (default `127.
 When changing the TCP protocol, connection lifecycle, command handling, responses, events, encoding, framing, or default endpoint:
 
 1. Inspect the corresponding client behavior in `../amnesia-multiplayer`, and in `../streamnesia` when touching the legacy protocol.
-2. Keep Sessions that do not negotiate a Protocol Version on the legacy protocol byte-for-byte until it is deliberately retired.
+2. Keep Sessions that do not negotiate a Protocol Version on the legacy protocol byte-for-byte until it is deliberately retired. Legacy Commands added after Streamnesia's pinned build, such as `chat:`, are exempt (ADR 0007).
 3. Account for required coordinated changes or migration work in the consuming repositories.
 4. Keep each repository's issue tracking and changes scoped to its own repository.
 
