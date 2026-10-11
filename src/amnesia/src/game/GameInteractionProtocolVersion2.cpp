@@ -50,6 +50,7 @@ namespace
 	const cCommandKeyword kCommandKeywords[] =
 	{
 		{ eGameInteractionCommand_NegotiateProtocol, kNegotiationKeyword },
+		{ eGameInteractionCommand_Chat, "chatentry" },
 		{ eGameInteractionCommand_AvatarCreate, "avatarcreate" },
 		{ eGameInteractionCommand_AvatarRemove, "avatarremove" },
 		{ eGameInteractionCommand_AvatarCollision, "avatarcollision" },
@@ -99,6 +100,9 @@ namespace
 		case eGameInteractionCommandOutcome_WrongMap: return "wrong-map";
 		case eGameInteractionCommandOutcome_EntityNotFound: return "not-found";
 		case eGameInteractionCommandOutcome_EntityNotHoldable: return "not-holdable";
+		case eGameInteractionCommandOutcome_InvalidAuthor: return "invalid-author";
+		case eGameInteractionCommandOutcome_InvalidMessage: return "invalid-message";
+		case eGameInteractionCommandOutcome_Unavailable: return "unavailable";
 		default: return "invalid";
 		}
 	}
@@ -236,6 +240,65 @@ namespace
 		}
 		request.mbValid = valid && reader.IsAtEnd();
 		return cGameInteractionCommand(aType, request);
+	}
+
+	int HexDigitValue(char acCharacter)
+	{
+		if (IsDigit(acCharacter)) return acCharacter - '0';
+		if (acCharacter >= 'a' && acCharacter <= 'f') return acCharacter - 'a' + 10;
+		if (acCharacter >= 'A' && acCharacter <= 'F') return acCharacter - 'A' + 10;
+		return -1;
+	}
+
+	// `-` keeps the part's default color; anything else must be RRGGBB in hex of either case.
+	bool TryReadChatColor(cGameInteractionFieldReader& aReader, cChatColor& aColor)
+	{
+		std::string field;
+		if (!aReader.TryReadField(field)) return false;
+		if (field == "-")
+		{
+			aColor = cChatColor();
+			return true;
+		}
+		if (field.size() != 6) return false;
+		unsigned char channels[3];
+		for (int channel = 0; channel < 3; ++channel)
+		{
+			const int high = HexDigitValue(field[channel * 2]);
+			const int low = HexDigitValue(field[channel * 2 + 1]);
+			if (high < 0 || low < 0) return false;
+			channels[channel] = static_cast<unsigned char>(high * 16 + low);
+		}
+		aColor = cChatColor(channels[0], channels[1], channels[2]);
+		return true;
+	}
+
+	// Malformed UTF-8 becomes a control character, which the chat model rejects for that part.
+	std::wstring DecodeChatText(const std::string& asText)
+	{
+		std::wstring text;
+		if (!cLegacyGameInteractionProtocol::TryDecodeUtf8(asText, text)) text.assign(1, static_cast<wchar_t>(1));
+		return text;
+	}
+
+	// chatentry <authorColor> <messageColor> <Author>:<message>. The first ':' ends the Chat Author.
+	cGameInteractionCommand ParseChatEntry(const std::string& asLine)
+	{
+		cGameInteractionFieldReader reader(asLine);
+		std::string keyword;
+		reader.TryReadField(keyword);
+		cGameInteractionChatRequest request;
+		std::string text;
+		const bool valid = TryReadChatColor(reader, request.mAuthorColor) &&
+			TryReadChatColor(reader, request.mMessageColor) && reader.TryReadRest(text);
+		const std::string::size_type delimiter = text.find(':');
+		request.mbValid = valid && delimiter != std::string::npos;
+		if (request.mbValid)
+		{
+			request.msAuthor = DecodeChatText(text.substr(0, delimiter));
+			request.msMessage = DecodeChatText(text.substr(delimiter + 1));
+		}
+		return cGameInteractionCommand(eGameInteractionCommand_Chat, request);
 	}
 
 	bool TryReadEntityIdentifier(cGameInteractionFieldReader& aReader, int& alIdentifier)
@@ -511,6 +574,7 @@ cGameInteractionCommand cGameInteractionProtocolVersion2::ParseCommand(const std
 	const eGameInteractionCommandType type = reader.TryReadField(keyword) ? CommandTypeFor(keyword) :
 		eGameInteractionCommand_Unknown;
 	if (type == eGameInteractionCommand_Unknown) return cLegacyGameInteractionProtocol::ParseCommand(asLine);
+	if (type == eGameInteractionCommand_Chat) return ParseChatEntry(asLine);
 	if (type == eGameInteractionCommand_LocalPose || type == eGameInteractionCommand_ReportedBodies)
 		return ParseSubscription(type, asLine);
 	if (type == eGameInteractionCommand_EntityDrive || type == eGameInteractionCommand_EntityBodies ||

@@ -3,6 +3,9 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
+// windows.h renames it, but cChatEntry was declared before windows.h was included.
+#undef GetMessage
+
 #include <clocale>
 #include <cstdio>
 #include <fstream>
@@ -98,15 +101,49 @@ namespace
 		return value;
 	}
 
+	std::string EncodeUtf8(const std::wstring& text)
+	{
+		if (text.empty()) return std::string();
+		const int size = WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), NULL, 0,
+			NULL, NULL);
+		std::string encoded(size, char());
+		WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), &encoded[0], size, NULL, NULL);
+		return encoded;
+	}
+
+	std::string FormatChatColor(const cChatColor& aColor)
+	{
+		if (!aColor.IsSet()) return "-";
+		char formatted[8];
+		sprintf(formatted, "%02x%02x%02x", aColor.GetRed(), aColor.GetGreen(), aColor.GetBlue());
+		return formatted;
+	}
+
+	// A displayed Chat Entry in the chatentry grammar, with lowercase hex.
+	std::string DescribeChatEntry(const cChatEntry& aEntry)
+	{
+		return FormatChatColor(aEntry.GetAuthorColor()) + " " + FormatChatColor(aEntry.GetMessageColor()) + " " +
+			EncodeUtf8(aEntry.GetAuthor()) + ":" + EncodeUtf8(aEntry.GetMessage());
+	}
+
 	class cFixtureGameAdapter : public iGameInteractionGameAdapter
 	{
 	public:
+		cFixtureGameAdapter() : mbChatAvailable(true) {}
+		bool mbChatAvailable;
+		std::vector<std::string> mvDisplayedChatEntries;
+
 		virtual bool IsMapLoaded() const { return true; }
 		virtual cGameInteractionPosition GetPosition() const { return cGameInteractionPosition(); }
 		virtual cGameInteractionRotation GetRotation() const { return cGameInteractionRotation(); }
 		virtual std::string GetMapFile() const { return "maps/main/level01.map"; }
 		virtual void RunScript(const std::string&) {}
-		virtual bool DisplayChatEntry(const cChatEntry&) { return true; }
+		virtual bool DisplayChatEntry(const cChatEntry& aEntry)
+		{
+			if (!mbChatAvailable) return false;
+			mvDisplayedChatEntries.push_back(DescribeChatEntry(aEntry));
+			return true;
+		}
 		virtual std::vector<cGameInteractionCustomStory> GetCustomStories() const
 		{
 			return std::vector<cGameInteractionCustomStory>();
@@ -297,9 +334,8 @@ namespace
 	}
 
 	// Sends the fixture's Commands in one write and returns everything the Session answered.
-	bool TryRunSession(const std::string& request, std::string& output)
+	bool TryRunSession(const std::string& request, cFixtureGameAdapter& adapter, std::string& output)
 	{
-		cFixtureGameAdapter adapter;
 		cGameInteractionGateway gateway;
 		if (!gateway.Listen("127.0.0.1", 0)) return false;
 		SOCKET peer = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -362,12 +398,20 @@ int main(int argc, char** argv)
 		std::string expected;
 		if (kind == "session")
 		{
-			if (!TryRunSession(ReadString(line, "request_wire"), actual))
+			cFixtureGameAdapter adapter;
+			adapter.mbChatAvailable = !ReadBool(line, "chat_unavailable");
+			if (!TryRunSession(ReadString(line, "request_wire"), adapter, actual))
 			{
 				std::cerr << "could not run the Session for fixture " << cases << "\n";
 				return 2;
 			}
 			expected = ReadString(line, "expected_wire");
+			// A chat fixture also names every Chat Entry the Session displayed, in order.
+			if (line.find("\"expected_chat_entries\"") != std::string::npos)
+			{
+				actual += "displayed " + JoinFields(adapter.mvDisplayedChatEntries);
+				expected += "displayed " + JoinFields(ReadStrings(line, "expected_chat_entries"));
+			}
 		}
 		else if (kind == "format_number")
 		{

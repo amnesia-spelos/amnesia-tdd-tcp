@@ -230,6 +230,18 @@ struct cGameInteractionEntityRequest
 	std::string msMapFile;
 };
 
+// What a chatentry Command asks to display. Invalid means the line was malformed; the Chat Author and
+// message are validated only when it is not.
+struct cGameInteractionChatRequest
+{
+	cGameInteractionChatRequest() : mbValid(false) {}
+	bool mbValid;
+	std::wstring msAuthor;
+	std::wstring msMessage;
+	cChatColor mAuthorColor;
+	cChatColor mMessageColor;
+};
+
 enum eGameInteractionCommandClassification
 {
 	eGameInteractionCommandClassification_Observational,
@@ -241,8 +253,7 @@ class cGameInteractionCommand
 public:
 	explicit cGameInteractionCommand(eGameInteractionCommandType aType,
 		const std::string& asData = std::string());
-	cGameInteractionCommand(eGameInteractionCommandType aType, const std::wstring& asChatAuthor,
-		const std::wstring& asChatMessage);
+	cGameInteractionCommand(eGameInteractionCommandType aType, const cGameInteractionChatRequest& aChatRequest);
 	cGameInteractionCommand(eGameInteractionCommandType aType, const std::wstring& asCustomStoryIdentifier);
 	// A negotiation Command. Protocol Version 0 means the requested version was malformed; the
 	// Capabilities are the recognized requested ones, as a set of eGameInteractionCapability flags.
@@ -257,8 +268,7 @@ public:
 	eGameInteractionCommandType GetType() const { return mType; }
 	eGameInteractionCommandClassification GetClassification() const;
 	const std::string& GetData() const { return msData; }
-	const std::wstring& GetChatAuthor() const { return msChatAuthor; }
-	const std::wstring& GetChatMessage() const { return msChatMessage; }
+	const cGameInteractionChatRequest& GetChatRequest() const { return mChatRequest; }
 	const std::wstring& GetCustomStoryIdentifier() const { return msCustomStoryIdentifier; }
 	unsigned int GetProtocolVersion() const { return mlProtocolVersion; }
 	unsigned int GetCapabilities() const { return mlCapabilities; }
@@ -270,8 +280,7 @@ public:
 private:
 	eGameInteractionCommandType mType;
 	std::string msData;
-	std::wstring msChatAuthor;
-	std::wstring msChatMessage;
+	cGameInteractionChatRequest mChatRequest;
 	std::wstring msCustomStoryIdentifier;
 	unsigned int mlProtocolVersion;
 	unsigned int mlCapabilities;

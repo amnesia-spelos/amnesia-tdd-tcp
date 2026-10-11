@@ -50,8 +50,7 @@ namespace
 		{
 			if (!mbChatAvailable) return false;
 			++mlDisplayedChatEntries;
-			msDisplayedAuthor = aEntry.GetAuthor();
-			msDisplayedMessage = aEntry.GetMessage();
+			mDisplayedChatEntry = aEntry;
 			return true;
 		}
 		virtual std::vector<cGameInteractionCustomStory> GetCustomStories() const { return mvCustomStories; }
@@ -163,8 +162,7 @@ namespace
 		std::string msExecutedScript;
 		bool mbChatAvailable;
 		int mlDisplayedChatEntries;
-		std::wstring msDisplayedAuthor;
-		std::wstring msDisplayedMessage;
+		cChatEntry mDisplayedChatEntry;
 		bool mbInMainMenu;
 		std::vector<cGameInteractionCustomStory> mvCustomStories;
 		std::wstring msInvalidCustomStory;
@@ -252,6 +250,26 @@ namespace
 		gateway.Update(adapter);
 		Expect(Receive(peer) == "EVENT:MapChanged:maps/main/level02.map\nEVENT:CHAT:Daniel:hi: all\n",
 			"legacy Events keep their wire form in a negotiated Session");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void ChatEntryCarriesItsChatColorsToTheGameAdapter()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenSession(gateway, adapter);
+		Expect(Exchange(peer, gateway, adapter, "protocol 2\nchatentry 4080FF - Alice:hello: there\n") ==
+			"RESPONSE protocol ok 2\nRESPONSE chatentry ok\n", "chatentry needs no Capability");
+		Expect(adapter.mlDisplayedChatEntries == 1 && adapter.mDisplayedChatEntry.GetAuthor() == L"Alice" &&
+			adapter.mDisplayedChatEntry.GetMessage() == L"hello: there" &&
+			adapter.mDisplayedChatEntry.GetAuthorColor() == cChatColor(0x40, 0x80, 0xFF) &&
+			!adapter.mDisplayedChatEntry.GetMessageColor().IsSet(),
+			"the displayed Chat Entry keeps its Chat Author, message, and Chat Colors");
+		Expect(Exchange(peer, gateway, adapter, "chatentry - - \xC3\x28:hello\nchatentry - - Alice:\xC3\x28\n") ==
+			"RESPONSE chatentry invalid-author\nRESPONSE chatentry invalid-message\n",
+			"malformed UTF-8 rejects the part it is in");
+		Expect(adapter.mlDisplayedChatEntries == 1, "a rejected chatentry displays nothing");
 		closesocket(peer);
 		gateway.Shutdown();
 	}
@@ -1068,11 +1086,8 @@ namespace
 
 int main()
 {
-	cGameInteractionCommand typedChat(eGameInteractionCommand_Chat, L"Alice", L"hello: world");
-	Expect(typedChat.GetClassification() == eGameInteractionCommandClassification_StateChanging,
-		"typed chat Command is state-changing");
-	Expect(typedChat.GetChatAuthor() == L"Alice" && typedChat.GetChatMessage() == L"hello: world",
-		"typed chat Command keeps Chat Author and message separate");
+	Expect(cGameInteractionCommand(eGameInteractionCommand_Chat, cGameInteractionChatRequest()).GetClassification() ==
+		eGameInteractionCommandClassification_StateChanging, "chatentry Command is state-changing");
 	cGameInteractionEvent typedSubmission(eGameInteractionEvent_LocalChatSubmitted, L"Daniel", L"hello");
 	Expect(typedSubmission.GetChatAuthor() == L"Daniel" && typedSubmission.GetChatMessage() == L"hello",
 		"typed local-submission Event keeps Chat Author and message separate");
@@ -1110,21 +1125,10 @@ int main()
 	Expect(adapter.msExecutedScript == "SetLocalVarInt(\"lever\", 1):with:colons",
 		"state-changing Command crosses the game adapter");
 
-	SendCommands(peer, gateway, adapter, "chat:Alice:hello: from elsewhere\n");
-	Expect(Receive(peer) == "RESPONSE:chat:message displayed\n",
-		"valid chat Command receives the success Response");
-	Expect(adapter.mlDisplayedChatEntries == 1 && adapter.msDisplayedAuthor == L"Alice" &&
-		adapter.msDisplayedMessage == L"hello: from elsewhere",
-		"valid chat Command displays exactly one whole Chat Entry");
-	SendCommands(peer, gateway, adapter, "chat: :hello\nchat:Alice: \n");
-	Expect(Receive(peer) == "RESPONSE:chat:invalid author\nRESPONSE:chat:invalid message\n",
-		"invalid chat fields receive stable outcomes");
-	Expect(adapter.mlDisplayedChatEntries == 1, "invalid chat Commands do not display partial entries");
-	adapter.mbChatAvailable = false;
-	SendCommands(peer, gateway, adapter, "chat:Alice:hello\n");
-	Expect(Receive(peer) == "RESPONSE:chat:unavailable\n", "unavailable chat UI receives a stable outcome");
-	Expect(adapter.mlDisplayedChatEntries == 1, "unavailable chat UI displays no entry");
-	adapter.mbChatAvailable = true;
+	SendCommands(peer, gateway, adapter, "chat:Alice:hello\nchatentry - - Alice:hello\n");
+	Expect(Receive(peer) == "WARNING:Unknown command\nWARNING:Unknown command\n",
+		"a Session that does not negotiate cannot display Chat Entries");
+	Expect(adapter.mlDisplayedChatEntries == 0, "unknown chat Commands display nothing");
 
 	adapter.mvCustomStories.push_back(cGameInteractionCustomStory(L"mp-test-cs", L"Amnesia Multiplayer Test"));
 	adapter.mvCustomStories.push_back(cGameInteractionCustomStory(L"other", L"Other"));
@@ -1193,6 +1197,7 @@ int main()
 	Expect(!gateway.IsListening(), "a shut-down gateway is not listening");
 
 	ProtocolVersion2NegotiationGrantsSupportedRequestedCapabilities();
+	ChatEntryCarriesItsChatColorsToTheGameAdapter();
 	ResponseIsDeliveredWithinTheUpdateThatProcessedItsCommand();
 	GameIsToldWhetherAPeerIsConnected();
 	OverlongInboundLineDisconnectsThePeerWithAReason();

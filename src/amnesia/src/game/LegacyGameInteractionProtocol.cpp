@@ -206,23 +206,15 @@ std::string cLegacyGameInteractionProtocol::ToWireLine(const std::string& asMess
 	return asMessage + "\n";
 }
 
+bool cLegacyGameInteractionProtocol::TryDecodeUtf8(const std::string& asText, std::wstring& asDecoded)
+{
+	return DecodeUtf8(asText, asDecoded);
+}
+
 cGameInteractionCommand cLegacyGameInteractionProtocol::ParseCommand(const std::string& asCommand)
 {
 	if (asCommand.compare(0, 5, "exec:") == 0)
 		return cGameInteractionCommand(eGameInteractionCommand_ExecuteScript, asCommand.substr(5));
-	if (asCommand.compare(0, 5, "chat:") == 0)
-	{
-		const std::string::size_type authorDelimiter = asCommand.find(':', 5);
-		const std::string authorBytes = asCommand.substr(5,
-			authorDelimiter == std::string::npos ? std::string::npos : authorDelimiter - 5);
-		const std::string messageBytes = authorDelimiter == std::string::npos ? std::string() :
-			asCommand.substr(authorDelimiter + 1);
-		std::wstring author;
-		std::wstring message;
-		if (!DecodeUtf8(authorBytes, author)) author.assign(1, static_cast<wchar_t>(1));
-		if (!DecodeUtf8(messageBytes, message)) message.assign(1, static_cast<wchar_t>(1));
-		return cGameInteractionCommand(eGameInteractionCommand_Chat, author, message);
-	}
 	if (asCommand.compare(0, 17, "startcustomstory:") == 0)
 	{
 		std::wstring identifier;
@@ -258,13 +250,6 @@ std::string cLegacyGameInteractionProtocol::SerializeResponse(const cGameInterac
 	else if (aResponse.GetCommandType() == eGameInteractionCommand_GetPositionRotation) command = "getposrot";
 	else if (aResponse.GetCommandType() == eGameInteractionCommand_GetMap) command = "getmap";
 	else if (aResponse.GetCommandType() == eGameInteractionCommand_ExecuteScript) command = "exec";
-	else if (aResponse.GetCommandType() == eGameInteractionCommand_Chat) command = "chat";
-	if (aResponse.GetOutcome() == eGameInteractionCommandOutcome_InvalidAuthor)
-		return "RESPONSE:chat:invalid author";
-	if (aResponse.GetOutcome() == eGameInteractionCommandOutcome_InvalidMessage)
-		return "RESPONSE:chat:invalid message";
-	if (aResponse.GetOutcome() == eGameInteractionCommandOutcome_Unavailable)
-		return "RESPONSE:chat:unavailable";
 	if (aResponse.GetOutcome() == eGameInteractionCommandOutcome_MapNotLoaded)
 		return std::string("RESPONSE:") + command + ":no map loaded";
 	if (aResponse.GetType() == eGameInteractionResponse_Pong) return "RESPONSE:ping:pong";
@@ -279,7 +264,5 @@ std::string cLegacyGameInteractionProtocol::SerializeResponse(const cGameInterac
 		return "RESPONSE:getmap:" + aResponse.GetMapFile();
 	if (aResponse.GetType() == eGameInteractionResponse_CustomStories)
 		return "RESPONSE:getcustomstories:" + FormatCustomStories(aResponse.GetCustomStories());
-	if (aResponse.GetType() == eGameInteractionResponse_ChatDisplayed)
-		return "RESPONSE:chat:message displayed";
 	return "RESPONSE:exec:script executed";
 }

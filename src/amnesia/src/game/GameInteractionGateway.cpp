@@ -46,9 +46,9 @@ cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aTy
 }
 
 cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
-	const std::wstring& asChatAuthor, const std::wstring& asChatMessage)
-	: mType(aType), msChatAuthor(asChatAuthor), msChatMessage(asChatMessage), mlProtocolVersion(0),
-	  mlCapabilities(0), mSubscriptionRequest(eGameInteractionSubscriptionRequest_Invalid), mlSubscriptionRate(0)
+	const cGameInteractionChatRequest& aChatRequest)
+	: mType(aType), mChatRequest(aChatRequest), mlProtocolVersion(0), mlCapabilities(0),
+	  mSubscriptionRequest(eGameInteractionSubscriptionRequest_Invalid), mlSubscriptionRate(0)
 {
 }
 
@@ -592,9 +592,13 @@ namespace
 		}
 		case eGameInteractionCommand_Chat:
 		{
+			const cGameInteractionChatRequest& request = aCommand.GetChatRequest();
+			if (!request.mbValid)
+				return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_ChatDisplayed,
+					eGameInteractionCommandOutcome_Invalid);
 			cChatEntry entry;
-			const eChatEntryValidation validation = cChatModel::TryCreateEntry(
-				aCommand.GetChatAuthor(), aCommand.GetChatMessage(), entry);
+			const eChatEntryValidation validation = cChatModel::TryCreateEntry(request.msAuthor,
+				request.msMessage, entry, request.mAuthorColor, request.mMessageColor);
 			if (validation == eChatEntryValidation_InvalidAuthor)
 				return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_ChatDisplayed,
 					eGameInteractionCommandOutcome_InvalidAuthor);

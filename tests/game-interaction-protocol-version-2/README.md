@@ -37,7 +37,7 @@ protocol <version> [<capability>...]
 - An older game answers `protocol ...` with `WARNING:Unknown command`. A Peer must not send any other Protocol Version 2 message unless negotiation succeeded.
 - A game older than a Capability ignores its name like any unknown one, so the granted list tells a Peer whether the game supports it. A game without `interactions` still grants `avatars` and `localpose`.
 
-A negotiated Session keeps every legacy Command, Response, and Event unchanged. Unknown Commands are still answered with `WARNING:Unknown command`.
+A negotiated Session keeps every legacy Command, Response, and Event of the [legacy contract](../legacy-game-interaction-protocol/README.md) unchanged. Unknown Commands are still answered with `WARNING:Unknown command`.
 
 ## Line format
 
@@ -71,6 +71,7 @@ The gateway checks Capabilities before it parses a message. A Protocol Version 2
 
 | Command | Capability | Responses |
 | --- | --- | --- |
+| `chatentry <authorColor> <messageColor> <Author>:<message>` | none | `ok`, `invalid`, `invalid-author`, `invalid-message`, `unavailable` |
 | `avatarcreate <id> [<entityFile>]` | `avatars` | `ok <id>`, `exists <id>`, `limit <id>`, `model-not-found <id>`, `invalid` |
 | `avatarremove <id>` | `avatars` | `ok <id>`, `not-found <id>`, `invalid` |
 | `avatarcollision <id> <0\|1>` | `avatars` | `ok <id>`, `not-found <id>`, `invalid` |
@@ -85,6 +86,7 @@ The gateway checks Capabilities before it parses a message. A Protocol Version 2
 | `entitybreak <entityId> <state> <map>` | `interactions` | `ok <entityId>`, `wrong-map <entityId>`, `not-found <entityId>`, `invalid` |
 | `entityrelease <entityId> <map>` | `interactions` | `ok <entityId>`, `wrong-map <entityId>`, `not-found <entityId>`, `invalid` |
 
+- `chatentry`: see [Chat](#chat).
 - `avatarcreate`: `<entityFile>` is a path field and defaults to `entities/multiplayer/skeleton_spelos/TheSkeletonSpelos.ent`. The checks run in this order: `invalid` means the line is malformed or the Avatar Identifier is invalid, and the Response does not echo the identifier. `exists` means the Session already drives an Avatar with that identifier. `limit` means the Session already drives 16 Avatars. `model-not-found` means the game cannot find the model file or the mesh it names.
 - `avatarremove`: `invalid` means the line is malformed or the Avatar Identifier is invalid, and the Response does not echo the identifier.
 - `avatarcollision`: `1` turns on collision between the local player and the Avatar, and `0` turns it off. Collision is on for a new Avatar. The setting stays in place across map changes, save loads, and dormancy until the next `avatarcollision` for that Avatar. `invalid` means the line is malformed, the Avatar Identifier is invalid, or the flag is not `0` or `1`, and the Response does not echo the identifier.
@@ -160,6 +162,20 @@ A Peer-Driven Entity is a map-placed entity whose motion a Peer supplies in plac
 - `entitybreak`: snaps the break body of the Peer-Driven Entity to `<state>` and breaks it through the game's own break path, with its debris, connected props, contained item, sound, particles, and break callback. The debris starts from `<state>`, as it does on the game that sent `reportbroke`, even if the body moves before the entity is gone. Until then the entity stays out of the local player's reach and its contacts still neither break it nor damage enemies. Only an `Object` breaks this way; any other entity is released instead. The entity is then no longer driven. `not-found` means this Session does not drive that entity.
 - `entityrelease`: ends driving and returns the entity to local physics from its current state, clearing its interacting mark. `not-found` means this Session does not drive that entity.
 - A Peer-Driven Entity belongs to its Session, like an Avatar. The game releases every one when the Session ends and when its Map Visit ends.
+
+## Chat
+
+```text
+chatentry <authorColor> <messageColor> <Author>:<message>
+```
+
+- Displays a Chat Entry in the Chat Log of the current menu or game context. It needs no Capability. It replaces the legacy `chat:` Command, which every Session now answers with `WARNING:Unknown command` (ADR 0007).
+- `<authorColor>` and `<messageColor>` are the Chat Colors of the Chat Author and the message. Each is exactly six hex digits `RRGGBB`, in either case and without alpha, or `-` for that part's default color. The Chat Log fade still sets their alpha.
+- `<Author>:<message>` is the rest of the line. The first `:` ends the Chat Author, so later colons belong to the message. Both parts must be valid UTF-8. After Unicode whitespace trimming, a Chat Author must contain 1–32 Unicode scalars and a message 1–256. Control characters are rejected, and a Chat Author cannot contain `:`. Nothing is truncated or partly displayed.
+- `invalid` means the line is malformed: a field is missing or empty, the rest of the line has no `:`, or a color is neither `-` nor `RRGGBB`, such as `ff40`, `#ff4040`, `ff4040aa`, or `zzzzzz`. A bad color rejects the whole Command; it never falls back to the default.
+- `invalid-author` and `invalid-message` mean that part failed validation. The Chat Author is checked first.
+- `unavailable` means the game cannot display chat right now.
+- The local player's own Chat Entries always use the default colors, and `EVENT:CHAT:<Author>:<message>` carries no colors.
 
 ## Avatars
 

@@ -56,17 +56,35 @@ namespace
 	}
 }
 
+cChatColor::cChatColor()
+	: mbSet(false), mcRed(0), mcGreen(0), mcBlue(0)
+{
+}
+
+cChatColor::cChatColor(unsigned char acRed, unsigned char acGreen, unsigned char acBlue)
+	: mbSet(true), mcRed(acRed), mcGreen(acGreen), mcBlue(acBlue)
+{
+}
+
+bool cChatColor::operator==(const cChatColor& aColor) const
+{
+	return mbSet == aColor.mbSet && mcRed == aColor.mcRed && mcGreen == aColor.mcGreen &&
+		mcBlue == aColor.mcBlue;
+}
+
 cChatEntry::cChatEntry()
 {
 }
 
-cChatEntry::cChatEntry(const std::wstring& asAuthor, const std::wstring& asMessage)
-	: msAuthor(asAuthor), msMessage(asMessage)
+cChatEntry::cChatEntry(const std::wstring& asAuthor, const std::wstring& asMessage,
+	const cChatColor& aAuthorColor, const cChatColor& aMessageColor)
+	: msAuthor(asAuthor), msMessage(asMessage), mAuthorColor(aAuthorColor), mMessageColor(aMessageColor)
 {
 }
 
 eChatEntryValidation cChatModel::TryCreateEntry(const std::wstring& asAuthor,
-	const std::wstring& asMessage, cChatEntry& aEntry)
+	const std::wstring& asMessage, cChatEntry& aEntry, const cChatColor& aAuthorColor,
+	const cChatColor& aMessageColor)
 {
 	if (!InspectText(asAuthor, static_cast<size_t>(-1), true))
 		return eChatEntryValidation_InvalidAuthor;
@@ -78,7 +96,7 @@ eChatEntryValidation cChatModel::TryCreateEntry(const std::wstring& asAuthor,
 	const std::wstring message = Trim(asMessage);
 	if (message.empty() || !InspectText(message, 256, false))
 		return eChatEntryValidation_InvalidMessage;
-	aEntry = cChatEntry(author, message);
+	aEntry = cChatEntry(author, message, aAuthorColor, aMessageColor);
 	return eChatEntryValidation_Valid;
 }
 
@@ -105,10 +123,12 @@ const cChatModel::cContextState& cChatModel::State(eChatContext aContext) const
 }
 
 eChatEntryValidation cChatModel::AddEntry(eChatContext aContext,
-	const std::wstring& asAuthor, const std::wstring& asMessage)
+	const std::wstring& asAuthor, const std::wstring& asMessage, const cChatColor& aAuthorColor,
+	const cChatColor& aMessageColor)
 {
 	cChatEntry entry;
-	const eChatEntryValidation validation = TryCreateEntry(asAuthor, asMessage, entry);
+	const eChatEntryValidation validation = TryCreateEntry(asAuthor, asMessage, entry, aAuthorColor,
+		aMessageColor);
 	if (validation != eChatEntryValidation_Valid) return validation;
 	cContextState& state = State(aContext);
 	if (state.mvEntries.size() == 10) state.mvEntries.erase(state.mvEntries.begin());

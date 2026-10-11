@@ -21,6 +21,13 @@ namespace
 	const float gfChatComposerY = 557.0f;
 	const float gfChatLineHeight = 21.0f;
 	const float gfChatTop = 335.0f;
+
+	// The Chat Log fade sets the alpha whatever the Chat Color.
+	cColor ChatLogColor(const cChatColor& aColor, const cColor& aDefault, float afAlpha)
+	{
+		if(!aColor.IsSet()) return cColor(aDefault.r, aDefault.g, aDefault.b, afAlpha);
+		return cColor(aColor.GetRed() / 255.0f, aColor.GetGreen() / 255.0f, aColor.GetBlue() / 255.0f, afAlpha);
+	}
 }
 
 cLuxChatHandler::cLuxChatHandler()
@@ -36,8 +43,8 @@ cLuxChatHandler::~cLuxChatHandler()
 
 bool cLuxChatHandler::DisplayChatEntry(const cChatEntry& aEntry)
 {
-	return mModel.AddEntry(mModel.GetContext(), aEntry.GetAuthor(), aEntry.GetMessage()) ==
-		eChatEntryValidation_Valid;
+	return mModel.AddEntry(mModel.GetContext(), aEntry.GetAuthor(), aEntry.GetMessage(),
+		aEntry.GetAuthorColor(), aEntry.GetMessageColor()) == eChatEntryValidation_Valid;
 }
 
 void cLuxChatHandler::OnStart()
@@ -228,11 +235,13 @@ void cLuxChatHandler::DrawLog()
 			y -= gfChatLineHeight;
 			if(y < gfChatTop) return;
 			mpSet->DrawFont(*row, gpBase->mpDefaultFont, cVector3f(gfChatLeft, y, 18),
-				gvChatFontSize, cColor(0.9f, 0.9f, 0.86f, alpha), eFontAlign_Left);
+				gvChatFontSize, ChatLogColor(it->GetMessageColor(), cColor(0.9f, 0.9f, 0.86f), alpha),
+				eFontAlign_Left);
 			if(row + 1 == rows.rend())
 			{
 				mpSet->DrawFont(prefix, gpBase->mpDefaultFont, cVector3f(gfChatLeft, y, 18.1f),
-					gvChatFontSize, cColor(0.55f, 0.62f, 0.65f, alpha), eFontAlign_Left);
+					gvChatFontSize, ChatLogColor(it->GetAuthorColor(), cColor(0.55f, 0.62f, 0.65f), alpha),
+					eFontAlign_Left);
 			}
 		}
 	}

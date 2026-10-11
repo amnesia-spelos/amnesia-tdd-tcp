@@ -63,6 +63,29 @@ int main()
 	Expect(cChatModel::TryCreateEntry(L"Alice", L"\xDE00", entry) ==
 		eChatEntryValidation_InvalidMessage, "unpaired low surrogate is rejected");
 
+	Expect(cChatModel::TryCreateEntry(L"Alice", L"hello", entry) == eChatEntryValidation_Valid &&
+		!entry.GetAuthorColor().IsSet() && !entry.GetMessageColor().IsSet(),
+		"a Chat Entry without Chat Colors keeps the default colors");
+	Expect(cChatModel::TryCreateEntry(L"Alice", L"hello", entry, cChatColor(0x40, 0x80, 0xFF)) ==
+		eChatEntryValidation_Valid && entry.GetAuthorColor() == cChatColor(0x40, 0x80, 0xFF) &&
+		!entry.GetMessageColor().IsSet(), "a Chat Entry can color only its Chat Author");
+	Expect(cChatModel::TryCreateEntry(L"Alice", L"hello", entry, cChatColor(), cChatColor(0xFF, 0x40, 0x40)) ==
+		eChatEntryValidation_Valid && !entry.GetAuthorColor().IsSet() &&
+		entry.GetMessageColor() == cChatColor(0xFF, 0x40, 0x40), "a Chat Entry can color only its message");
+	Expect(cChatColor(0, 0, 0).IsSet() && !(cChatColor(0, 0, 0) == cChatColor()),
+		"black is a Chat Color, not the default");
+	Expect(cChatModel::TryCreateEntry(L" ", L"hello", entry, cChatColor(1, 2, 3), cChatColor(4, 5, 6)) ==
+		eChatEntryValidation_InvalidAuthor, "Chat Colors do not change Chat Author validation");
+
+	cChatModel colorModel;
+	colorModel.AddEntry(eChatContext_Game, L"Alice", L"hi", cChatColor(0x40, 0x80, 0xFF), cChatColor(0xFF, 0x40, 0x40));
+	Expect(colorModel.GetEntries(eChatContext_Game).back().GetAuthorColor() == cChatColor(0x40, 0x80, 0xFF) &&
+		colorModel.GetEntries(eChatContext_Game).back().GetMessageColor() == cChatColor(0xFF, 0x40, 0x40),
+		"an added Chat Entry keeps both Chat Colors");
+	const cChatColor color(0x12, 0x34, 0x56);
+	Expect(color.GetRed() == 0x12 && color.GetGreen() == 0x34 && color.GetBlue() == 0x56,
+		"a Chat Color keeps its channels");
+
 	cChatModel model;
 	for (int index = 0; index < 11; ++index)
 	{
@@ -116,6 +139,9 @@ int main()
 	Expect(!model.IsComposerOpen() && model.GetEntries(eChatContext_Game).back().GetAuthor() == L"Daniel" &&
 		model.GetEntries(eChatContext_Game).back().GetMessage() == L"/world",
 		"local submission adds the literal Chat Author and preserves slash text");
+	Expect(!model.GetEntries(eChatContext_Game).back().GetAuthorColor().IsSet() &&
+		!model.GetEntries(eChatContext_Game).back().GetMessageColor().IsSet(),
+		"local submission has no Chat Color");
 	model.OpenComposer();
 	model.SetDraft(L"   ");
 	Expect(model.SubmitComposer() == eChatSubmitResult_Empty && !model.IsComposerOpen(),
