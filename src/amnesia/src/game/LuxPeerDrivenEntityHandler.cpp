@@ -7,6 +7,7 @@
 #include "LuxPlayerState_Interact.h"
 #include "LuxProp.h"
 #include "LuxProp_Object.h"
+#include "LuxSocketServer.h"
 
 namespace
 {
@@ -107,6 +108,15 @@ namespace
 				pBody->Enable();
 			}
 			m_mapBodyGravity.erase(alEntityId);
+		}
+
+		virtual void ReportScriptRelease(int alEntityId)
+		{
+			if(gpBase->mpSocketServer==NULL) return;
+			cGameInteractionEntityEvent event;
+			event.mlEntityId = alEntityId;
+			event.msMapFile = mpMap->GetMapPath();
+			gpBase->mpSocketServer->PublishEvent(cGameInteractionEvent(eGameInteractionEvent_EntityReleased, event));
 		}
 
 		// The prop's own logic sees the Peer's interaction as the local player's: a door unlatches, and a
@@ -224,6 +234,14 @@ eGameInteractionEntityOutcome cLuxPeerDrivenEntityHandler::ReleaseEntity(int alE
 {
 	cLuxPeerDrivenEntityWorld world(gpBase->mpMapHandler->GetCurrentMap(), m_mapBodyGravity);
 	return mModel.Release(alEntityId, world);
+}
+
+void cLuxPeerDrivenEntityHandler::ReleaseEntityByScript(int alEntityId)
+{
+	cLuxMap *pMap = gpBase->mpMapHandler->GetCurrentMap();
+	if(pMap==NULL) return;
+	cLuxPeerDrivenEntityWorld world(pMap, m_mapBodyGravity);
+	mModel.ReleaseByScript(alEntityId, world);
 }
 
 // The Session ended. Without a map, leaving the last one already released every entity.

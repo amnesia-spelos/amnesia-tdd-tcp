@@ -148,6 +148,12 @@ eGameInteractionEntityOutcome cPeerDrivenEntityModel::Release(int alEntityId, iP
 	return eGameInteractionEntityOutcome_NotFound;
 }
 
+void cPeerDrivenEntityModel::ReleaseByScript(int alEntityId, iPeerDrivenEntityWorld& aWorld)
+{
+	if (Release(alEntityId, aWorld) == eGameInteractionEntityOutcome_Success)
+		aWorld.ReportScriptRelease(alEntityId);
+}
+
 eGameInteractionEntityOutcome cPeerDrivenEntityModel::Break(int alEntityId,
 	const cGameInteractionBodyState& aFinalState, iPeerDrivenEntityWorld& aWorld)
 {
@@ -184,7 +190,9 @@ void cPeerDrivenEntityModel::Update(double afLocalTimeMs, iPeerDrivenEntityWorld
 		// Destroyed, as by a script, so there is nothing to give back.
 		if (aWorld.FindEntity(driven.mlEntityId) != eGameInteractionEntityOutcome_Success)
 		{
-			mvDriven.erase(mvDriven.begin() + i);
+			const int lEntityId = driven.mlEntityId;
+			EndDriving(i, aWorld);
+			aWorld.ReportScriptRelease(lEntityId);
 			continue;
 		}
 

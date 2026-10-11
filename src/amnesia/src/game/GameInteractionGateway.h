@@ -78,6 +78,8 @@ enum eGameInteractionEventType
 	eGameInteractionEvent_ReportContact,
 	eGameInteractionEvent_ReportSettled,
 	eGameInteractionEvent_ReportBroke,
+	// A script ended following a Peer-Driven Entity. Carries its identifier and Map Path.
+	eGameInteractionEvent_EntityReleased,
 	// A Map Visit started. It carries the Map Path, and precedes every other interactions Event of that visit.
 	eGameInteractionEvent_MapEntered,
 	// The local player triggered a Shared Callback, which only a Session granted sharedcallbacks receives.

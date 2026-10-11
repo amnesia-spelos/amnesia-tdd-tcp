@@ -99,6 +99,70 @@ namespace
 		cSharedCallbackModel::RunCollide(PlayerCollide(), 0, -1, colliding);
 		Expect(colliding, "another player leaving does not take the local player out of the area");
 	}
+
+	void PeerDrivenCollidesStaySilentAndKeepTheirCurrentEdge()
+	{
+		cSharedCollide collide;
+		collide.mbChildPeerDriven = true;
+		bool colliding = false;
+		bool callbackColliding = false;
+		Expect(!cSharedCallbackModel::CheckLocalCollide(collide, 0, true, colliding, callbackColliding),
+			"a Peer-Driven child entering runs no callback");
+		collide.mbChildPeerDriven = false;
+		Expect(!cSharedCallbackModel::CheckLocalCollide(collide, 0, true, colliding, callbackColliding),
+			"ending driving while still inside does not fire an entering callback");
+		Expect(cSharedCallbackModel::CheckLocalCollide(collide, 0, false, colliding, callbackColliding),
+			"a later local exit runs the callback");
+		collide.mbParentPeerDriven = true;
+		Expect(!cSharedCallbackModel::CheckLocalCollide(collide, 0, true, colliding, callbackColliding),
+			"a Peer-Driven parent entering runs no callback");
+		Expect(!cSharedCallbackModel::CheckLocalCollide(collide, 0, false, colliding, callbackColliding),
+			"a Peer-Driven parent leaving runs no callback");
+		collide.mbParentPeerDriven = false;
+		Expect(!cSharedCallbackModel::CheckLocalCollide(collide, 0, false, colliding, callbackColliding),
+			"ending driving outside does not fire a leaving callback");
+		collide.mbParentHeld = true;
+		Expect(cSharedCallbackModel::CheckLocalCollide(collide, 1, true, colliding, callbackColliding),
+			"the Holder's game still runs its entering callback");
+	}
+
+	void ASilentDrivenEdgeDoesNotConsumeTheSharedCallbackReplay()
+	{
+		cSharedCollide collide;
+		collide.mbChildPeerDriven = true;
+		bool colliding = false;
+		bool callbackColliding = false;
+		Expect(!cSharedCallbackModel::CheckLocalCollide(collide, 0, true, colliding, callbackColliding),
+			"driven motion reaches the area silently before the Command arrives");
+		Expect(cSharedCallbackModel::RunCollide(collide, 0, 1, callbackColliding),
+			"the arriving Shared Callback still runs its registration");
+		Expect(!cSharedCallbackModel::RunCollide(collide, 0, 1, callbackColliding),
+			"a duplicate entering Command does not run it twice");
+		cSharedCallbackModel::RunCollide(collide, 0, -1, callbackColliding);
+		Expect(cSharedCallbackModel::RunCollide(collide, 0, 1, callbackColliding),
+			"a later entry Command may arrive before the body's sample");
+		cSharedCallbackModel::CheckLocalCollide(collide, 0, false, colliding, callbackColliding);
+		cSharedCallbackModel::CheckLocalCollide(collide, 0, true, colliding, callbackColliding);
+		Expect(callbackColliding, "silent samples do not undo the replayed callback state");
+		collide.mbChildPeerDriven = false;
+		Expect(!cSharedCallbackModel::CheckLocalCollide(collide, 0, true, colliding, callbackColliding),
+			"release inside still does not run a spurious entry");
+	}
+
+	void AReplayAheadOfDrivenMotionDoesNotInventAnEntryOnRelease()
+	{
+		cSharedCollide collide;
+		collide.mbChildPeerDriven = true;
+		bool colliding = false;
+		bool callbackColliding = false;
+		cSharedCallbackModel::CheckLocalCollide(collide, 0, true, colliding, callbackColliding);
+		cSharedCallbackModel::RunCollide(collide, 0, 1, callbackColliding, &colliding);
+		Expect(cSharedCallbackModel::RunCollide(collide, 0, -1, callbackColliding, &colliding),
+			"an exit replay may arrive while the driven body is still physically inside");
+		collide.mbChildPeerDriven = false;
+		Expect(!cSharedCallbackModel::CheckLocalCollide(collide, 0, true, colliding, callbackColliding),
+			"releasing before another driven tick does not invent an entry");
+	}
 }
 
 int main()
@@ -109,6 +173,9 @@ int main()
 	AnEntityCollideRunKeepsTheEdgeSoTheLocalCheckDoesNotFireAgain();
 	AnEntityCollideTheLocalCheckAlreadyFiredDoesNotRunAgain();
 	APlayerCollideRunLeavesTheLocalPlayersEdgeAlone();
+	PeerDrivenCollidesStaySilentAndKeepTheirCurrentEdge();
+	ASilentDrivenEdgeDoesNotConsumeTheSharedCallbackReplay();
+	AReplayAheadOfDrivenMotionDoesNotInventAnEntryOnRelease();
 	std::cout << "Shared Callback model cases passed\n";
 	return 0;
 }

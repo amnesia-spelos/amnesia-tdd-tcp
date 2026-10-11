@@ -656,6 +656,8 @@ public:
 	int mlStates;
 
 	bool mbColliding;
+	// Last edge handled by the local callback path or replay, separate from silently sampled motion.
+	bool mbCallbackColliding;
 };
 
 typedef std::list<cLuxCollideCallback*> tLuxCollideCallbackList;

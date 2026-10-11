@@ -32,6 +32,7 @@
 #include "LuxEffectHandler.h"
 #include "LuxMapHandler.h"
 #include "LuxSharedCallbackHandler.h"
+#include "LuxPeerDrivenEntityHandler.h"
 
 #include "LuxEnemy.h"
 #include "LuxEnemyPathfinder.h"
@@ -619,6 +620,8 @@ void cLuxMap::DestroyEntity(iLuxEntity *apEntity)
 
 	if(apEntity->GetDestroyMe()) return;
 
+	if(!mbDeletingAllWorldEntities && apEntity->IsPeerDriven() && gpBase->mpPeerDrivenEntityHandler)
+		gpBase->mpPeerDrivenEntityHandler->ReleaseEntityByScript(apEntity->GetID());
 	apEntity->DestroyMe();
     mlstToBeDestroyedEntities.push_back(apEntity);
 }

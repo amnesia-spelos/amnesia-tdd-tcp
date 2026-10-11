@@ -1,5 +1,15 @@
 #include "SharedCallbackModel.h"
 
+bool cSharedCallbackModel::CheckLocalCollide(const cSharedCollide& aCollide, int alStatesFilter,
+	bool abNowColliding, bool& abColliding, bool& abCallbackColliding)
+{
+	const bool bChanged = abColliding != abNowColliding;
+	abColliding = abNowColliding;
+	if (aCollide.mbParentPeerDriven || aCollide.mbChildPeerDriven || !bChanged) return false;
+	abCallbackColliding = abNowColliding;
+	return alStatesFilter == 0 || alStatesFilter == (abNowColliding ? 1 : -1);
+}
+
 bool cSharedCallbackModel::ReportsCollide(const cSharedCollide& aCollide) const
 {
 	if (!ReportsCallback()) return false;
@@ -7,13 +17,15 @@ bool cSharedCallbackModel::ReportsCollide(const cSharedCollide& aCollide) const
 }
 
 bool cSharedCallbackModel::RunCollide(const cSharedCollide& aCollide, int alStatesFilter, int alState,
-	bool& abColliding)
+	bool& abCallbackColliding, bool* apSampledColliding)
 {
 	if (!aCollide.mbParentIsPlayer)
 	{
 		// The local check already fired this edge, so running it again would run the callback twice.
-		if (abColliding == (alState > 0)) return false;
-		abColliding = alState > 0;
+		if (abCallbackColliding == (alState > 0)) return false;
+		abCallbackColliding = alState > 0;
+		if (apSampledColliding && !aCollide.mbParentPeerDriven && !aCollide.mbChildPeerDriven)
+			*apSampledColliding = abCallbackColliding;
 	}
 	return alStatesFilter == 0 || alStatesFilter == alState;
 }

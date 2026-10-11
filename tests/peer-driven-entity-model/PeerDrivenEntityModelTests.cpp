@@ -61,6 +61,7 @@ namespace
 
 		virtual void BeginDriving(int alEntityId) { Log("begin", alEntityId); }
 		virtual void EndDriving(int alEntityId) { Log("end", alEntityId); }
+		virtual void ReportScriptRelease(int alEntityId) { Log("script-release", alEntityId); }
 
 		virtual void SetInteracting(int alEntityId, bool abInteracting)
 		{
@@ -412,6 +413,27 @@ namespace
 		Expect(world.mlBodyStatesSet == 0, "driving it again does not replay old samples");
 	}
 
+	void TestAScriptReleaseEndsFollowingAndReportsItOnce()
+	{
+		cFakeWorld world;
+		world.Place(12);
+		cPeerDrivenEntityModel model;
+		model.Drive(12, world);
+		model.SetInteracting(12, true, world);
+		Add(model, world, 0, 1000.0, Body(12, 0, 1.0f));
+		world.mvCalls.clear();
+		model.ReleaseByScript(12, world);
+		Expect(!model.IsDriving(12), "a script can stop following its entity");
+		Expect(world.mvCalls.size() == 3 && world.mvCalls[0] == "not-interacting 12" &&
+			world.mvCalls[1] == "end 12" && world.mvCalls[2] == "script-release 12",
+			"the mark and local physics are restored before the Peer is told");
+		model.ReleaseByScript(12, world);
+		world.ForgetStates();
+		model.Update(1200.0, world);
+		Expect(world.mvCalls.size() == 3 && world.mlBodyStatesSet == 0,
+			"the release is reported once and buffered motion cannot undo a script change");
+	}
+
 	void TestBreakingSnapsTheEntityAndEndsDrivingIt()
 	{
 		cFakeWorld world;
@@ -476,9 +498,10 @@ namespace
 		world.mvCalls.clear();
 		model.Update(1100.0, world);
 		Expect(!model.IsDriving(12), "a destroyed entity is no longer driven");
-		Expect(world.mvCalls.empty(), "and is not handed back");
+		Expect(world.mvCalls.size() == 2 && world.mvCalls[0] == "end 12" &&
+			world.mvCalls[1] == "script-release 12", "world bookkeeping is cleared and the Peer is told");
 		model.ReleaseAll(world);
-		Expect(world.mvCalls.empty(), "nor later");
+		Expect(world.mvCalls.size() == 2, "the Peer is not told again during cleanup");
 	}
 
 	void TestClearingForgetsWithoutTouchingTheWorld()
@@ -513,6 +536,7 @@ int main()
 	TestInteractingIsMirroredOnlyForADrivenEntity();
 	TestOnlyAChangedMarkReachesTheWorld();
 	TestReleasingGivesTheEntityBack();
+	TestAScriptReleaseEndsFollowingAndReportsItOnce();
 	TestReleasingAllEndsEveryDrivenEntity();
 	TestBreakingSnapsTheEntityAndEndsDrivingIt();
 	TestAnEntityTheWorldLostIsForgotten();

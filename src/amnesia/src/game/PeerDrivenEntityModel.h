@@ -22,6 +22,8 @@ public:
 	// state.
 	virtual void BeginDriving(int alEntityId) = 0;
 	virtual void EndDriving(int alEntityId) = 0;
+	// Tells the Peer a script ended following, independently of a Peer's release Command.
+	virtual void ReportScriptRelease(int alEntityId) = 0;
 	// Marks the entity as being interacted with, starting an interaction with it as the local player's
 	// would, or clears the mark. Told only when the mark changes.
 	virtual void SetInteracting(int alEntityId, bool abInteracting) = 0;
@@ -58,6 +60,9 @@ public:
 
 	// Gives the entity back to local physics from its current state, clearing any interacting mark.
 	eGameInteractionEntityOutcome Release(int alEntityId, iPeerDrivenEntityWorld& aWorld);
+	// A script deactivated, removed, or moved the entity. Discards buffered motion and tells the Peer
+	// once; a release Command or Session cleanup never produces this report.
+	void ReleaseByScript(int alEntityId, iPeerDrivenEntityWorld& aWorld);
 	// Ends driving the entity by breaking it from the final state the breaking game had, clearing any
 	// interacting mark.
 	eGameInteractionEntityOutcome Break(int alEntityId, const cGameInteractionBodyState& aFinalState,

@@ -743,6 +743,8 @@ std::string cGameInteractionProtocolVersion2::SerializeEvent(const cGameInteract
 		return FormatEntityEvent("reportcontact", entityEvent, std::string());
 	case eGameInteractionEvent_ReportSettled:
 		return FormatEntityEvent("reportsettled", entityEvent, std::string());
+	case eGameInteractionEvent_EntityReleased:
+		return FormatEntityEvent("entityreleased", entityEvent, std::string());
 	case eGameInteractionEvent_ReportBroke:
 		return FormatEntityEvent("reportbroke", entityEvent, " " + FormatBodyState(entityEvent.mState));
 	case eGameInteractionEvent_MapEntered:

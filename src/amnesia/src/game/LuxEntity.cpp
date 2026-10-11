@@ -23,6 +23,7 @@
 #include "LuxPlayer.h"
 #include "LuxMapHelper.h"
 #include "LuxSharedCallbackHandler.h"
+#include "LuxPeerDrivenEntityHandler.h"
 
 //////////////////////////////////////////////////////////////////////////
 // CONSTRUCTORS
@@ -147,6 +148,9 @@ bool iLuxEntity::RunInteractCallbackFunc()
 
 void iLuxEntity::SetActive(bool abX)
 {
+	// Restore gravity before OnSetActive disables the bodies. Buffered motion must not reactivate them.
+	if(!abX && mbPeerDriven && gpBase->mpPeerDrivenEntityHandler)
+		gpBase->mpPeerDrivenEntityHandler->ReleaseEntityByScript(mlID);
 	if(mbActive == abX) return;
 
 	mbActive = abX;

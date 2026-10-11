@@ -4,12 +4,15 @@
 // A collide callback the game ran, or is asked to run, as the local game has its two sides.
 struct cSharedCollide
 {
-	cSharedCollide() : mbParentIsPlayer(false), mbParentHeld(false), mbChildHeld(false) {}
+	cSharedCollide() : mbParentIsPlayer(false), mbParentHeld(false), mbChildHeld(false),
+		mbParentPeerDriven(false), mbChildPeerDriven(false) {}
 	// The parent is the local player rather than an entity.
 	bool mbParentIsPlayer;
 	// Whether the local player Holds the parent or the child, so that the other games follow it.
 	bool mbParentHeld;
 	bool mbChildHeld;
+	bool mbParentPeerDriven;
+	bool mbChildPeerDriven;
 };
 
 // Decides which Map Script callbacks are Shared Callbacks, and keeps Shared Callback mode: while a
@@ -37,7 +40,16 @@ public:
 	// edge to the state as the local check would, so the local check does not fire it again, and does not
 	// run when the edge is already there. A Player collide's edge is the local player's body, which
 	// another player's trigger does not move.
-	static bool RunCollide(const cSharedCollide& aCollide, int alStatesFilter, int alState, bool& abColliding);
+	// When supplied, the sampled edge follows the replay only for an ordinary entity collide;
+	// while either side is Peer-Driven it stays independent of the Command's arrival time.
+	static bool RunCollide(const cSharedCollide& aCollide, int alStatesFilter, int alState,
+		bool& abCallbackColliding, bool* apSampledColliding = 0);
+	// A local check always tracks the current collision edge, but callbacks involving either
+	// Peer-Driven side stay silent. Releasing inside an area therefore does not trigger an entry.
+	// The callback edge changes only for unsuppressed local edges or a RunCollide Command, so a
+	// silently sampled edge cannot consume a later replay. Pass that edge to RunCollide.
+	static bool CheckLocalCollide(const cSharedCollide& aCollide, int alStatesFilter, bool abNowColliding,
+		bool& abColliding, bool& abCallbackColliding);
 
 private:
 	int mlRunDepth;

@@ -22,6 +22,7 @@ public:
 	eGameInteractionEntityOutcome SetEntityInteracting(int alEntityId, bool abInteracting);
 	eGameInteractionEntityOutcome BreakEntity(int alEntityId, const cGameInteractionBodyState& aFinalState);
 	eGameInteractionEntityOutcome ReleaseEntity(int alEntityId);
+	void ReleaseEntityByScript(int alEntityId);
 	void ReleaseEntities();
 
 	void Update(float afTimeStep);

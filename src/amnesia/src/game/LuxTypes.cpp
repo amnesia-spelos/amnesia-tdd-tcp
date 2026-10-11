@@ -172,24 +172,25 @@ void iLuxCollideCallbackContainer::CheckCollisionCallback(const tString& asName,
 
 		/////////////////////
 		//Handle collision
-		if( (bCollide && pCallback->mbColliding==false) || (bCollide==false && pCallback->mbColliding) )
+		cSharedCollide collide;
+		iLuxEntity *pParent = GetCollideCallbackParentEntity();
+		collide.mbParentPeerDriven = pParent && pParent->IsPeerDriven();
+		collide.mbChildPeerDriven = pEntity->IsPeerDriven();
+		if(cSharedCallbackModel::CheckLocalCollide(collide, pCallback->mlStates, bCollide,
+			pCallback->mbColliding, pCallback->mbCallbackColliding))
 		{
 			int lState = bCollide ? 1 : -1;
-            pCallback->mbColliding = bCollide;
-			if(lState == pCallback->mlStates || pCallback->mlStates==0)
-			{
-				tString sCommand = GetCollideCallbackCommand(pCallback, asName, lState);
-				if(gpBase->mpSharedCallbackHandler)
-					gpBase->mpSharedCallbackHandler->OnCollideCallbackRunning(GetCollideCallbackParentEntity(), pEntity, lState);
-				apMap->RunScript(sCommand);
+			tString sCommand = GetCollideCallbackCommand(pCallback, asName, lState);
+			if(gpBase->mpSharedCallbackHandler)
+				gpBase->mpSharedCallbackHandler->OnCollideCallbackRunning(GetCollideCallbackParentEntity(), pEntity, lState);
+			apMap->RunScript(sCommand);
 			
-				gpBase->mpSocketServer->PublishEvent(cGameInteractionEvent(
-					eGameInteractionEvent_ScriptCallObserved, sCommand));
+			gpBase->mpSocketServer->PublishEvent(cGameInteractionEvent(
+				eGameInteractionEvent_ScriptCallObserved, sCommand));
 
-				///////////////////////
-				// Auto remove
-				if(pCallback->mbDeleteWhenColliding) QueueCollideCallbackDeletion(pCallback);
-			}
+			///////////////////////
+			// Auto remove
+			if(pCallback->mbDeleteWhenColliding) QueueCollideCallbackDeletion(pCallback);
 		}
 	}
 
@@ -214,8 +215,13 @@ bool iLuxCollideCallbackContainer::RunSharedCollideCallback(iLuxEntity *apChild,
 	if(pCallback==NULL || apChild->IsActive()==false) return false;
 
 	cSharedCollide collide;
-	collide.mbParentIsPlayer = GetCollideCallbackParentEntity()==NULL;
-	if(cSharedCallbackModel::RunCollide(collide, pCallback->mlStates, alState, pCallback->mbColliding)==false) return false;
+	iLuxEntity *pParent = GetCollideCallbackParentEntity();
+	collide.mbParentIsPlayer = pParent==NULL;
+	collide.mbParentPeerDriven = pParent && pParent->IsPeerDriven();
+	collide.mbChildPeerDriven = apChild->IsPeerDriven();
+	const bool bRun = cSharedCallbackModel::RunCollide(collide, pCallback->mlStates, alState,
+		pCallback->mbCallbackColliding, &pCallback->mbColliding);
+	if(!bRun) return false;
 
 	// The script may remove callbacks, so removals wait until it is done, as in the collide check.
 	mbUpdatingCollideCallbacks = true;
@@ -313,6 +319,7 @@ void iLuxCollideCallbackContainer::AddCollideCallback(iLuxEntity *apEntity, cons
 	pCallback->msCallbackFunc = asCallbackFunc;
 	pCallback->mbDeleteWhenColliding = abRemoveAtCollide;
 	pCallback->mbColliding = false;
+	pCallback->mbCallbackColliding = false;
 	pCallback->mlStates = alStates;
 
 	apEntity->AddCollideCallbackParent(this);
@@ -565,6 +572,8 @@ void cLuxCollideCallback_SaveData::ToCallback(cLuxMap *apMap, iLuxCollideCallbac
 	apCallback->mbDeleteWhenColliding = mbDeleteWhenColliding;
 	apCallback->mlStates = mlStates;
 	apCallback->mbColliding = mbColliding;
+	// Loading a save ends the previous Map Visit and its driving/replays. Start both edges together.
+	apCallback->mbCallbackColliding = mbColliding;
 
 	apCallback->mpCollideEntity = apMap->GetEntityByID(mlCollideEntity);
 	if(apCallback->mpCollideEntity==NULL)
