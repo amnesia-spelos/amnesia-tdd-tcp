@@ -22,6 +22,7 @@
 #include "LuxMap.h"
 #include "LuxPlayer.h"
 #include "LuxMapHelper.h"
+#include "LuxSharedCallbackHandler.h"
 
 //////////////////////////////////////////////////////////////////////////
 // CONSTRUCTORS
@@ -131,13 +132,15 @@ void iLuxEntity::RunCallbackFunc(const tString& asType)
 
 //-----------------------------------------------------------------------
 
-void iLuxEntity::RunInteractCallbackFunc()
+bool iLuxEntity::RunInteractCallbackFunc()
 {
-	if(msInteractCallback=="")return;
-	
+	if(msInteractCallback=="")return false;
+
+	if(gpBase->mpSharedCallbackHandler) gpBase->mpSharedCallbackHandler->OnInteractCallbackRunning(this);
 	mpMap->RunScript(msInteractCallback + "(\""+msName+"\")");
-	
+
 	if(mbInteractCallbackRemove) msInteractCallback = "";
+	return true;
 }
 
 //-----------------------------------------------------------------------

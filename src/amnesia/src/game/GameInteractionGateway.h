@@ -79,7 +79,38 @@ enum eGameInteractionEventType
 	eGameInteractionEvent_ReportSettled,
 	eGameInteractionEvent_ReportBroke,
 	// A Map Visit started. It carries the Map Path, and precedes every other interactions Event of that visit.
-	eGameInteractionEvent_MapEntered
+	eGameInteractionEvent_MapEntered,
+	// The local player triggered a Shared Callback, which only a Session granted sharedcallbacks receives.
+	eGameInteractionEvent_SharedCallback
+};
+
+// The kinds of Map Script callback that are Shared Callbacks.
+enum eGameInteractionSharedCallbackKind
+{
+	// A collide callback whose parent is the local player.
+	eGameInteractionSharedCallbackKind_PlayerCollide,
+	// A collide callback between two entities, either of which the local player Holds.
+	eGameInteractionSharedCallbackKind_EntityCollide,
+	// An entity's player interact callback.
+	eGameInteractionSharedCallbackKind_Interact,
+	// A use-item callback of an item on an entity.
+	eGameInteractionSharedCallbackKind_UseItem
+};
+
+// A Map Script callback registration, named by identifiers only, never by function or script text.
+// The parent applies to an entity collide, the state to both collides, and the item to a use-item.
+struct cGameInteractionSharedCallback
+{
+	cGameInteractionSharedCallback()
+		: mKind(eGameInteractionSharedCallbackKind_Interact), mlParentEntityId(0), mlEntityId(0), mlState(1) {}
+	eGameInteractionSharedCallbackKind mKind;
+	int mlParentEntityId;
+	// The collide's child entity, or the entity interacted with or used an item on.
+	int mlEntityId;
+	// 1 when the bodies started colliding and -1 when they stopped.
+	int mlState;
+	std::string msItem;
+	std::string msMapFile;
 };
 
 // How the local player's interaction with an entity ended.
@@ -114,8 +145,10 @@ public:
 		const std::wstring& asChatMessage);
 	cGameInteractionEvent(eGameInteractionEventType aType, const std::wstring& asCustomStoryIdentifier);
 	cGameInteractionEvent(eGameInteractionEventType aType, const cGameInteractionEntityEvent& aEntityEvent);
+	cGameInteractionEvent(eGameInteractionEventType aType, const cGameInteractionSharedCallback& aSharedCallback);
 	eGameInteractionEventType GetType() const { return mType; }
 	bool IsInteractionsEvent() const;
+	const cGameInteractionSharedCallback& GetSharedCallback() const { return mSharedCallback; }
 	const std::string& GetData() const { return msData; }
 	const std::wstring& GetChatAuthor() const { return msChatAuthor; }
 	const std::wstring& GetChatMessage() const { return msChatMessage; }
@@ -129,6 +162,7 @@ private:
 	std::wstring msChatMessage;
 	std::wstring msCustomStoryIdentifier;
 	cGameInteractionEntityEvent mEntityEvent;
+	cGameInteractionSharedCallback mSharedCallback;
 };
 
 enum eGameInteractionCommandType
@@ -154,7 +188,8 @@ enum eGameInteractionCommandType
 	eGameInteractionCommand_EntityBodies,
 	eGameInteractionCommand_EntityInteracting,
 	eGameInteractionCommand_EntityBreak,
-	eGameInteractionCommand_EntityRelease
+	eGameInteractionCommand_EntityRelease,
+	eGameInteractionCommand_SharedCallback
 };
 
 enum eGameInteractionCapability
@@ -162,7 +197,8 @@ enum eGameInteractionCapability
 	eGameInteractionCapability_None = 0,
 	eGameInteractionCapability_Avatars = 1 << 0,
 	eGameInteractionCapability_LocalPose = 1 << 1,
-	eGameInteractionCapability_Interactions = 1 << 2
+	eGameInteractionCapability_Interactions = 1 << 2,
+	eGameInteractionCapability_SharedCallbacks = 1 << 3
 };
 
 struct cGameInteractionRotation
@@ -242,6 +278,14 @@ struct cGameInteractionChatRequest
 	cChatColor mMessageColor;
 };
 
+// What a sharedcallback Command asks the game to run. Invalid means the line was malformed.
+struct cGameInteractionSharedCallbackRequest
+{
+	cGameInteractionSharedCallbackRequest() : mbValid(false) {}
+	bool mbValid;
+	cGameInteractionSharedCallback mCallback;
+};
+
 enum eGameInteractionCommandClassification
 {
 	eGameInteractionCommandClassification_Observational,
@@ -265,6 +309,8 @@ public:
 		unsigned int alSubscriptionRate);
 	cGameInteractionCommand(eGameInteractionCommandType aType, const cGameInteractionAvatarRequest& aAvatarRequest);
 	cGameInteractionCommand(eGameInteractionCommandType aType, const cGameInteractionEntityRequest& aEntityRequest);
+	cGameInteractionCommand(eGameInteractionCommandType aType,
+		const cGameInteractionSharedCallbackRequest& aSharedCallbackRequest);
 	eGameInteractionCommandType GetType() const { return mType; }
 	eGameInteractionCommandClassification GetClassification() const;
 	const std::string& GetData() const { return msData; }
@@ -276,6 +322,7 @@ public:
 	unsigned int GetSubscriptionRate() const { return mlSubscriptionRate; }
 	const cGameInteractionAvatarRequest& GetAvatarRequest() const { return mAvatarRequest; }
 	const cGameInteractionEntityRequest& GetEntityRequest() const { return mEntityRequest; }
+	const cGameInteractionSharedCallbackRequest& GetSharedCallbackRequest() const { return mSharedCallbackRequest; }
 
 private:
 	eGameInteractionCommandType mType;
@@ -288,6 +335,7 @@ private:
 	unsigned int mlSubscriptionRate;
 	cGameInteractionAvatarRequest mAvatarRequest;
 	cGameInteractionEntityRequest mEntityRequest;
+	cGameInteractionSharedCallbackRequest mSharedCallbackRequest;
 };
 
 enum eGameInteractionResponseType
@@ -305,6 +353,7 @@ enum eGameInteractionResponseType
 	eGameInteractionResponse_Subscription,
 	eGameInteractionResponse_Avatar,
 	eGameInteractionResponse_Entity,
+	eGameInteractionResponse_SharedCallback,
 	eGameInteractionResponse_Rejected,
 	// The Command is not answered, such as a successful avatarpose.
 	eGameInteractionResponse_None
@@ -332,7 +381,9 @@ enum eGameInteractionCommandOutcome
 	// The Command names a map other than the current one, or no map is loaded.
 	eGameInteractionCommandOutcome_WrongMap,
 	eGameInteractionCommandOutcome_EntityNotFound,
-	eGameInteractionCommandOutcome_EntityNotHoldable
+	eGameInteractionCommandOutcome_EntityNotHoldable,
+	// The current Map Script has no registration matching a sharedcallback Command, so nothing ran.
+	eGameInteractionCommandOutcome_CallbackNotFound
 };
 
 // What the game did with a Peer-Driven Entity operation on the current map.
@@ -416,6 +467,10 @@ public:
 	virtual eGameInteractionEntityOutcome ReleaseDrivenEntity(int alEntityId) = 0;
 	// Called when a Session that drove an entity ends, whatever map is loaded.
 	virtual void ReleaseDrivenEntities() = 0;
+	// Runs the callback the current map's own Map Script registered for these identifiers, as the local
+	// trigger would, as a Shared Callback. False when no registration matches, so nothing ran. Called
+	// only for the current map.
+	virtual bool RunSharedCallback(const cGameInteractionSharedCallback& aCallback) = 0;
 	// Whether a Peer is connected, negotiated or not. While one is, the game keeps updating when out of
 	// focus. Told on every update, so it follows every way a Peer can leave.
 	virtual void SetPeerConnected(bool abConnected) = 0;

@@ -4,7 +4,7 @@ Protocol Version 2 (ADR 0004) is a per-Session superset of the [legacy protocol]
 
 `contract.jsonl` holds language-neutral fixtures, one JSON object per line:
 
-- `session`: a fresh Session receives `request_wire` in one write. `expected_wire` is everything it answers after the greeting. The harness game has a map loaded and reports a fixed local Pose: time `123456`, teleport counter `3`, feet at `1.25 -2.5 3.75`, body yaw `90`, camera pitch `-45`, crouching, with the lantern raised, on map `custom_stories/My Story: Part 2/maps/cellar one.map`. It finds every Avatar model except `entities/missing.ent`. Its current map is `maps/main/level01.map`. It has no entity `404`, entity `405` is not holdable, and it can drive every other entity. Every body of an entity it drives exists except body `99`. Its report holds body `3` of entity `12` and body `0` of entity `-7` at game time `123456` on `maps/main/level01.map`.
+- `session`: a fresh Session receives `request_wire` in one write. `expected_wire` is everything it answers after the greeting. The harness game has a map loaded and reports a fixed local Pose: time `123456`, teleport counter `3`, feet at `1.25 -2.5 3.75`, body yaw `90`, camera pitch `-45`, crouching, with the lantern raised, on map `custom_stories/My Story: Part 2/maps/cellar one.map`. It finds every Avatar model except `entities/missing.ent`. Its current map is `maps/main/level01.map`. It has no entity `404`, entity `405` is not holdable, and it can drive every other entity. Every body of an entity it drives exists except body `99`. Its report holds body `3` of entity `12` and body `0` of entity `-7` at game time `123456` on `maps/main/level01.map`. Its Map Script has a registration for every Shared Callback except those naming entity `404`.
 - `local_pose`: how a local Pose is written as a `localpose` State Update.
 - `avatar_pose`: which `avatarpose` lines are well formed, and the crouch flag, lantern flag, and map path read from them.
 - `format_number`, `parse_number`: how numbers are written and which texts are accepted. The harness runs these under a comma-decimal system locale to prove locale independence.
@@ -14,6 +14,8 @@ Protocol Version 2 (ADR 0004) is a per-Session superset of the [legacy protocol]
 - `entity_command`: which Peer-Driven Entity Command lines are well formed, and the Command written back canonically, which shows every field read in order.
 - `reported_bodies`: how a report is written as a `reportedbodies` State Update.
 - `interaction_event`: how each `interactions` Event, including `mapentered`, is written.
+- `shared_callback_command`: which `sharedcallback` Command lines are well formed, and the Shared Callback written back canonically.
+- `shared_callback_event`: how a `sharedcallback` Event is written.
 
 Run the game-side harness without starting the game:
 
@@ -27,8 +29,8 @@ Run the game-side harness without starting the game:
 protocol <version> [<capability>...]
 ```
 
-- The only supported Protocol Version is `2`. The supported Capabilities are `avatars`, `localpose`, and `interactions`.
-- Success: `RESPONSE protocol ok 2 [<capability>...]`. The granted Capabilities are the requested ones that the game supports. Each is listed once, in the order `avatars`, `localpose`, `interactions`. Unknown names are ignored, so a Session can request none and still negotiate.
+- The only supported Protocol Version is `2`. The supported Capabilities are `avatars`, `localpose`, `interactions`, and `sharedcallbacks`.
+- Success: `RESPONSE protocol ok 2 [<capability>...]`. The granted Capabilities are the requested ones that the game supports. Each is listed once, in the order `avatars`, `localpose`, `interactions`, `sharedcallbacks`. Unknown names are ignored, so a Session can request none and still negotiate.
 - `RESPONSE protocol unsupported-version`: the version is a positive decimal integer other than `2`. Leading zeros are allowed, so `02` means `2`.
 - `RESPONSE protocol invalid`: the version is missing, `0`, or not a decimal integer that fits in 32 bits, or the line has an empty field.
 - `RESPONSE protocol already-negotiated`: the Session already negotiated.
@@ -85,8 +87,10 @@ The gateway checks Capabilities before it parses a message. A Protocol Version 2
 | `entityinteracting <entityId> <0\|1> <map>` | `interactions` | `ok <entityId>`, `wrong-map <entityId>`, `not-found <entityId>`, `invalid` |
 | `entitybreak <entityId> <state> <map>` | `interactions` | `ok <entityId>`, `wrong-map <entityId>`, `not-found <entityId>`, `invalid` |
 | `entityrelease <entityId> <map>` | `interactions` | `ok <entityId>`, `wrong-map <entityId>`, `not-found <entityId>`, `invalid` |
+| `sharedcallback <kind> <field>... <map>` | `sharedcallbacks` | `ok`, `not-found`, `wrong-map`, `invalid` |
 
 - `chatentry`: see [Chat](#chat).
+- `sharedcallback`: see [Shared Callbacks](#shared-callbacks).
 - `avatarcreate`: `<entityFile>` is a path field and defaults to `entities/multiplayer/skeleton_spelos/TheSkeletonSpelos.ent`. The checks run in this order: `invalid` means the line is malformed or the Avatar Identifier is invalid, and the Response does not echo the identifier. `exists` means the Session already drives an Avatar with that identifier. `limit` means the Session already drives 16 Avatars. `model-not-found` means the game cannot find the model file or the mesh it names.
 - `avatarremove`: `invalid` means the line is malformed or the Avatar Identifier is invalid, and the Response does not echo the identifier.
 - `avatarcollision`: `1` turns on collision between the local player and the Avatar, and `0` turns it off. Collision is on for a new Avatar. The setting stays in place across map changes, save loads, and dormancy until the next `avatarcollision` for that Avatar. `invalid` means the line is malformed, the Avatar Identifier is invalid, or the flag is not `0` or `1`, and the Response does not echo the identifier.
@@ -162,6 +166,47 @@ A Peer-Driven Entity is a map-placed entity whose motion a Peer supplies in plac
 - `entitybreak`: snaps the break body of the Peer-Driven Entity to `<state>` and breaks it through the game's own break path, with its debris, connected props, contained item, sound, particles, and break callback. The debris starts from `<state>`, as it does on the game that sent `reportbroke`, even if the body moves before the entity is gone. Until then the entity stays out of the local player's reach and its contacts still neither break it nor damage enemies. Only an `Object` breaks this way; any other entity is released instead. The entity is then no longer driven. `not-found` means this Session does not drive that entity.
 - `entityrelease`: ends driving and returns the entity to local physics from its current state, clearing its interacting mark. `not-found` means this Session does not drive that entity.
 - A Peer-Driven Entity belongs to its Session, like an Avatar. The game releases every one when the Session ends and when its Map Visit ends.
+
+## Shared Callbacks
+
+The `sharedcallbacks` Capability shares the Map Script callbacks the local player triggers, so every other player's game can run the callback its own Map Script registered for the same entities (amnesia-multiplayer's ADR 0006). A Shared Callback names a registration by identifiers only: the Map Path, integer Entity Identifiers, a collide state, and an item name. It never carries a function name or script text, and the game never runs text it was sent.
+
+```text
+EVENT sharedcallback <kind> <field>... <map>
+sharedcallback <kind> <field>... <map>
+```
+
+The Event and the Command carry the same fields, so a Peer can relay an Event's fields as a Command to another game. The kinds and their fields are:
+
+| Kind | Fields | Callback |
+| --- | --- | --- |
+| `playercollide` | `<entityId> <state>` | A collide callback whose parent is `Player`, with `<entityId>` as its child. |
+| `entitycollide` | `<parentId> <entityId> <state>` | A collide callback between two entities, either of which the local player Holds. |
+| `interact` | `<entityId>` | The entity's player interact callback (`SetEntityPlayerInteractCallback`), including the one a grab runs. |
+| `useitem` | `<entityId> <item>` | The use-item callback (`AddUseItemCallback`) of item `<item>` on the entity. |
+
+- `<state>` is `1` when the bodies started colliding and `-1` when they stopped.
+- `<item>` is the item's name, 1–64 printable ASCII characters (`!` through `~`), so it has no spaces.
+- Every named entity is map-placed. A callback that names an entity created at runtime, or an item whose name falls outside these limits, is not reported.
+
+### The report
+
+A Session granted `sharedcallbacks` receives `EVENT sharedcallback` each time one of these callbacks runs because of the local player, just before the callback runs. A local player Holds an entity while it is in the report of the `interactions` Capability; the other games follow such an entity rather than collide it. An entity collide where neither side is Held is not reported.
+
+These are never reported: look-at, timer, prop animation, effect voice, checkpoint, lantern, combine, and entity callback func (pickup, break, ignite) callbacks, connection-state, `ConnectEntities`, and multi-slider callbacks, and `OnStart`, `OnEnter`, `OnLeave`, and `OnUpdate`. A callback that runs because a `sharedcallback` Command ran it is never reported, and neither is any callback that runs nested inside it. A trigger the local player causes later is reported even if a Shared Callback set it up.
+
+### Running a callback by its registration
+
+`sharedcallback` runs the callback that this game's own Map Script registered for the identifiers, as the local trigger would. It is State-Changing, so it needs the Authority Grant.
+
+- The checks run in this order: `invalid` (the line is malformed), `wrong-map` (the map is not the local current map, or no map is loaded), `not-found`.
+- `ok` means the callback ran. `not-found` means this game's Map Script has no matching registration, so nothing ran: it was already removed, its child is inactive, the scripts drifted, or a collide registration's states filter excludes `<state>`. It is an outcome, not an error, and the game logs one line for it.
+- The callback receives the arguments a local trigger would pass. One-shot registrations (`abDeleteOnCollide`, `abRemoveOnInteraction`, `abAutoDestroy`) are removed after it runs, so a second run answers `not-found`.
+- An `entitycollide` run moves the registration's colliding state to `<state>`, as the local collide check would, so the check does not fire it again when the entities' bodies agree. If the registration is already in that state, because this game's own check fired it, the run answers `not-found` and runs nothing. A `playercollide` run leaves the colliding state of the local player's body alone, because another player's body triggered it.
+- While the callback runs, the game is in Shared Callback mode: scripts cannot take the local player's control or camera, so `SetPlayerActive`, `TeleportPlayer`, `StartPlayerLookAt`, `MovePlayerForward`, `MovePlayerHeadPos`, `SetPlayerMoveSpeedMul`, `SetPlayerRunSpeedMul`, `SetPlayerLookSpeedMul`, and `SetPlayerJumpForceMul` do nothing. Sanity, health, music, sounds, and screen effects run as usual. Timers and other follow-ups the callback starts run later as ordinary local callbacks.
+- A `useitem` run does not need the item in the local inventory. Only the callback's own script, such as a `RemoveItem`, touches it.
+
+The legacy `SCRIPT_CALL:` Event and `exec:` Command are unchanged. A collide callback run by `sharedcallback` sends no `SCRIPT_CALL:`.
 
 ## Chat
 

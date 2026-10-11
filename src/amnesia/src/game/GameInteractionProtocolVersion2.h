@@ -30,8 +30,11 @@ public:
 	static std::string SerializeResponse(const cGameInteractionResponse& aResponse);
 	static std::string SerializeLocalPose(const cGameInteractionPose& aPose);
 	static std::string SerializeReportedBodies(const cGameInteractionBodySamples& aBodies);
-	// Only the interactions Events have a Protocol Version 2 form.
+	// Only the interactions and sharedcallbacks Events have a Protocol Version 2 form.
 	static std::string SerializeEvent(const cGameInteractionEvent& aEvent);
+	// The fields a sharedcallback Event and Command share: <kind> <fields>... <map>.
+	static std::string FormatSharedCallback(const cGameInteractionSharedCallback& aCallback);
+	static bool IsValidItemName(const std::string& asItem);
 
 	static std::string FormatNumber(double afValue);
 	static bool TryParseNumber(const std::string& asText, double& afValue);

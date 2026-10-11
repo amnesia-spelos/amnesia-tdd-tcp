@@ -199,20 +199,7 @@ void cLuxPlayerState_UseItem::UseItem()
 	//An object is in focus
 	if(pEntity && pMap && mfFocusDistance < cMath::Max(pEntity->GetMaxFocusDistance(), mfMinUseItemDistance))
 	{
-		cLuxUseItemCallback *pCallback = pMap->GetUseItemCallback(mpCurrentItem->GetName(), pEntity->GetName());
-		if(pCallback)
-		{
-            // Running the script MAY destroy this item so "Backup" the check flag.
-            bool bAutoDestroy = pCallback->mbAutoDestroy;
-			tString sName = pCallback->msName;
-            pMap->RunScript(pCallback->msFunction+ "(\"" + pCallback->msItem + "\", \"" + pCallback->msEntity + "\")" );
-
-			if(bAutoDestroy)
-			{
-				pMap->RemoveUseItemCallback(pCallback, sName);
-			}
-		}
-		else
+		if(pMap->RunUseItemCallback(mpCurrentItem->GetName(), pEntity)==false)
 		{
 			gpBase->mpMessageHandler->SetMessage(kTranslate("Inventory","UseItemDoesNotWork"), 0);
 		}

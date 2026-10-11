@@ -169,6 +169,9 @@ public:
 	 */
 	void RemoveUseItemCallback( cLuxUseItemCallback * apCallback, const tString& asName="");
 	cLuxUseItemCallback* GetUseItemCallback(const tString& asItem, const tString& asEntity);
+	// Runs the callback registered for using the item on the entity, and removes it if it auto destroys.
+	// False when there is none.
+	bool RunUseItemCallback(const tString& asItem, iLuxEntity *apEntity);
 
 	void AddTimer(const tString& asName, float afTime, const tString& asFunction);
 	void RemoveTimer(const tString& asName);

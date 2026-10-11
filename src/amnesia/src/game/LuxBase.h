@@ -69,6 +69,7 @@ class cLuxPlayer;
 class cLuxAvatarHandler;
 class cLuxInteractionReportHandler;
 class cLuxPeerDrivenEntityHandler;
+class cLuxSharedCallbackHandler;
 class cLuxSocketServer;
 class cLuxSideAppManager;
 
@@ -291,6 +292,7 @@ public:
 	cLuxAvatarHandler* mpAvatarHandler;
 	cLuxInteractionReportHandler* mpInteractionReportHandler;
 	cLuxPeerDrivenEntityHandler* mpPeerDrivenEntityHandler;
+	cLuxSharedCallbackHandler* mpSharedCallbackHandler;
 	cLuxSocketServer* mpSocketServer;
 	cLuxSideAppManager* mpSideAppManager;
 

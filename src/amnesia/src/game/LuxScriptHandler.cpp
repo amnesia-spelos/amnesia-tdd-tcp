@@ -66,6 +66,7 @@
 #include "LuxInteractConnections.h"
 
 #include "LuxAchievementHandler.h"
+#include "LuxSharedCallbackHandler.h"
 
 
 
@@ -77,6 +78,13 @@ int cLuxScriptHandler::mlRopeIdCount =0;
 
 
 string gsScriptNull="";
+
+// While a Shared Callback runs, the player's control and camera stay with the local player
+// (amnesia-multiplayer's ADR 0006), so scripts that would take them do nothing.
+static bool ScriptMayTakePlayerControl()
+{
+	return gpBase->mpSharedCallbackHandler==NULL || gpBase->mpSharedCallbackHandler->AllowsPlayerControl();
+}
 
 //-----------------------------------------------------------------------
 
@@ -1351,6 +1359,7 @@ void __stdcall cLuxScriptHandler::PlayGuiSound(string& asSoundEntFile, float afV
 
 void __stdcall cLuxScriptHandler::SetPlayerActive(bool abActive)
 {
+	if(!ScriptMayTakePlayerControl()) return;
 	gpBase->mpPlayer->SetActive(abActive);
 }
 
@@ -1491,6 +1500,7 @@ float __stdcall cLuxScriptHandler::GetPlayerYSpeed()
 
 void __stdcall cLuxScriptHandler::MovePlayerForward(float afAmount)
 {
+	if(!ScriptMayTakePlayerControl()) return;
 	gpBase->mpPlayer->GetCharacterBody()->Move(eCharDir_Forward, afAmount);
 }
 
@@ -1579,6 +1589,7 @@ void __stdcall cLuxScriptHandler::FadePlayerRollTo(float afX, float afSpeedMul, 
 
 void __stdcall cLuxScriptHandler::MovePlayerHeadPos(float afX, float afY, float afZ, float afSpeed, float afSlowDownDist)
 {
+	if(!ScriptMayTakePlayerControl()) return;
 	gpBase->mpPlayer->MoveHeadPosAdd(eLuxHeadPosAdd_Script, cVector3f(afX, afY, afZ), afSpeed, afSlowDownDist);
 }
 
@@ -1587,6 +1598,7 @@ void __stdcall cLuxScriptHandler::MovePlayerHeadPos(float afX, float afY, float 
 
 void __stdcall cLuxScriptHandler::StartPlayerLookAt(string& asEntityName, float afSpeedMul, float afMaxSpeed, string & asAtTargetCallback)
 {
+	if(!ScriptMayTakePlayerControl()) return;
 	iLuxEntity *pEntity = GetEntity(asEntityName, eLuxEntityType_LastEnum, -1);
 	if(pEntity==NULL) return;
 
@@ -1614,21 +1626,25 @@ void __stdcall cLuxScriptHandler::StopPlayerLookAt()
 
 void __stdcall cLuxScriptHandler::SetPlayerMoveSpeedMul(float afMul)
 {
+	if(!ScriptMayTakePlayerControl()) return;
 	gpBase->mpPlayer->SetScriptMoveSpeedMul(afMul);
 }
 
 void __stdcall cLuxScriptHandler::SetPlayerRunSpeedMul(float afMul)
 {
+	if(!ScriptMayTakePlayerControl()) return;
 	gpBase->mpPlayer->SetScriptRunSpeedMul(afMul);
 }
 
 void __stdcall cLuxScriptHandler::SetPlayerLookSpeedMul(float afMul)
 {
+	if(!ScriptMayTakePlayerControl()) return;
 	gpBase->mpPlayer->SetLookSpeedMul(afMul);
 }
 
 void __stdcall cLuxScriptHandler::SetPlayerJumpForceMul(float afMul)
 {
+	if(!ScriptMayTakePlayerControl()) return;
 	gpBase->mpPlayer->SetScriptJumpForceMul(afMul);
 }
 
@@ -1653,6 +1669,7 @@ void __stdcall cLuxScriptHandler::SetPlayerFallDamageDisabled(bool abX)
 
 void __stdcall cLuxScriptHandler::TeleportPlayer(string &asStartPosName)
 {
+	if(!ScriptMayTakePlayerControl()) return;
 	cLuxNode_PlayerStart *pNode = gpBase->mpMapHandler->GetCurrentMap()->GetPlayerStart(asStartPosName);
 	if(pNode==NULL)
 	{

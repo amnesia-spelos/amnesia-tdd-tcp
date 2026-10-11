@@ -24,6 +24,8 @@
 #include "LuxProp.h"
 #include "LuxMap.h"
 #include "LuxSocketServer.h"
+#include "LuxSharedCallbackHandler.h"
+#include "SharedCallbackModel.h"
 
 //////////////////////////////////////////////////////////////////////////
 // TYPE CONVERSIONS
@@ -176,7 +178,9 @@ void iLuxCollideCallbackContainer::CheckCollisionCallback(const tString& asName,
             pCallback->mbColliding = bCollide;
 			if(lState == pCallback->mlStates || pCallback->mlStates==0)
 			{
-				tString sCommand = pCallback->msCallbackFunc+"(\"" + asName + "\", \""+ pEntity->GetName()+"\", "+cString::ToString(lState)+")" ;
+				tString sCommand = GetCollideCallbackCommand(pCallback, asName, lState);
+				if(gpBase->mpSharedCallbackHandler)
+					gpBase->mpSharedCallbackHandler->OnCollideCallbackRunning(GetCollideCallbackParentEntity(), pEntity, lState);
 				apMap->RunScript(sCommand);
 			
 				gpBase->mpSocketServer->PublishEvent(cGameInteractionEvent(
@@ -184,34 +188,65 @@ void iLuxCollideCallbackContainer::CheckCollisionCallback(const tString& asName,
 
 				///////////////////////
 				// Auto remove
-				if(pCallback->mbDeleteWhenColliding)
-				{
-					// Check so it is not already in delete list
-					bool bCallbackExistInDeleteList = false;
-					for(tLuxCollideCallbackListIt it = mlstDeleteCallbacks.begin(); it != mlstDeleteCallbacks.end(); ++it)
-					{
-						cLuxCollideCallback *pTestCallback = *it;
-						if(pTestCallback == pCallback) 
-						{
-							bCallbackExistInDeleteList = true;
-							break;
-						}
-					}
-					
-					// Add to delete list (if not already there)
-					if(bCallbackExistInDeleteList==false)
-					{
-						mlstDeleteCallbacks.push_back(pCallback);
-					}
-				}
+				if(pCallback->mbDeleteWhenColliding) QueueCollideCallbackDeletion(pCallback);
 			}
 		}
 	}
 
 	mbUpdatingCollideCallbacks = false;
 
-	/////////////////////
-	//Delete callbacks
+	DeleteQueuedCollideCallbacks();
+}
+
+//-----------------------------------------------------------------------
+
+bool iLuxCollideCallbackContainer::RunSharedCollideCallback(iLuxEntity *apChild, const tString& asName, int alState,
+															cLuxMap *apMap)
+{
+	cLuxCollideCallback *pCallback = NULL;
+	for(tLuxCollideCallbackListIt it = mlstCollideCallbacks.begin(); it != mlstCollideCallbacks.end(); ++it)
+	{
+		if((*it)->mpCollideEntity != apChild) continue;
+		pCallback = *it;
+		break;
+	}
+	// As in the collide check, an inactive child never collides.
+	if(pCallback==NULL || apChild->IsActive()==false) return false;
+
+	cSharedCollide collide;
+	collide.mbParentIsPlayer = GetCollideCallbackParentEntity()==NULL;
+	if(cSharedCallbackModel::RunCollide(collide, pCallback->mlStates, alState, pCallback->mbColliding)==false) return false;
+
+	// The script may remove callbacks, so removals wait until it is done, as in the collide check.
+	mbUpdatingCollideCallbacks = true;
+	apMap->RunScript(GetCollideCallbackCommand(pCallback, asName, alState));
+	if(pCallback->mbDeleteWhenColliding) QueueCollideCallbackDeletion(pCallback);
+	mbUpdatingCollideCallbacks = false;
+
+	DeleteQueuedCollideCallbacks();
+	return true;
+}
+
+//-----------------------------------------------------------------------
+
+tString iLuxCollideCallbackContainer::GetCollideCallbackCommand(cLuxCollideCallback *apCallback, const tString& asName,
+																int alState)
+{
+	return apCallback->msCallbackFunc+"(\"" + asName + "\", \""+ apCallback->mpCollideEntity->GetName()+"\", "+cString::ToString(alState)+")";
+}
+
+void iLuxCollideCallbackContainer::QueueCollideCallbackDeletion(cLuxCollideCallback *apCallback)
+{
+	// Check so it is not already in delete list
+	for(tLuxCollideCallbackListIt it = mlstDeleteCallbacks.begin(); it != mlstDeleteCallbacks.end(); ++it)
+	{
+		if(*it == apCallback) return;
+	}
+	mlstDeleteCallbacks.push_back(apCallback);
+}
+
+void iLuxCollideCallbackContainer::DeleteQueuedCollideCallbacks()
+{
 	for(tLuxCollideCallbackListIt it = mlstDeleteCallbacks.begin(); it != mlstDeleteCallbacks.end(); ++it)
 	{
 		cLuxCollideCallback *pCallback = *it;

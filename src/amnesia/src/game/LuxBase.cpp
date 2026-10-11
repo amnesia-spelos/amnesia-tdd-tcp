@@ -59,6 +59,7 @@
 #include "LuxAvatarHandler.h"
 #include "LuxInteractionReportHandler.h"
 #include "LuxPeerDrivenEntityHandler.h"
+#include "LuxSharedCallbackHandler.h"
 #include "LuxSocketServer.h"
 #include "LuxSideAppManager.h"
 
@@ -460,6 +461,7 @@ cLuxBase::cLuxBase()
 	mpAvatarHandler = NULL;
 	mpInteractionReportHandler = NULL;
 	mpPeerDrivenEntityHandler = NULL;
+	mpSharedCallbackHandler = NULL;
 
 	mpCurrentMapLoading = NULL;
 
@@ -1539,13 +1541,15 @@ bool cLuxBase::InitGame()
 	RunModuleMessage(eLuxUpdateableMessage_LoadMainConfig);
 
 	// Avatars and Peer-Driven Entities belong to the Game Interaction Protocol Session, so their modules
-	// precede the server, as does the local interaction report the server sends.
+	// precede the server, as do the local interaction report and the Shared Callbacks the server sends.
 	mpAvatarHandler = hplNew(cLuxAvatarHandler, ());
 	AddGlobalModule(mpAvatarHandler);
 	mpInteractionReportHandler = hplNew(cLuxInteractionReportHandler, ());
 	AddGlobalModule(mpInteractionReportHandler);
 	mpPeerDrivenEntityHandler = hplNew(cLuxPeerDrivenEntityHandler, ());
 	AddGlobalModule(mpPeerDrivenEntityHandler);
+	mpSharedCallbackHandler = hplNew(cLuxSharedCallbackHandler, ());
+	AddGlobalModule(mpSharedCallbackHandler);
 	mpSocketServer = hplNew(cLuxSocketServer, ());
 	AddGlobalModule(mpSocketServer);
 

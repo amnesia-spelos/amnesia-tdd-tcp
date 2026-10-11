@@ -673,6 +673,9 @@ public:
 	
 	void CheckCollisionCallback(const tString& asName, cLuxMap *apMap);
 	bool CheckEntityCollision(iLuxEntity*apEntity, cLuxMap *apMap);
+	// Runs the callback registered for apChild as a Shared Callback, as the collide check would for
+	// alState, honouring its states filter and auto removal. False when none matches, so nothing ran.
+	bool RunSharedCollideCallback(iLuxEntity *apChild, const tString& asName, int alState, cLuxMap *apMap);
 
 	bool HasCollideCallbacks(){ return mlstCollideCallbacks.empty() == false;}
 	tLuxCollideCallbackList* GetCollideCallbackList(){ return &mlstCollideCallbacks;}
@@ -681,6 +684,12 @@ public:
 	void RemoveCollideCallback(const tString& asEntityName);
 	void RemoveCollideCallbackInstantly(iLuxEntity *apEntity);
 protected:
+	// The entity that is the parent of this container's callbacks, or NULL for the player.
+	virtual iLuxEntity* GetCollideCallbackParentEntity(){ return NULL; }
+
+	tString GetCollideCallbackCommand(cLuxCollideCallback *apCallback, const tString& asName, int alState);
+	void QueueCollideCallbackDeletion(cLuxCollideCallback *apCallback);
+	void DeleteQueuedCollideCallbacks();
 
 	tLuxCollideCallbackList mlstCollideCallbacks;
 	tLuxCollideCallbackList mlstDeleteCallbacks;

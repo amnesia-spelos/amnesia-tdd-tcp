@@ -31,6 +31,12 @@ cGameInteractionEvent::cGameInteractionEvent(eGameInteractionEventType aType,
 {
 }
 
+cGameInteractionEvent::cGameInteractionEvent(eGameInteractionEventType aType,
+	const cGameInteractionSharedCallback& aSharedCallback)
+	: mType(aType), mSharedCallback(aSharedCallback)
+{
+}
+
 bool cGameInteractionEvent::IsInteractionsEvent() const
 {
 	return mType == eGameInteractionEvent_InteractionStarted || mType == eGameInteractionEvent_InteractionEnded ||
@@ -88,6 +94,14 @@ cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aTy
 {
 }
 
+cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
+	const cGameInteractionSharedCallbackRequest& aSharedCallbackRequest)
+	: mType(aType), mlProtocolVersion(0), mlCapabilities(0),
+	  mSubscriptionRequest(eGameInteractionSubscriptionRequest_Invalid), mlSubscriptionRate(0),
+	  mSharedCallbackRequest(aSharedCallbackRequest)
+{
+}
+
 eGameInteractionCommandClassification cGameInteractionCommand::GetClassification() const
 {
 	return mType == eGameInteractionCommand_ExecuteScript || mType == eGameInteractionCommand_Chat ||
@@ -95,7 +109,8 @@ eGameInteractionCommandClassification cGameInteractionCommand::GetClassification
 		mType == eGameInteractionCommand_AvatarRemove || mType == eGameInteractionCommand_AvatarCollision ||
 		mType == eGameInteractionCommand_AvatarPose || mType == eGameInteractionCommand_EntityDrive ||
 		mType == eGameInteractionCommand_EntityBodies || mType == eGameInteractionCommand_EntityInteracting ||
-		mType == eGameInteractionCommand_EntityBreak || mType == eGameInteractionCommand_EntityRelease ?
+		mType == eGameInteractionCommand_EntityBreak || mType == eGameInteractionCommand_EntityRelease ||
+		mType == eGameInteractionCommand_SharedCallback ?
 		eGameInteractionCommandClassification_StateChanging :
 		eGameInteractionCommandClassification_Observational;
 }
@@ -119,7 +134,7 @@ namespace
 
 	const unsigned int kSupportedCapabilities =
 		eGameInteractionCapability_Avatars | eGameInteractionCapability_LocalPose |
-		eGameInteractionCapability_Interactions;
+		eGameInteractionCapability_Interactions | eGameInteractionCapability_SharedCallbacks;
 
 	const unsigned int kMinimumSubscriptionRate = 1;
 	const unsigned int kMaximumSubscriptionRate = 60;
@@ -407,6 +422,18 @@ namespace
 		return response;
 	}
 
+	// A Shared Callback names its map, so a late Command never runs a registration of another map.
+	cGameInteractionResponse RunSharedCallback(const cGameInteractionCommand& aCommand,
+		iGameInteractionGameAdapter& aGameAdapter)
+	{
+		const cGameInteractionSharedCallbackRequest& request = aCommand.GetSharedCallbackRequest();
+		eGameInteractionCommandOutcome outcome = eGameInteractionCommandOutcome_Success;
+		if (!request.mbValid) outcome = eGameInteractionCommandOutcome_Invalid;
+		else if (!IsCurrentMap(aGameAdapter, request.mCallback.msMapFile)) outcome = eGameInteractionCommandOutcome_WrongMap;
+		else if (!aGameAdapter.RunSharedCallback(request.mCallback)) outcome = eGameInteractionCommandOutcome_CallbackNotFound;
+		return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_SharedCallback, outcome);
+	}
+
 	cGameInteractionResponse AvatarResponse(eGameInteractionCommandType aType, eGameInteractionCommandOutcome aOutcome,
 		const std::string& asIdentifier)
 	{
@@ -496,6 +523,8 @@ namespace
 		case eGameInteractionCommand_EntityBreak:
 		case eGameInteractionCommand_EntityRelease:
 			return eGameInteractionCapability_Interactions;
+		case eGameInteractionCommand_SharedCallback:
+			return eGameInteractionCapability_SharedCallbacks;
 		default:
 			return eGameInteractionCapability_None;
 		}
@@ -536,6 +565,8 @@ namespace
 		case eGameInteractionCommand_EntityBreak:
 		case eGameInteractionCommand_EntityRelease:
 			return ExecuteEntityCommand(aCommand, aGameAdapter, aSession.mEntities);
+		case eGameInteractionCommand_SharedCallback:
+			return RunSharedCallback(aCommand, aGameAdapter);
 		case eGameInteractionCommand_AvatarCreate:
 			return CreateAvatar(aCommand, aGameAdapter, aSession.mAvatars);
 		case eGameInteractionCommand_AvatarRemove:
@@ -792,6 +823,13 @@ void cGameInteractionGateway::Update(iGameInteractionGameAdapter& aGameAdapter)
 void cGameInteractionGateway::Report(const cGameInteractionEvent& aEvent)
 {
 	if (!mpImplementation->mTransport.HasPeer()) return;
+	if (aEvent.GetType() == eGameInteractionEvent_SharedCallback)
+	{
+		if (mpImplementation->mSession.mlGrantedCapabilities & eGameInteractionCapability_SharedCallbacks)
+			mpImplementation->mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(
+				cGameInteractionProtocolVersion2::SerializeEvent(aEvent)));
+		return;
+	}
 	if (!aEvent.IsInteractionsEvent())
 	{
 		mpImplementation->mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(

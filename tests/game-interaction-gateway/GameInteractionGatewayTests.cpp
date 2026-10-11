@@ -146,6 +146,11 @@ namespace
 			mvEntityOperations.push_back("release all");
 			msetDrivenEntities.clear();
 		}
+		virtual bool RunSharedCallback(const cGameInteractionSharedCallback& aCallback)
+		{
+			mvSharedCallbacks.push_back(aCallback);
+			return aCallback.mlEntityId != 404;
+		}
 		virtual void SetPeerConnected(bool abConnected) { mbPeerConnected = abConnected; }
 
 		static std::string Text(int alValue)
@@ -183,6 +188,7 @@ namespace
 		std::vector<std::string> mvEntityOperations;
 		cGameInteractionBodySamples mLastDrivenBodies;
 		cGameInteractionBodyState mLastBreakState;
+		std::vector<cGameInteractionSharedCallback> mvSharedCallbacks;
 		bool mbPeerConnected;
 	};
 
@@ -883,6 +889,81 @@ namespace
 		gateway.Shutdown();
 	}
 
+	SOCKET OpenSharedCallbacksSession(cGameInteractionGateway& aGateway, cFakeGameAdapter& aAdapter)
+	{
+		SOCKET peer = OpenSession(aGateway, aAdapter);
+		Expect(Exchange(peer, aGateway, aAdapter, "protocol 2 sharedcallbacks\n") ==
+			"RESPONSE protocol ok 2 sharedcallbacks\n", "Session negotiates the sharedcallbacks Capability");
+		return peer;
+	}
+
+	void SharedCallbackCommandsReachTheGameWithEveryIdentifier()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenSharedCallbacksSession(gateway, adapter);
+		Expect(Exchange(peer, gateway, adapter, "sharedcallback entitycollide 30 12 -1 " + kCurrentMap +
+			"\nsharedcallback useitem 404 key_study_1 " + kCurrentMap + "\n") ==
+			"RESPONSE sharedcallback ok\nRESPONSE sharedcallback not-found\n",
+			"the Response tells a callback that ran from one with no registration");
+		Expect(adapter.mvSharedCallbacks.size() == 2, "each sharedcallback Command reaches the game once");
+		const cGameInteractionSharedCallback& collide = adapter.mvSharedCallbacks[0];
+		Expect(collide.mKind == eGameInteractionSharedCallbackKind_EntityCollide && collide.mlParentEntityId == 30 &&
+			collide.mlEntityId == 12 && collide.mlState == -1 && collide.msMapFile == kCurrentMap,
+			"the game receives the collide's parent, child, and state");
+		const cGameInteractionSharedCallback& useItem = adapter.mvSharedCallbacks[1];
+		Expect(useItem.mKind == eGameInteractionSharedCallbackKind_UseItem && useItem.mlEntityId == 404 &&
+			useItem.msItem == "key_study_1", "the game receives the use-item's entity and item");
+
+		adapter.mbMapLoaded = false;
+		Expect(Exchange(peer, gateway, adapter, "sharedcallback interact 5 " + kCurrentMap + "\n") ==
+			"RESPONSE sharedcallback wrong-map\n", "a sharedcallback without a loaded map is wrong-map");
+		Expect(adapter.mvSharedCallbacks.size() == 2, "a wrong-map sharedcallback does not reach the game");
+		Expect(cGameInteractionCommand(eGameInteractionCommand_SharedCallback,
+			cGameInteractionSharedCallbackRequest()).GetClassification() ==
+			eGameInteractionCommandClassification_StateChanging, "running a Shared Callback is state-changing");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void ReportSharedCallback(cGameInteractionGateway& aGateway, cFakeGameAdapter& aAdapter)
+	{
+		cGameInteractionSharedCallback callback;
+		callback.mKind = eGameInteractionSharedCallbackKind_PlayerCollide;
+		callback.mlEntityId = 12;
+		callback.msMapFile = kCurrentMap;
+		aGateway.Report(cGameInteractionEvent(eGameInteractionEvent_SharedCallback, callback));
+		aGateway.Report(cGameInteractionEvent(eGameInteractionEvent_MapChanged, "maps/main/level02.map"));
+		aGateway.Update(aAdapter);
+	}
+
+	void SharedCallbackEventsReachOnlySessionsGrantedSharedCallbacks()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET legacyPeer = OpenSession(gateway, adapter);
+		ReportSharedCallback(gateway, adapter);
+		Expect(ReceiveAvailable(legacyPeer, 100) == "EVENT:MapChanged:maps/main/level02.map\n",
+			"a legacy Session receives no Shared Callback");
+		closesocket(legacyPeer);
+		gateway.Shutdown();
+
+		SOCKET interactionsPeer = OpenInteractionsSession(gateway, adapter);
+		ReportSharedCallback(gateway, adapter);
+		Expect(ReceiveAvailable(interactionsPeer, 100) == "EVENT:MapChanged:maps/main/level02.map\n",
+			"a Session without sharedcallbacks receives no Shared Callback");
+		closesocket(interactionsPeer);
+		gateway.Shutdown();
+
+		SOCKET peer = OpenSharedCallbacksSession(gateway, adapter);
+		ReportSharedCallback(gateway, adapter);
+		Expect(ReceiveLines(peer, 2) == "EVENT sharedcallback playercollide 12 1 " + kCurrentMap +
+			"\nEVENT:MapChanged:maps/main/level02.map\n",
+			"a Session granted sharedcallbacks receives Shared Callbacks in order among legacy Events");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
 	cGameInteractionBodySample ReportedBody(int alEntityId, float afX)
 	{
 		cGameInteractionBodySample sample;
@@ -1218,6 +1299,8 @@ int main()
 	EntityBodiesFailuresAreReportedOncePerStreak();
 	PeerDrivenEntitiesAreReleasedWhenTheSessionEnds();
 	InteractionsEventsReachOnlySessionsGrantedInteractions();
+	SharedCallbackCommandsReachTheGameWithEveryIdentifier();
+	SharedCallbackEventsReachOnlySessionsGrantedSharedCallbacks();
 	ReportedBodiesFollowTheSubscribedRateWhileTheReportHoldsBodies();
 	ReportedBodiesAndLocalPoseAreDeliveredTogether();
 	ReportedBodiesAreWrittenWithinTheirBounds();

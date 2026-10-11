@@ -13,6 +13,7 @@ namespace
 	// Fifteen digits stay exact in a double mantissa, so dividing by a power of ten rounds once.
 	const int kMaximumNumberDigits = 15;
 	const std::string::size_type kMaximumAvatarIdentifierLength = 32;
+	const std::string::size_type kMaximumItemNameLength = 64;
 
 	const char* const kNegotiationKeyword = "protocol";
 	const std::string kNegotiationPrefix = std::string(kNegotiationKeyword) + " ";
@@ -37,7 +38,8 @@ namespace
 	{
 		{ eGameInteractionCapability_Avatars, "avatars" },
 		{ eGameInteractionCapability_LocalPose, "localpose" },
-		{ eGameInteractionCapability_Interactions, "interactions" }
+		{ eGameInteractionCapability_Interactions, "interactions" },
+		{ eGameInteractionCapability_SharedCallbacks, "sharedcallbacks" }
 	};
 	const int kCapabilityNameCount = sizeof(kCapabilityNames) / sizeof(kCapabilityNames[0]);
 
@@ -61,9 +63,25 @@ namespace
 		{ eGameInteractionCommand_EntityBodies, "entitybodies" },
 		{ eGameInteractionCommand_EntityInteracting, "entityinteracting" },
 		{ eGameInteractionCommand_EntityBreak, "entitybreak" },
-		{ eGameInteractionCommand_EntityRelease, "entityrelease" }
+		{ eGameInteractionCommand_EntityRelease, "entityrelease" },
+		{ eGameInteractionCommand_SharedCallback, "sharedcallback" }
 	};
 	const int kCommandKeywordCount = sizeof(kCommandKeywords) / sizeof(kCommandKeywords[0]);
+
+	struct cSharedCallbackKindName
+	{
+		eGameInteractionSharedCallbackKind mKind;
+		const char* mpName;
+	};
+
+	const cSharedCallbackKindName kSharedCallbackKindNames[] =
+	{
+		{ eGameInteractionSharedCallbackKind_PlayerCollide, "playercollide" },
+		{ eGameInteractionSharedCallbackKind_EntityCollide, "entitycollide" },
+		{ eGameInteractionSharedCallbackKind_Interact, "interact" },
+		{ eGameInteractionSharedCallbackKind_UseItem, "useitem" }
+	};
+	const int kSharedCallbackKindNameCount = sizeof(kSharedCallbackKindNames) / sizeof(kSharedCallbackKindNames[0]);
 
 	const char* KeywordFor(eGameInteractionCommandType aType)
 	{
@@ -100,6 +118,7 @@ namespace
 		case eGameInteractionCommandOutcome_WrongMap: return "wrong-map";
 		case eGameInteractionCommandOutcome_EntityNotFound: return "not-found";
 		case eGameInteractionCommandOutcome_EntityNotHoldable: return "not-holdable";
+		case eGameInteractionCommandOutcome_CallbackNotFound: return "not-found";
 		case eGameInteractionCommandOutcome_InvalidAuthor: return "invalid-author";
 		case eGameInteractionCommandOutcome_InvalidMessage: return "invalid-message";
 		case eGameInteractionCommandOutcome_Unavailable: return "unavailable";
@@ -391,6 +410,51 @@ namespace
 		return cGameInteractionCommand(aType, request);
 	}
 
+	bool TryReadSharedCallbackKind(cGameInteractionFieldReader& aReader, eGameInteractionSharedCallbackKind& aKind)
+	{
+		std::string field;
+		if (!aReader.TryReadField(field)) return false;
+		for (int index = 0; index < kSharedCallbackKindNameCount; ++index)
+		{
+			if (field != kSharedCallbackKindNames[index].mpName) continue;
+			aKind = kSharedCallbackKindNames[index].mKind;
+			return true;
+		}
+		return false;
+	}
+
+	bool TryReadCollideState(cGameInteractionFieldReader& aReader, int& alState)
+	{
+		std::string field;
+		if (!aReader.TryReadField(field) || (field != "1" && field != "-1")) return false;
+		alState = field == "1" ? 1 : -1;
+		return true;
+	}
+
+	// sharedcallback playercollide <entityId> <state> <map>, entitycollide <parentId> <entityId> <state> <map>,
+	// interact <entityId> <map>, and useitem <entityId> <item> <map>.
+	cGameInteractionCommand ParseSharedCallback(const std::string& asLine)
+	{
+		cGameInteractionFieldReader reader(asLine);
+		std::string keyword;
+		reader.TryReadField(keyword);
+		cGameInteractionSharedCallbackRequest request;
+		cGameInteractionSharedCallback& callback = request.mCallback;
+		bool valid = TryReadSharedCallbackKind(reader, callback.mKind);
+		if (valid && callback.mKind == eGameInteractionSharedCallbackKind_EntityCollide)
+			valid = TryReadEntityIdentifier(reader, callback.mlParentEntityId);
+		valid = valid && TryReadEntityIdentifier(reader, callback.mlEntityId);
+		if (valid && (callback.mKind == eGameInteractionSharedCallbackKind_PlayerCollide ||
+			callback.mKind == eGameInteractionSharedCallbackKind_EntityCollide))
+			valid = TryReadCollideState(reader, callback.mlState);
+		else if (valid && callback.mKind == eGameInteractionSharedCallbackKind_UseItem)
+			valid = reader.TryReadField(callback.msItem) &&
+				cGameInteractionProtocolVersion2::IsValidItemName(callback.msItem);
+		valid = valid && reader.TryReadRest(callback.msMapFile);
+		request.mbValid = valid && reader.IsAtEnd();
+		return cGameInteractionCommand(eGameInteractionCommand_SharedCallback, request);
+	}
+
 	// A writer keeps every number finite and within the reader's bound.
 	double BoundedNumber(float afValue)
 	{
@@ -517,6 +581,35 @@ bool cGameInteractionProtocolVersion2::IsValidAvatarIdentifier(const std::string
 	return true;
 }
 
+// Printable ASCII without spaces, so an item is one field and every game reads it the same.
+bool cGameInteractionProtocolVersion2::IsValidItemName(const std::string& asItem)
+{
+	if (asItem.empty() || asItem.size() > kMaximumItemNameLength) return false;
+	for (std::string::size_type index = 0; index < asItem.size(); ++index)
+	{
+		const unsigned char character = static_cast<unsigned char>(asItem[index]);
+		if (character <= ' ' || character > '~') return false;
+	}
+	return true;
+}
+
+std::string cGameInteractionProtocolVersion2::FormatSharedCallback(const cGameInteractionSharedCallback& aCallback)
+{
+	const char* kind = "interact";
+	for (int index = 0; index < kSharedCallbackKindNameCount; ++index)
+		if (kSharedCallbackKindNames[index].mKind == aCallback.mKind) kind = kSharedCallbackKindNames[index].mpName;
+	std::string fields = std::string(kind) + " ";
+	if (aCallback.mKind == eGameInteractionSharedCallbackKind_EntityCollide)
+		fields += FormatEntityIdentifier(aCallback.mlParentEntityId) + " ";
+	fields += FormatEntityIdentifier(aCallback.mlEntityId);
+	if (aCallback.mKind == eGameInteractionSharedCallbackKind_PlayerCollide ||
+		aCallback.mKind == eGameInteractionSharedCallbackKind_EntityCollide)
+		fields += aCallback.mlState > 0 ? " 1" : " -1";
+	else if (aCallback.mKind == eGameInteractionSharedCallbackKind_UseItem)
+		fields += " " + aCallback.msItem;
+	return fields + " " + aCallback.msMapFile;
+}
+
 std::string cGameInteractionProtocolVersion2::FormatEntityIdentifier(int alIdentifier)
 {
 	char formatted[16];
@@ -575,6 +668,7 @@ cGameInteractionCommand cGameInteractionProtocolVersion2::ParseCommand(const std
 		eGameInteractionCommand_Unknown;
 	if (type == eGameInteractionCommand_Unknown) return cLegacyGameInteractionProtocol::ParseCommand(asLine);
 	if (type == eGameInteractionCommand_Chat) return ParseChatEntry(asLine);
+	if (type == eGameInteractionCommand_SharedCallback) return ParseSharedCallback(asLine);
 	if (type == eGameInteractionCommand_LocalPose || type == eGameInteractionCommand_ReportedBodies)
 		return ParseSubscription(type, asLine);
 	if (type == eGameInteractionCommand_EntityDrive || type == eGameInteractionCommand_EntityBodies ||
@@ -653,6 +747,8 @@ std::string cGameInteractionProtocolVersion2::SerializeEvent(const cGameInteract
 		return FormatEntityEvent("reportbroke", entityEvent, " " + FormatBodyState(entityEvent.mState));
 	case eGameInteractionEvent_MapEntered:
 		return "EVENT mapentered " + aEvent.GetData();
+	case eGameInteractionEvent_SharedCallback:
+		return "EVENT sharedcallback " + FormatSharedCallback(aEvent.GetSharedCallback());
 	default:
 		return std::string();
 	}

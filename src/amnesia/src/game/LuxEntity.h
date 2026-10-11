@@ -142,7 +142,8 @@ public:
 	cSoundEntity* PlaySound(const tString& asName, const tString& asFile, bool abRemoveWhenDone, bool abAttach);
 
 	void RunCallbackFunc(const tString& asType);
-	void RunInteractCallbackFunc();
+	// Returns whether the entity had an interact callback to run.
+	bool RunInteractCallbackFunc();
 
 	virtual void GiveDamage(float afAmount, int alStrength)=0;
 
@@ -223,6 +224,8 @@ public:
 	virtual void SetupSaveData(iLuxEntity_SaveData *apSaveData);
 
 protected:
+	virtual iLuxEntity* GetCollideCallbackParentEntity(){ return this; }
+
 	void UpdateCheckCollideCallback(float afTimeStep);
 	void UpdatePlayerLookAt(float afTimeStep);
 	void ConnectionStateChange(int alState);

@@ -31,6 +31,7 @@
 #include "LuxProgressLogHandler.h"
 #include "LuxEffectHandler.h"
 #include "LuxMapHandler.h"
+#include "LuxSharedCallbackHandler.h"
 
 #include "LuxEnemy.h"
 #include "LuxEnemyPathfinder.h"
@@ -1055,6 +1056,25 @@ cLuxUseItemCallback* cLuxMap::GetUseItemCallback(const tString& asItem, const tS
 	}
 
 	return NULL;
+}
+
+bool cLuxMap::RunUseItemCallback(const tString& asItem, iLuxEntity *apEntity)
+{
+	cLuxUseItemCallback *pCallback = GetUseItemCallback(asItem, apEntity->GetName());
+	if(pCallback==NULL) return false;
+
+	// Running the script MAY destroy this item so "Backup" the check flag.
+	bool bAutoDestroy = pCallback->mbAutoDestroy;
+	tString sName = pCallback->msName;
+	if(gpBase->mpSharedCallbackHandler)
+		gpBase->mpSharedCallbackHandler->OnUseItemCallbackRunning(pCallback->msItem, apEntity);
+	RunScript(pCallback->msFunction+ "(\"" + pCallback->msItem + "\", \"" + pCallback->msEntity + "\")" );
+
+	if(bAutoDestroy)
+	{
+		RemoveUseItemCallback(pCallback, sName);
+	}
+	return true;
 }
 
 //-----------------------------------------------------------------------

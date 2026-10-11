@@ -2,6 +2,7 @@
 #include "LuxAvatarHandler.h"
 #include "LuxInteractionReportHandler.h"
 #include "LuxPeerDrivenEntityHandler.h"
+#include "LuxSharedCallbackHandler.h"
 #include "LuxMap.h"
 #include "LuxMapHandler.h"
 #include "LuxPlayer.h"
@@ -190,6 +191,11 @@ namespace
 		virtual void ReleaseDrivenEntities()
 		{
 			if(gpBase->mpPeerDrivenEntityHandler) gpBase->mpPeerDrivenEntityHandler->ReleaseEntities();
+		}
+
+		virtual bool RunSharedCallback(const cGameInteractionSharedCallback& aCallback)
+		{
+			return gpBase->mpSharedCallbackHandler && gpBase->mpSharedCallbackHandler->RunSharedCallback(aCallback);
 		}
 
 		virtual void SetPeerConnected(bool abConnected)

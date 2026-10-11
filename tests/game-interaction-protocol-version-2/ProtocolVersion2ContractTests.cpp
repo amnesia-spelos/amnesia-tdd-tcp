@@ -229,6 +229,10 @@ namespace
 				eGameInteractionEntityOutcome_NotFound;
 		}
 		virtual void ReleaseDrivenEntities() { msetDrivenEntities.clear(); }
+		virtual bool RunSharedCallback(const cGameInteractionSharedCallback& aCallback)
+		{
+			return aCallback.mlEntityId != 404;
+		}
 		virtual void SetPeerConnected(bool) {}
 
 	private:
@@ -303,6 +307,14 @@ namespace
 		if (name == "reportcontact") return eGameInteractionEvent_ReportContact;
 		if (name == "reportsettled") return eGameInteractionEvent_ReportSettled;
 		return eGameInteractionEvent_ReportBroke;
+	}
+
+	eGameInteractionSharedCallbackKind SharedCallbackKindNamed(const std::string& name)
+	{
+		if (name == "playercollide") return eGameInteractionSharedCallbackKind_PlayerCollide;
+		if (name == "entitycollide") return eGameInteractionSharedCallbackKind_EntityCollide;
+		if (name == "useitem") return eGameInteractionSharedCallbackKind_UseItem;
+		return eGameInteractionSharedCallbackKind_Interact;
 	}
 
 	eGameInteractionEnding EndingNamed(const std::string& name)
@@ -494,6 +506,27 @@ int main(int argc, char** argv)
 		{
 			actual = DescribeEntityCommand(cGameInteractionProtocolVersion2::ParseCommand(ReadString(line, "line")));
 			expected = ReadBool(line, "valid") ? ReadString(line, "expected_text") : "invalid";
+		}
+		else if (kind == "shared_callback_command")
+		{
+			const cGameInteractionCommand command = cGameInteractionProtocolVersion2::ParseCommand(ReadString(line, "line"));
+			const cGameInteractionSharedCallbackRequest& request = command.GetSharedCallbackRequest();
+			actual = command.GetType() != eGameInteractionCommand_SharedCallback ? "not a sharedcallback Command" :
+				request.mbValid ? cGameInteractionProtocolVersion2::FormatSharedCallback(request.mCallback) : "invalid";
+			expected = ReadBool(line, "valid") ? ReadString(line, "expected_text") : "invalid";
+		}
+		else if (kind == "shared_callback_event")
+		{
+			cGameInteractionSharedCallback callback;
+			callback.mKind = SharedCallbackKindNamed(ReadString(line, "callback"));
+			std::istringstream(ReadString(line, "parent_id")) >> callback.mlParentEntityId;
+			std::istringstream(ReadString(line, "entity_id")) >> callback.mlEntityId;
+			std::istringstream(ReadString(line, "state")) >> callback.mlState;
+			callback.msItem = ReadString(line, "item");
+			callback.msMapFile = ReadString(line, "map");
+			actual = cGameInteractionProtocolVersion2::SerializeEvent(
+				cGameInteractionEvent(eGameInteractionEvent_SharedCallback, callback));
+			expected = ReadString(line, "expected_text");
 		}
 		else if (kind == "reported_bodies")
 		{
