@@ -6,6 +6,8 @@
 #include "LuxMap.h"
 #include "LuxMapHandler.h"
 #include "LuxPlayer.h"
+#include "LuxProp_Button.h"
+#include "LuxProp_Lamp.h"
 #include "LuxSocketServer.h"
 
 namespace
@@ -73,6 +75,39 @@ void cLuxSharedCallbackHandler::OnUseItemCallbackRunning(const tString& asItem, 
 	callback.mlEntityId = apEntity->GetID();
 	callback.msItem = asItem;
 	Publish(callback);
+}
+
+void cLuxSharedCallbackHandler::OnLocalEntityStateChanged(iLuxEntity *apEntity,
+	eGameInteractionEntityStateKind aKind, bool abBefore, bool abAfter)
+{
+	if(!mModel.ReportsEntityState(abBefore, abAfter) || !IsMapPlaced(apEntity)) return;
+	cLuxMap *pMap = gpBase->mpMapHandler->GetCurrentMap();
+	if(pMap==NULL || gpBase->mpSocketServer==NULL) return;
+	cGameInteractionEntityState state;
+	state.mKind = aKind;
+	state.mlEntityId = apEntity->GetID();
+	state.mbState = abAfter;
+	state.msMapFile = pMap->GetMapPath();
+	gpBase->mpSocketServer->PublishEvent(cGameInteractionEvent(aKind == eGameInteractionEntityStateKind_Button ?
+		eGameInteractionEvent_ButtonState : eGameInteractionEvent_LampState, state));
+}
+
+eGameInteractionCommandOutcome cLuxSharedCallbackHandler::ApplyEntityState(const cGameInteractionEntityState& aState)
+{
+	cLuxMap *pMap = gpBase->mpMapHandler->GetCurrentMap();
+	iLuxEntity *pEntity = pMap ? pMap->GetEntityByID(aState.mlEntityId) : NULL;
+	if(!IsMapPlaced(pEntity)) return eGameInteractionCommandOutcome_EntityNotFound;
+	const eLuxPropType type = aState.mKind == eGameInteractionEntityStateKind_Button ? eLuxPropType_Button : eLuxPropType_Lamp;
+	if(pEntity->GetEntityType() != eLuxEntityType_Prop || static_cast<iLuxProp*>(pEntity)->GetPropType() != type)
+		return eGameInteractionCommandOutcome_EntityWrongType;
+
+	mModel.BeginRun();
+	if(aState.mKind == eGameInteractionEntityStateKind_Button)
+		static_cast<cLuxProp_Button*>(pEntity)->SetSwitchedOn(aState.mbState, true);
+	else
+		static_cast<cLuxProp_Lamp*>(pEntity)->SetLit(aState.mbState, true);
+	mModel.EndRun();
+	return eGameInteractionCommandOutcome_Success;
 }
 
 // The gateway calls this only for the current map.

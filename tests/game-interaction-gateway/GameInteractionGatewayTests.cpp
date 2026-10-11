@@ -146,6 +146,14 @@ namespace
 			mvEntityOperations.push_back("release all");
 			msetDrivenEntities.clear();
 		}
+		virtual eGameInteractionCommandOutcome ApplyEntityState(const cGameInteractionEntityState& aState)
+		{
+			mvEntityStates.push_back(aState);
+			return aState.mlEntityId == 404 ? eGameInteractionCommandOutcome_EntityNotFound :
+				aState.mlEntityId == 405 ? eGameInteractionCommandOutcome_EntityWrongType : eGameInteractionCommandOutcome_Success;
+		}
+		std::vector<cGameInteractionEntityState> mvEntityStates;
+
 		virtual bool RunSharedCallback(const cGameInteractionSharedCallback& aCallback)
 		{
 			mvSharedCallbacks.push_back(aCallback);
@@ -899,6 +907,75 @@ namespace
 		return peer;
 	}
 
+	void ButtonStateCommandIsRecognized()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenSharedCallbacksSession(gateway, adapter);
+		Expect(Exchange(peer, gateway, adapter, "buttonstate 12 1 " + kCurrentMap + "\n") ==
+			"RESPONSE buttonstate ok\n", "a buttonstate Command is accepted with sharedcallbacks");
+		Expect(Exchange(peer, gateway, adapter, "lampstate -12 0 " + kCurrentMap + "\n") ==
+			"RESPONSE lampstate ok\n", "a lamp can be switched off by Command");
+		Expect(adapter.mvEntityStates.size() == 2 && adapter.mvEntityStates[0].mbState &&
+			adapter.mvEntityStates[0].mKind == eGameInteractionEntityStateKind_Button &&
+			adapter.mvEntityStates[0].mlEntityId == 12 && adapter.mvEntityStates[0].msMapFile == kCurrentMap &&
+			!adapter.mvEntityStates[1].mbState && adapter.mvEntityStates[1].mlEntityId == -12 &&
+			adapter.mvEntityStates[1].mKind == eGameInteractionEntityStateKind_Lamp,
+			"the game receives the kind, signed entity ID, state and Map Path");
+		Expect(Exchange(peer, gateway, adapter, "buttonstate 12 2 " + kCurrentMap +
+			"\nlampstate nope 1 " + kCurrentMap + "\nbuttonstate 12 1\n") ==
+			"RESPONSE buttonstate invalid\nRESPONSE lampstate invalid\nRESPONSE buttonstate invalid\n",
+			"malformed state Commands are rejected");
+		Expect(Exchange(peer, gateway, adapter, "lampstate 12 1 other.map\n") ==
+			"RESPONSE lampstate wrong-map\n", "a state for another map is rejected");
+		Expect(adapter.mvEntityStates.size() == 2, "rejected Commands never reach the game");
+		Expect(Exchange(peer, gateway, adapter, "buttonstate 404 1 " + kCurrentMap +
+			"\nlampstate 405 1 " + kCurrentMap + "\n") ==
+			"RESPONSE buttonstate not-found\nRESPONSE lampstate wrong-type\n", "entity failures reach the Peer");
+		adapter.mbMapLoaded = false;
+		Expect(Exchange(peer, gateway, adapter, "buttonstate 12 1 " + kCurrentMap + "\n") ==
+			"RESPONSE buttonstate wrong-map\n", "no loaded map is wrong-map");
+		Expect(cGameInteractionCommand(eGameInteractionCommand_LampState, cGameInteractionEntityStateRequest()).GetClassification() ==
+			eGameInteractionCommandClassification_StateChanging, "applying entity state is state-changing");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void ButtonAndLampReportsRequireSharedCallbacks()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		cGameInteractionEntityState state;
+		state.mlEntityId = 12;
+		state.mbState = true;
+		state.msMapFile = kCurrentMap;
+		SOCKET peer = OpenSession(gateway, adapter);
+		gateway.Report(cGameInteractionEvent(eGameInteractionEvent_ButtonState, state));
+		gateway.Update(adapter);
+		Expect(ReceiveAvailable(peer, 100).empty(), "legacy Sessions receive no button reports");
+		closesocket(peer);
+		gateway.Shutdown();
+		peer = OpenInteractionsSession(gateway, adapter);
+		gateway.Report(cGameInteractionEvent(eGameInteractionEvent_LampState, state));
+		gateway.Update(adapter);
+		Expect(ReceiveAvailable(peer, 100).empty(), "Sessions without sharedcallbacks receive no lamp reports");
+		Expect(Exchange(peer, gateway, adapter, "buttonstate 12 1 " + kCurrentMap + "\n") ==
+			"RESPONSE buttonstate not-granted\n", "state Commands require sharedcallbacks");
+		Expect(adapter.mvEntityStates.empty(), "an ungranted Command never reaches the game");
+		closesocket(peer);
+		gateway.Shutdown();
+		peer = OpenSharedCallbacksSession(gateway, adapter);
+		gateway.Report(cGameInteractionEvent(eGameInteractionEvent_ButtonState, state));
+		state.mKind = eGameInteractionEntityStateKind_Lamp;
+		state.mbState = false;
+		gateway.Report(cGameInteractionEvent(eGameInteractionEvent_LampState, state));
+		gateway.Update(adapter);
+		Expect(ReceiveLines(peer, 2) == "EVENT buttonstate 12 1 " + kCurrentMap + "\nEVENT lampstate 12 0 " +
+			kCurrentMap + "\n", "state reports carry entity ID, state and Map Path in order");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
 	void SharedCallbackCommandsReachTheGameWithEveryIdentifier()
 	{
 		cFakeGameAdapter adapter;
@@ -1301,6 +1378,8 @@ int main()
 	EntityBodiesFailuresAreReportedOncePerStreak();
 	PeerDrivenEntitiesAreReleasedWhenTheSessionEnds();
 	InteractionsEventsReachOnlySessionsGrantedInteractions();
+	ButtonStateCommandIsRecognized();
+	ButtonAndLampReportsRequireSharedCallbacks();
 	SharedCallbackCommandsReachTheGameWithEveryIdentifier();
 	SharedCallbackEventsReachOnlySessionsGrantedSharedCallbacks();
 	ReportedBodiesFollowTheSubscribedRateWhileTheReportHoldsBodies();

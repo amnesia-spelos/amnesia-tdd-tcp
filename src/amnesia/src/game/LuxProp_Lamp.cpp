@@ -18,6 +18,7 @@
  */
 
 #include "LuxProp_Lamp.h"
+#include "LuxSharedCallbackHandler.h"
 
 #include "LuxPlayer.h"
 #include "LuxPlayerState.h"
@@ -247,7 +248,11 @@ bool cLuxProp_Lamp::OnInteract(iPhysicsBody *apBody, const cVector3f &avPos)
 
 		RunCallbackFunc("OnIgnite");
 		
+		const bool bBefore = mbLit;
 		SetLit(true, true);
+		if(gpBase->mpSharedCallbackHandler)
+			gpBase->mpSharedCallbackHandler->OnLocalEntityStateChanged(this,
+				eGameInteractionEntityStateKind_Lamp, bBefore, mbLit);
 	}
 
 	return true;

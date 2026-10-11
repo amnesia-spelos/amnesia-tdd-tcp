@@ -193,6 +193,12 @@ namespace
 			if(gpBase->mpPeerDrivenEntityHandler) gpBase->mpPeerDrivenEntityHandler->ReleaseEntities();
 		}
 
+		virtual eGameInteractionCommandOutcome ApplyEntityState(const cGameInteractionEntityState& aState)
+		{
+			return gpBase->mpSharedCallbackHandler ? gpBase->mpSharedCallbackHandler->ApplyEntityState(aState) :
+				eGameInteractionCommandOutcome_Unavailable;
+		}
+
 		virtual bool RunSharedCallback(const cGameInteractionSharedCallback& aCallback)
 		{
 			return gpBase->mpSharedCallbackHandler && gpBase->mpSharedCallbackHandler->RunSharedCallback(aCallback);

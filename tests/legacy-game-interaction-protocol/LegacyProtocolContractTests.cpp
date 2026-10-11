@@ -173,6 +173,9 @@ namespace
 		}
 		virtual eGameInteractionEntityOutcome ReleaseDrivenEntity(int) { return eGameInteractionEntityOutcome_NotFound; }
 		virtual void ReleaseDrivenEntities() {}
+		virtual eGameInteractionCommandOutcome ApplyEntityState(const cGameInteractionEntityState&)
+		{ return eGameInteractionCommandOutcome_EntityNotFound; }
+
 		virtual bool RunSharedCallback(const cGameInteractionSharedCallback&) { return true; }
 		virtual void SetPeerConnected(bool) {}
 	};

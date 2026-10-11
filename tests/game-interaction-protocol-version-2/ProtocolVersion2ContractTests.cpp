@@ -229,6 +229,9 @@ namespace
 				eGameInteractionEntityOutcome_NotFound;
 		}
 		virtual void ReleaseDrivenEntities() { msetDrivenEntities.clear(); }
+		virtual eGameInteractionCommandOutcome ApplyEntityState(const cGameInteractionEntityState&)
+		{ return eGameInteractionCommandOutcome_EntityNotFound; }
+
 		virtual bool RunSharedCallback(const cGameInteractionSharedCallback& aCallback)
 		{
 			return aCallback.mlEntityId != 404;

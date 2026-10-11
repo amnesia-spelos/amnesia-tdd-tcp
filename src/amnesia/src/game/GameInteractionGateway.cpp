@@ -37,6 +37,15 @@ cGameInteractionEvent::cGameInteractionEvent(eGameInteractionEventType aType,
 {
 }
 
+cGameInteractionEvent::cGameInteractionEvent(eGameInteractionEventType aType,
+	const cGameInteractionEntityState& aState) : mType(aType), mEntityState(aState) {}
+
+cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
+	const cGameInteractionEntityStateRequest& aRequest)
+	: mType(aType), mlProtocolVersion(0), mlCapabilities(0),
+	  mSubscriptionRequest(eGameInteractionSubscriptionRequest_Invalid), mlSubscriptionRate(0),
+	  mEntityStateRequest(aRequest) {}
+
 bool cGameInteractionEvent::IsInteractionsEvent() const
 {
 	return mType == eGameInteractionEvent_InteractionStarted || mType == eGameInteractionEvent_InteractionEnded ||
@@ -111,6 +120,7 @@ eGameInteractionCommandClassification cGameInteractionCommand::GetClassification
 		mType == eGameInteractionCommand_AvatarPose || mType == eGameInteractionCommand_EntityDrive ||
 		mType == eGameInteractionCommand_EntityBodies || mType == eGameInteractionCommand_EntityInteracting ||
 		mType == eGameInteractionCommand_EntityBreak || mType == eGameInteractionCommand_EntityRelease ||
+		mType == eGameInteractionCommand_ButtonState || mType == eGameInteractionCommand_LampState ||
 		mType == eGameInteractionCommand_SharedCallback ?
 		eGameInteractionCommandClassification_StateChanging :
 		eGameInteractionCommandClassification_Observational;
@@ -423,6 +433,19 @@ namespace
 		return response;
 	}
 
+	// Reject late state Commands for another map.
+	cGameInteractionResponse ApplyEntityState(const cGameInteractionCommand& aCommand,
+		iGameInteractionGameAdapter& aGameAdapter)
+	{
+		const cGameInteractionEntityStateRequest& request = aCommand.GetEntityStateRequest();
+		eGameInteractionCommandOutcome outcome = eGameInteractionCommandOutcome_Success;
+		if (!request.mbValid) outcome = eGameInteractionCommandOutcome_Invalid;
+		else if (!aGameAdapter.IsMapLoaded() || aGameAdapter.GetMapFile() != request.mState.msMapFile)
+			outcome = eGameInteractionCommandOutcome_WrongMap;
+		else outcome = aGameAdapter.ApplyEntityState(request.mState);
+		return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_EntityState, outcome);
+	}
+
 	// A Shared Callback names its map, so a late Command never runs a registration of another map.
 	cGameInteractionResponse RunSharedCallback(const cGameInteractionCommand& aCommand,
 		iGameInteractionGameAdapter& aGameAdapter)
@@ -524,6 +547,8 @@ namespace
 		case eGameInteractionCommand_EntityBreak:
 		case eGameInteractionCommand_EntityRelease:
 			return eGameInteractionCapability_Interactions;
+		case eGameInteractionCommand_ButtonState:
+		case eGameInteractionCommand_LampState:
 		case eGameInteractionCommand_SharedCallback:
 			return eGameInteractionCapability_SharedCallbacks;
 		default:
@@ -566,6 +591,9 @@ namespace
 		case eGameInteractionCommand_EntityBreak:
 		case eGameInteractionCommand_EntityRelease:
 			return ExecuteEntityCommand(aCommand, aGameAdapter, aSession.mEntities);
+		case eGameInteractionCommand_ButtonState:
+		case eGameInteractionCommand_LampState:
+			return ApplyEntityState(aCommand, aGameAdapter);
 		case eGameInteractionCommand_SharedCallback:
 			return RunSharedCallback(aCommand, aGameAdapter);
 		case eGameInteractionCommand_AvatarCreate:
@@ -824,7 +852,8 @@ void cGameInteractionGateway::Update(iGameInteractionGameAdapter& aGameAdapter)
 void cGameInteractionGateway::Report(const cGameInteractionEvent& aEvent)
 {
 	if (!mpImplementation->mTransport.HasPeer()) return;
-	if (aEvent.GetType() == eGameInteractionEvent_SharedCallback)
+	if (aEvent.GetType() == eGameInteractionEvent_SharedCallback ||
+		aEvent.GetType() == eGameInteractionEvent_ButtonState || aEvent.GetType() == eGameInteractionEvent_LampState)
 	{
 		if (mpImplementation->mSession.mlGrantedCapabilities & eGameInteractionCapability_SharedCallbacks)
 			mpImplementation->mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(

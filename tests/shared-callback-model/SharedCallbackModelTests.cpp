@@ -39,6 +39,17 @@ namespace
 		Expect(model.AllowsPlayerControl(), "scripts may take the player's control outside a run");
 	}
 
+	void LocalEntityStateChangesAreReportedOnlyOnceAndNeverDuringReplay()
+	{
+		cSharedCallbackModel model;
+		Expect(model.ReportsEntityState(false, true), "a local player changing state produces a report");
+		Expect(!model.ReportsEntityState(true, true), "a state already applied produces no report");
+		model.BeginRun();
+		Expect(!model.ReportsEntityState(false, true), "a state change nested in replay produces no report");
+		model.EndRun();
+		Expect(model.ReportsEntityState(true, false), "a local button switched off after replay is reported");
+	}
+
 	void ARunAndEverythingNestedInItIsNeverReported()
 	{
 		cSharedCallbackModel model;
@@ -168,6 +179,7 @@ namespace
 int main()
 {
 	LocalTriggersAreReportedOutsideASharedCallbackRun();
+	LocalEntityStateChangesAreReportedOnlyOnceAndNeverDuringReplay();
 	ARunAndEverythingNestedInItIsNeverReported();
 	ACollideRunHonoursTheStatesFilter();
 	AnEntityCollideRunKeepsTheEdgeSoTheLocalCheckDoesNotFireAgain();

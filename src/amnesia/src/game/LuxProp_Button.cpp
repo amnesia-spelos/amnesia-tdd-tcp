@@ -22,6 +22,7 @@
 #include "LuxPlayer.h"
 #include "LuxPlayerState.h"
 #include "LuxMap.h"
+#include "LuxSharedCallbackHandler.h"
 
 //////////////////////////////////////////////////////////////////////////
 // LOADER
@@ -100,7 +101,12 @@ bool cLuxProp_Button::CanInteract(iPhysicsBody *apBody)
 
 bool cLuxProp_Button::OnInteract(iPhysicsBody *apBody, const cVector3f &avPos)
 {
-	SetSwitchedOn(!mbSwitchedOn, true);
+	const bool bSwitchedOn = !mbSwitchedOn;
+	// Report the press before connection callbacks can reset a momentary button.
+	if(gpBase->mpSharedCallbackHandler)
+		gpBase->mpSharedCallbackHandler->OnLocalEntityStateChanged(this,
+			eGameInteractionEntityStateKind_Button, mbSwitchedOn, bSwitchedOn);
+	SetSwitchedOn(bSwitchedOn, true);
 
 	return true;
 }

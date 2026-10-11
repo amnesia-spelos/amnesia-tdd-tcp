@@ -23,6 +23,10 @@ public:
 	void OnInteractCallbackRunning(iLuxEntity *apEntity);
 	void OnUseItemCallbackRunning(const tString& asItem, iLuxEntity *apEntity);
 
+	void OnLocalEntityStateChanged(iLuxEntity *apEntity, eGameInteractionEntityStateKind aKind,
+		bool abBefore, bool abAfter);
+	eGameInteractionCommandOutcome ApplyEntityState(const cGameInteractionEntityState& aState);
+
 	// Runs the current map's registration for the callback. False when none matches, so nothing ran.
 	bool RunSharedCallback(const cGameInteractionSharedCallback& aCallback);
 

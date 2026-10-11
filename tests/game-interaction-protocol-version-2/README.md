@@ -244,3 +244,37 @@ chatentry <authorColor> <messageColor> <Author>:<message>
 - `TCP_NODELAY` is set on the Peer socket.
 - Responses are flushed in the same game update that processed their Commands.
 - An inbound line longer than 65,536 bytes, not counting its terminator, disconnects the Peer. The game logs `Peer exceeded the inbound line length limit`. Commands on earlier lines in the same read are processed, and their Responses are sent before the disconnect if the socket accepts them immediately.
+
+## Button and lamp state
+
+The `sharedcallbacks` Capability also grants these Commands and Events:
+
+```text
+buttonstate <entityId> <state> <map>
+lampstate <entityId> <state> <map>
+RESPONSE buttonstate <outcome>
+RESPONSE lampstate <outcome>
+EVENT buttonstate <entityId> <state> <map>
+EVENT lampstate <entityId> <state> <map>
+```
+
+`state` is `1` for switched on or lit, and `0` for switched off or unlit. Entity IDs are signed integers; the Map Path is the rest of the line. Outcomes are `ok`, `invalid`, `not-granted`, `wrong-map`, `not-found`, or `wrong-type`. Runtime-created entities are not shared. Sessions without `sharedcallbacks`, including legacy Sessions, receive neither Event.
+
+Only the local player's button press or lamp lighting reports state, and only when it changes. Map Script setters and changes nested inside a Peer's Command do not report. Applying state uses the game's own setter with effects, so button connection callbacks and connected entities run as for a local press. An unchanged state does nothing. The whole application runs in Shared Callback mode: callbacks never report back and calls that take player control or camera are ignored. Applying lamp state never interacts with the lamp, runs its local `OnIgnite` callback, spends tinderboxes, or awards lighting sanity.
+
+The multiplayer consumer must relay these Events and compose the corresponding Commands, including queuing them for another Map Path. That coordination belongs to `amnesia-multiplayer` (Shared Callbacks map #43).
+
+### Manual verification with the Controller
+
+Run `dotnet run --project ..\amnesia-csharp-controller\src\AmnesiaController` against a running game and type `protocol 2 sharedcallbacks`. Expect `RESPONSE protocol ok 2 sharedcallbacks`. Version 2 lines appear as `uncategorised`.
+
+Use a map with a switchable button and an unlit candle, with a button connection callback that has a visible effect. The entity IDs and Map Path below are examples: use the exact fields from the Events emitted by your map.
+
+1. Press the button. Expect exactly one `EVENT buttonstate 12 1 maps/test.map` for that button. In another game on the same map, type `buttonstate 12 1 maps/test.map`. Expect `RESPONSE buttonstate ok`, the button and its connected effect changing once, and no `EVENT buttonstate` or `EVENT sharedcallback` from that Command. Repeat the line: expect `RESPONSE buttonstate ok` with no callback or effect replay.
+2. Note the tinderbox count and light the candle locally. Expect exactly one `EVENT lampstate 13 1 maps/test.map` and one tinderbox spent. In the other game, note its count and type `lampstate 13 1 maps/test.map`. Expect `RESPONSE lampstate ok`, lit candle effects, no inventory change, and no state or Shared Callback report. Repeat: expect `RESPONSE lampstate ok` with no replayed effects.
+3. Type `lampstate 13 0 maps/test.map`. Expect `RESPONSE lampstate ok`, the candle going out with effects, no tinderbox change, and no state report.
+4. Make the button's connection callback call `SetPlayerActive(false)` and `StartPlayerLookAt(...)`. Apply the button state by Command: expect the connection's ordinary effects once, with local control and camera retained. A local button press should still permit those script calls.
+5. For a button named `test_button` and lamp named `test_candle`, type `exec:SetButtonSwitchedOn("test_button", false, true)` and `exec:SetLampLit("test_candle", false, true)`. Expect `RESPONSE:exec:script executed` for each line and no `EVENT buttonstate` or `EVENT lampstate` for script changes. Local interactions must still report after these changes.
+6. Type `buttonstate 12 1 maps/other.map` on the test map. Expect `RESPONSE buttonstate wrong-map` and no effects.
+
+7. Use a momentary button whose connection callback resets it to switched off. Press it locally: expect one `EVENT buttonstate 12 1 maps/test.map` even though it ends switched off. Type `buttonstate 12 1 maps/test.map` in the other game: expect `RESPONSE buttonstate ok`, the same connection effect and reset, and no report back.

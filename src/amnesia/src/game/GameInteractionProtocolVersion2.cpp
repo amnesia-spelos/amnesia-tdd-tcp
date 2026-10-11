@@ -64,7 +64,9 @@ namespace
 		{ eGameInteractionCommand_EntityInteracting, "entityinteracting" },
 		{ eGameInteractionCommand_EntityBreak, "entitybreak" },
 		{ eGameInteractionCommand_EntityRelease, "entityrelease" },
-		{ eGameInteractionCommand_SharedCallback, "sharedcallback" }
+		{ eGameInteractionCommand_SharedCallback, "sharedcallback" },
+		{ eGameInteractionCommand_ButtonState, "buttonstate" },
+		{ eGameInteractionCommand_LampState, "lampstate" }
 	};
 	const int kCommandKeywordCount = sizeof(kCommandKeywords) / sizeof(kCommandKeywords[0]);
 
@@ -119,6 +121,7 @@ namespace
 		case eGameInteractionCommandOutcome_EntityNotFound: return "not-found";
 		case eGameInteractionCommandOutcome_EntityNotHoldable: return "not-holdable";
 		case eGameInteractionCommandOutcome_CallbackNotFound: return "not-found";
+		case eGameInteractionCommandOutcome_EntityWrongType: return "wrong-type";
 		case eGameInteractionCommandOutcome_InvalidAuthor: return "invalid-author";
 		case eGameInteractionCommandOutcome_InvalidMessage: return "invalid-message";
 		case eGameInteractionCommandOutcome_Unavailable: return "unavailable";
@@ -410,6 +413,19 @@ namespace
 		return cGameInteractionCommand(aType, request);
 	}
 
+	cGameInteractionCommand ParseEntityState(const std::string& asLine, eGameInteractionCommandType aType)
+	{
+		cGameInteractionFieldReader reader(asLine);
+		std::string keyword;
+		reader.TryReadField(keyword);
+		cGameInteractionEntityStateRequest request;
+		request.mState.mKind = aType == eGameInteractionCommand_ButtonState ?
+			eGameInteractionEntityStateKind_Button : eGameInteractionEntityStateKind_Lamp;
+		request.mbValid = TryReadEntityIdentifier(reader, request.mState.mlEntityId) &&
+			TryReadFlag(reader, request.mState.mbState) && reader.TryReadRest(request.mState.msMapFile) && reader.IsAtEnd();
+		return cGameInteractionCommand(aType, request);
+	}
+
 	bool TryReadSharedCallbackKind(cGameInteractionFieldReader& aReader, eGameInteractionSharedCallbackKind& aKind)
 	{
 		std::string field;
@@ -669,6 +685,8 @@ cGameInteractionCommand cGameInteractionProtocolVersion2::ParseCommand(const std
 	if (type == eGameInteractionCommand_Unknown) return cLegacyGameInteractionProtocol::ParseCommand(asLine);
 	if (type == eGameInteractionCommand_Chat) return ParseChatEntry(asLine);
 	if (type == eGameInteractionCommand_SharedCallback) return ParseSharedCallback(asLine);
+	if (type == eGameInteractionCommand_ButtonState || type == eGameInteractionCommand_LampState)
+		return ParseEntityState(asLine, type);
 	if (type == eGameInteractionCommand_LocalPose || type == eGameInteractionCommand_ReportedBodies)
 		return ParseSubscription(type, asLine);
 	if (type == eGameInteractionCommand_EntityDrive || type == eGameInteractionCommand_EntityBodies ||
@@ -749,6 +767,13 @@ std::string cGameInteractionProtocolVersion2::SerializeEvent(const cGameInteract
 		return FormatEntityEvent("reportbroke", entityEvent, " " + FormatBodyState(entityEvent.mState));
 	case eGameInteractionEvent_MapEntered:
 		return "EVENT mapentered " + aEvent.GetData();
+	case eGameInteractionEvent_ButtonState:
+	case eGameInteractionEvent_LampState:
+	{
+		const cGameInteractionEntityState& state = aEvent.GetEntityState();
+		return std::string("EVENT ") + (aEvent.GetType() == eGameInteractionEvent_ButtonState ? "buttonstate " : "lampstate ") +
+			FormatEntityIdentifier(state.mlEntityId) + (state.mbState ? " 1 " : " 0 ") + state.msMapFile;
+	}
 	case eGameInteractionEvent_SharedCallback:
 		return "EVENT sharedcallback " + FormatSharedCallback(aEvent.GetSharedCallback());
 	default:
