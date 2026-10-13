@@ -993,11 +993,18 @@ namespace
 		const cGameInteractionSharedCallback& useItem = adapter.mvSharedCallbacks[1];
 		Expect(useItem.mKind == eGameInteractionSharedCallbackKind_UseItem && useItem.mlEntityId == 404 &&
 			useItem.msItem == "key_study_1", "the game receives the use-item's entity and item");
+		Expect(Exchange(peer, gateway, adapter, "sharedcallback pickup 42 " + kCurrentMap +
+			"\nsharedcallback pickup 404 " + kCurrentMap + "\n") ==
+			"RESPONSE sharedcallback ok\nRESPONSE sharedcallback not-found\n",
+			"a pickup answers not-found when the item is no longer in the world");
+		Expect(adapter.mvSharedCallbacks.size() == 4 &&
+			adapter.mvSharedCallbacks[2].mKind == eGameInteractionSharedCallbackKind_Pickup &&
+			adapter.mvSharedCallbacks[2].mlEntityId == 42, "the game receives the picked-up item's entity");
 
 		adapter.mbMapLoaded = false;
 		Expect(Exchange(peer, gateway, adapter, "sharedcallback interact 5 " + kCurrentMap + "\n") ==
 			"RESPONSE sharedcallback wrong-map\n", "a sharedcallback without a loaded map is wrong-map");
-		Expect(adapter.mvSharedCallbacks.size() == 2, "a wrong-map sharedcallback does not reach the game");
+		Expect(adapter.mvSharedCallbacks.size() == 4, "a wrong-map sharedcallback does not reach the game");
 		Expect(cGameInteractionCommand(eGameInteractionCommand_SharedCallback,
 			cGameInteractionSharedCallbackRequest()).GetClassification() ==
 			eGameInteractionCommandClassification_StateChanging, "running a Shared Callback is state-changing");

@@ -50,6 +50,16 @@ namespace
 		Expect(model.ReportsEntityState(true, false), "a local button switched off after replay is reported");
 	}
 
+	void OnlyALocalPickupOfANonConsumableIsReported()
+	{
+		cSharedCallbackModel model;
+		Expect(model.ReportsPickup(false), "picking up a puzzle item, note, or diary is reported");
+		Expect(!model.ReportsPickup(true), "picking up a tinderbox, oil, a sanity potion, or laudanum is not reported");
+		model.BeginRun();
+		Expect(!model.ReportsPickup(false), "a pickup a Peer's Command ran is not reported");
+		model.EndRun();
+	}
+
 	void ARunAndEverythingNestedInItIsNeverReported()
 	{
 		cSharedCallbackModel model;
@@ -180,6 +190,7 @@ int main()
 {
 	LocalTriggersAreReportedOutsideASharedCallbackRun();
 	LocalEntityStateChangesAreReportedOnlyOnceAndNeverDuringReplay();
+	OnlyALocalPickupOfANonConsumableIsReported();
 	ARunAndEverythingNestedInItIsNeverReported();
 	ACollideRunHonoursTheStatesFilter();
 	AnEntityCollideRunKeepsTheEdgeSoTheLocalCheckDoesNotFireAgain();

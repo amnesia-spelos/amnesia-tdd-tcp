@@ -317,6 +317,7 @@ namespace
 		if (name == "playercollide") return eGameInteractionSharedCallbackKind_PlayerCollide;
 		if (name == "entitycollide") return eGameInteractionSharedCallbackKind_EntityCollide;
 		if (name == "useitem") return eGameInteractionSharedCallbackKind_UseItem;
+		if (name == "pickup") return eGameInteractionSharedCallbackKind_Pickup;
 		return eGameInteractionSharedCallbackKind_Interact;
 	}
 

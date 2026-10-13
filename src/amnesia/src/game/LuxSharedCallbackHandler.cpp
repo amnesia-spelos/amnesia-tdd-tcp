@@ -7,6 +7,7 @@
 #include "LuxMapHandler.h"
 #include "LuxPlayer.h"
 #include "LuxProp_Button.h"
+#include "LuxProp_Item.h"
 #include "LuxProp_Lamp.h"
 #include "LuxSocketServer.h"
 
@@ -25,6 +26,18 @@ namespace
 		for(size_t i=0; i<report.mvBodies.size(); ++i)
 			if(report.mvBodies[i].mlEntityId == apEntity->GetID()) return true;
 		return false;
+	}
+
+	bool IsPropOfType(iLuxEntity *apEntity, eLuxPropType aType)
+	{
+		return apEntity->GetEntityType() == eLuxEntityType_Prop && static_cast<iLuxProp*>(apEntity)->GetPropType() == aType;
+	}
+
+	// Tinderboxes, oil, sanity potions, and laudanum stay local.
+	bool IsConsumable(eLuxItemType aType)
+	{
+		return aType == eLuxItemType_Tinderbox || aType == eLuxItemType_LampOil ||
+			aType == eLuxItemType_Sanity || aType == eLuxItemType_Health;
 	}
 }
 
@@ -77,6 +90,16 @@ void cLuxSharedCallbackHandler::OnUseItemCallbackRunning(const tString& asItem, 
 	Publish(callback);
 }
 
+void cLuxSharedCallbackHandler::OnItemPickedUp(cLuxProp_Item *apItem)
+{
+	if(!IsMapPlaced(apItem) || !mModel.ReportsPickup(IsConsumable(apItem->GetItemType()))) return;
+
+	cGameInteractionSharedCallback callback;
+	callback.mKind = eGameInteractionSharedCallbackKind_Pickup;
+	callback.mlEntityId = apItem->GetID();
+	Publish(callback);
+}
+
 void cLuxSharedCallbackHandler::OnLocalEntityStateChanged(iLuxEntity *apEntity,
 	eGameInteractionEntityStateKind aKind, bool abBefore, bool abAfter)
 {
@@ -98,8 +121,7 @@ eGameInteractionCommandOutcome cLuxSharedCallbackHandler::ApplyEntityState(const
 	iLuxEntity *pEntity = pMap ? pMap->GetEntityByID(aState.mlEntityId) : NULL;
 	if(!IsMapPlaced(pEntity)) return eGameInteractionCommandOutcome_EntityNotFound;
 	const eLuxPropType type = aState.mKind == eGameInteractionEntityStateKind_Button ? eLuxPropType_Button : eLuxPropType_Lamp;
-	if(pEntity->GetEntityType() != eLuxEntityType_Prop || static_cast<iLuxProp*>(pEntity)->GetPropType() != type)
-		return eGameInteractionCommandOutcome_EntityWrongType;
+	if(!IsPropOfType(pEntity, type)) return eGameInteractionCommandOutcome_EntityWrongType;
 
 	mModel.BeginRun();
 	if(aState.mKind == eGameInteractionEntityStateKind_Button)
@@ -144,9 +166,20 @@ bool cLuxSharedCallbackHandler::RunRegistration(cLuxMap *apMap, const cGameInter
 		return pEntity->RunInteractCallbackFunc();
 	case eGameInteractionSharedCallbackKind_UseItem:
 		return apMap->RunUseItemCallback(aCallback.msItem, pEntity);
+	case eGameInteractionSharedCallbackKind_Pickup:
+		return PickUp(pEntity);
 	default:
 		return false;
 	}
+}
+
+// Only a shared item still in the world is picked up. A picked-up item stays in the map until the end
+// of the update, so it is checked for being destroyed rather than for being in the map.
+bool cLuxSharedCallbackHandler::PickUp(iLuxEntity *apEntity)
+{
+	if(apEntity->GetDestroyMe() || !apEntity->IsActive() || !IsPropOfType(apEntity, eLuxPropType_Item)) return false;
+	cLuxProp_Item *pItem = static_cast<cLuxProp_Item*>(apEntity);
+	return !IsConsumable(pItem->GetItemType()) && pItem->PickUp();
 }
 
 void cLuxSharedCallbackHandler::Publish(cGameInteractionSharedCallback& aCallback)

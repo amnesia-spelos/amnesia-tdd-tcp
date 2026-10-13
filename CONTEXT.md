@@ -141,5 +141,5 @@ The script file with the same name as a map, stored beside it, that the game run
 _Avoid_: Level script, map code, hps
 
 **Shared Callback**:
-A Map Script callback the local player triggered, reported to Peers by the identifiers of its registration, or the run of this game's own registration for those identifiers that a Peer's Command asks for. A Shared Callback never names a function or carries script text.
+A Map Script callback the local player triggered, or an item pickup the local player made, reported to Peers by the identifiers of its registration or item, or the run of this game's own registration or pickup for those identifiers that a Peer's Command asks for. A Shared Callback never names a function or carries script text.
 _Avoid_: Callback sync, remote script, trigger relay

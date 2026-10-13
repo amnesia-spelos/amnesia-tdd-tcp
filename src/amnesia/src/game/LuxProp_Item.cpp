@@ -26,6 +26,7 @@
 #include "LuxItemType.h"
 #include "LuxMessageHandler.h"
 #include "LuxEffectRenderer.h"
+#include "LuxSharedCallbackHandler.h"
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -151,6 +152,14 @@ bool cLuxProp_Item::CanInteract(iPhysicsBody *apBody)
 
 bool cLuxProp_Item::OnInteract(iPhysicsBody *apBody, const cVector3f &avPos)
 {
+	PickUp();
+	return true;
+}
+
+//-----------------------------------------------------------------------
+
+bool cLuxProp_Item::PickUp()
+{
 	////////////////////
 	//Picked up item
 	bool bRemoveProp=true;	
@@ -170,6 +179,7 @@ bool cLuxProp_Item::OnInteract(iPhysicsBody *apBody, const cVector3f &avPos)
 			gpBase->mpMessageHandler->SetMessage(kTranslate("Inventory", "PickedUp")+_W(" ")+kTranslate("Inventory",sEntry), 0);
 		}
 
+		if(gpBase->mpSharedCallbackHandler) gpBase->mpSharedCallbackHandler->OnItemPickedUp(this);
 		RunCallbackFunc("OnPickup");
 	}
 	/////////////////////
@@ -178,8 +188,7 @@ bool cLuxProp_Item::OnInteract(iPhysicsBody *apBody, const cVector3f &avPos)
 	{
 	}
 
-	
-	return true;
+	return bRemoveProp;
 }
 
 //-----------------------------------------------------------------------

@@ -32,6 +32,8 @@ public:
 	// Called only at local interaction sites, never at Map Script setters.
 	bool ReportsEntityState(bool abBefore, bool abAfter) const
 	{ return abBefore != abAfter && ReportsCallback(); }
+	// Consumables (tinderboxes, oil, sanity potions, and laudanum) stay local; every other item is shared.
+	bool ReportsPickup(bool abConsumable) const { return !abConsumable && ReportsCallback(); }
 	// A collide callback is shared when the local player's body is its parent, or when the local player
 	// Holds either side, because the other games then follow that entity rather than collide it.
 	bool ReportsCollide(const cSharedCollide& aCollide) const;

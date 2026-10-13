@@ -52,6 +52,9 @@ public:
 	//General
 	bool CanInteract(iPhysicsBody *apBody);
 	bool OnInteract(iPhysicsBody *apBody, const cVector3f &avPos);
+	// Picks the item up as the local player's interaction does, also when a Shared Callback replays it.
+	// Returns whether the item left the world.
+	bool PickUp();
 
 	void OnSetupAfterLoad(cWorld *apWorld);
 

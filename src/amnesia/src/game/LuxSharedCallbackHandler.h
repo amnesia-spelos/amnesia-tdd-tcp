@@ -5,10 +5,12 @@
 #include "GameInteractionGateway.h"
 #include "SharedCallbackModel.h"
 
+class cLuxProp_Item;
+
 //----------------------------------------------
 
 // Shares Map Script callbacks between games (amnesia-multiplayer's ADR 0006, not this repository's). It reports the collide,
-// interact, and use-item callbacks the local player triggers, naming each registration by identifiers
+// interact, and use-item callbacks and the item pickups the local player triggers, naming each registration by identifiers
 // only, and runs the registration a Peer's Command names as the local trigger would. While it runs one,
 // nothing that runs is reported back and scripts cannot take the player's control or camera. Only
 // map-placed entities are named, because an entity created at runtime has no identifier the other
@@ -22,6 +24,8 @@ public:
 	void OnCollideCallbackRunning(iLuxEntity *apParentEntity, iLuxEntity *apChild, int alState);
 	void OnInteractCallbackRunning(iLuxEntity *apEntity);
 	void OnUseItemCallbackRunning(const tString& asItem, iLuxEntity *apEntity);
+	// The item was picked up and its OnPickup callback is about to run. Consumables are not reported.
+	void OnItemPickedUp(cLuxProp_Item *apItem);
 
 	void OnLocalEntityStateChanged(iLuxEntity *apEntity, eGameInteractionEntityStateKind aKind,
 		bool abBefore, bool abAfter);
@@ -37,6 +41,7 @@ public:
 
 private:
 	bool RunRegistration(cLuxMap *apMap, const cGameInteractionSharedCallback& aCallback);
+	bool PickUp(iLuxEntity *apEntity);
 	void Publish(cGameInteractionSharedCallback& aCallback);
 
 	cSharedCallbackModel mModel;

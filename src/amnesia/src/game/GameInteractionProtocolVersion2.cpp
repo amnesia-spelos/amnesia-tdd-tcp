@@ -81,7 +81,8 @@ namespace
 		{ eGameInteractionSharedCallbackKind_PlayerCollide, "playercollide" },
 		{ eGameInteractionSharedCallbackKind_EntityCollide, "entitycollide" },
 		{ eGameInteractionSharedCallbackKind_Interact, "interact" },
-		{ eGameInteractionSharedCallbackKind_UseItem, "useitem" }
+		{ eGameInteractionSharedCallbackKind_UseItem, "useitem" },
+		{ eGameInteractionSharedCallbackKind_Pickup, "pickup" }
 	};
 	const int kSharedCallbackKindNameCount = sizeof(kSharedCallbackKindNames) / sizeof(kSharedCallbackKindNames[0]);
 
@@ -448,7 +449,7 @@ namespace
 	}
 
 	// sharedcallback playercollide <entityId> <state> <map>, entitycollide <parentId> <entityId> <state> <map>,
-	// interact <entityId> <map>, and useitem <entityId> <item> <map>.
+	// interact <entityId> <map>, useitem <entityId> <item> <map>, and pickup <entityId> <map>.
 	cGameInteractionCommand ParseSharedCallback(const std::string& asLine)
 	{
 		cGameInteractionFieldReader reader(asLine);
