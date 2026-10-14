@@ -318,6 +318,7 @@ namespace
 		if (name == "entitycollide") return eGameInteractionSharedCallbackKind_EntityCollide;
 		if (name == "useitem") return eGameInteractionSharedCallbackKind_UseItem;
 		if (name == "pickup") return eGameInteractionSharedCallbackKind_Pickup;
+		if (name == "flashback") return eGameInteractionSharedCallbackKind_Flashback;
 		return eGameInteractionSharedCallbackKind_Interact;
 	}
 

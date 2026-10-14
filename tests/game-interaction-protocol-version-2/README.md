@@ -191,6 +191,7 @@ The Event and the Command carry the same fields, so a Peer can relay an Event's 
 | `interact` | `<entityId>` | The entity's player interact callback (`SetEntityPlayerInteractCallback`), including the one a grab runs. |
 | `useitem` | `<entityId> <item>` | The use-item callback (`AddUseItemCallback`) of item `<item>` on the entity. |
 | `pickup` | `<entityId>` | The local player picked up the item `<entityId>`. Consumables (tinderboxes, oil, sanity potions, and laudanum) are never reported. |
+| `flashback` | `<entityId>` | The local player set off the Flashback area `<entityId>` (`AreaType="Flashback"`), which started its flashback. The flashback file and callback are never sent. |
 
 - `<state>` is `1` when the bodies started colliding and `-1` when they stopped.
 - `<item>` is the item's name, 1–64 printable ASCII characters (`!` through `~`), so it has no spaces.
@@ -200,7 +201,7 @@ The Event and the Command carry the same fields, so a Peer can relay an Event's 
 
 A Session granted `sharedcallbacks` receives `EVENT sharedcallback` each time one of these callbacks runs because of the local player, just before the callback runs. A local player Holds an entity while it is in the report of the `interactions` Capability; the other games follow such an entity rather than collide it. An entity collide where neither side is Held is not reported.
 
-These are never reported: look-at, timer, prop animation, effect voice, checkpoint, lantern, combine, and entity callback func (break, ignite) callbacks other than a shared pickup's `OnPickup`, connection-state, `ConnectEntities`, and multi-slider callbacks, and `OnStart`, `OnEnter`, `OnLeave`, and `OnUpdate`. A callback that runs because a `sharedcallback` Command ran it is never reported, and neither is any callback that runs nested inside it. A trigger the local player causes later is reported even if a Shared Callback set it up.
+These are never reported: look-at, timer, prop animation, effect voice, checkpoint, lantern, combine, and entity callback func (break, ignite) callbacks other than a shared pickup's `OnPickup`, the callback a flashback runs when it ends, connection-state, `ConnectEntities`, and multi-slider callbacks, and `OnStart`, `OnEnter`, `OnLeave`, and `OnUpdate`. A callback that runs because a `sharedcallback` Command ran it is never reported, and neither is any callback that runs nested inside it. A trigger the local player causes later is reported even if a Shared Callback set it up.
 
 ### Running a callback by its registration
 
@@ -213,6 +214,7 @@ These are never reported: look-at, timer, prop animation, effect voice, checkpoi
 - While the callback runs, the game is in Shared Callback mode: scripts cannot take the local player's control or camera, so `SetPlayerActive`, `TeleportPlayer`, `StartPlayerLookAt`, `MovePlayerForward`, `MovePlayerHeadPos`, `SetPlayerMoveSpeedMul`, `SetPlayerRunSpeedMul`, `SetPlayerLookSpeedMul`, and `SetPlayerJumpForceMul` do nothing. Sanity, health, music, sounds, and screen effects run as usual. Timers and other follow-ups the callback starts run later as ordinary local callbacks.
 - A `useitem` run does not need the item in the local inventory. Only the callback's own script, such as a `RemoveItem`, touches it.
 - A `pickup` run picks the item up exactly as the local player would: the item leaves the world and enters the inventory, the pickup message and sound play, a note or diary opens and plays its voice, and the item's entity callback func runs with `"OnPickup"`. Opening the note or diary is part of the pickup and is not suppressed. If the item is no longer in the world, because this game picked it up first, a script removed or deactivated it, or it never existed, is not an item, or is a consumable, the run answers `not-found` and nothing runs. Two players picking up the same item at nearly the same time therefore run its callback once in each game.
+- A `flashback` run sets off this game's own Flashback area exactly as the local player walking in would: the area deactivates and the full flashback plays, with its flash, voices, subtitles, sepia, and slowdown, and its callback runs when it ends as an ordinary local callback. The flashback's own effects on the player are not script control calls, so Shared Callback mode does not suppress them. A flashback that starts while another plays waits for it to end. If the area is inactive, because this game already had its flashback, or it never existed or is not a Flashback area, the run answers `not-found` and nothing starts. Walking into the area afterwards does nothing.
 
 The legacy `SCRIPT_CALL:` Event and `exec:` Command are unchanged. A collide callback run by `sharedcallback` sends no `SCRIPT_CALL:`.
 

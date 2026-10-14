@@ -24,6 +24,7 @@
 #include "LuxPlayerHelpers.h"
 #include "LuxHelpFuncs.h"
 #include "LuxMessageHandler.h"
+#include "LuxSharedCallbackHandler.h"
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -107,10 +108,18 @@ void cLuxArea_Flashback::OnUpdate(float afTimeStep)
 	// Check collision
 	if(CollidesWithPlayer())
 	{
-		SetActive(false);
-
-		gpBase->mpPlayer->GetHelperFlashback()->Start(msFlashbackFile, msCallback);
+		StartFlashback();
 	}
+}
+
+//-----------------------------------------------------------------------
+
+void cLuxArea_Flashback::StartFlashback()
+{
+	SetActive(false);
+
+	if(gpBase->mpSharedCallbackHandler) gpBase->mpSharedCallbackHandler->OnFlashbackStarting(this);
+	gpBase->mpPlayer->GetHelperFlashback()->Start(msFlashbackFile, msCallback);
 }
 
 //-----------------------------------------------------------------------

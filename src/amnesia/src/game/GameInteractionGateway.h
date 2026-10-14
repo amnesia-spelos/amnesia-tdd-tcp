@@ -100,7 +100,9 @@ enum eGameInteractionSharedCallbackKind
 	// A use-item callback of an item on an entity.
 	eGameInteractionSharedCallbackKind_UseItem,
 	// The local player picked up a map-placed item that is not a consumable.
-	eGameInteractionSharedCallbackKind_Pickup
+	eGameInteractionSharedCallbackKind_Pickup,
+	// The local player set off a Flashback area, which started its flashback.
+	eGameInteractionSharedCallbackKind_Flashback
 };
 
 // A Map Script callback registration, named by identifiers only, never by function or script text.
@@ -111,7 +113,7 @@ struct cGameInteractionSharedCallback
 		: mKind(eGameInteractionSharedCallbackKind_Interact), mlParentEntityId(0), mlEntityId(0), mlState(1) {}
 	eGameInteractionSharedCallbackKind mKind;
 	int mlParentEntityId;
-	// The collide's child entity, the entity interacted with or used an item on, or the item picked up.
+	// The collide's child entity, the entity interacted with or used an item on, the item picked up, or the Flashback area.
 	int mlEntityId;
 	// 1 when the bodies started colliding and -1 when they stopped.
 	int mlState;

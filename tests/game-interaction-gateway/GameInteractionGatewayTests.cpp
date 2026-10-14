@@ -1000,11 +1000,18 @@ namespace
 		Expect(adapter.mvSharedCallbacks.size() == 4 &&
 			adapter.mvSharedCallbacks[2].mKind == eGameInteractionSharedCallbackKind_Pickup &&
 			adapter.mvSharedCallbacks[2].mlEntityId == 42, "the game receives the picked-up item's entity");
+		Expect(Exchange(peer, gateway, adapter, "sharedcallback flashback 17 " + kCurrentMap +
+			"\nsharedcallback flashback 404 " + kCurrentMap + "\n") ==
+			"RESPONSE sharedcallback ok\nRESPONSE sharedcallback not-found\n",
+			"a flashback answers not-found when the Flashback area is gone or already inactive");
+		Expect(adapter.mvSharedCallbacks.size() == 6 &&
+			adapter.mvSharedCallbacks[4].mKind == eGameInteractionSharedCallbackKind_Flashback &&
+			adapter.mvSharedCallbacks[4].mlEntityId == 17, "the game receives the Flashback area's entity");
 
 		adapter.mbMapLoaded = false;
 		Expect(Exchange(peer, gateway, adapter, "sharedcallback interact 5 " + kCurrentMap + "\n") ==
 			"RESPONSE sharedcallback wrong-map\n", "a sharedcallback without a loaded map is wrong-map");
-		Expect(adapter.mvSharedCallbacks.size() == 4, "a wrong-map sharedcallback does not reach the game");
+		Expect(adapter.mvSharedCallbacks.size() == 6, "a wrong-map sharedcallback does not reach the game");
 		Expect(cGameInteractionCommand(eGameInteractionCommand_SharedCallback,
 			cGameInteractionSharedCallbackRequest()).GetClassification() ==
 			eGameInteractionCommandClassification_StateChanging, "running a Shared Callback is state-changing");

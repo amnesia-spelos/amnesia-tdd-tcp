@@ -1,6 +1,7 @@
 #include "LuxSharedCallbackHandler.h"
 
 #include "GameInteractionProtocolVersion2.h"
+#include "LuxArea_Flashback.h"
 #include "LuxEntity.h"
 #include "LuxInteractionReportHandler.h"
 #include "LuxMap.h"
@@ -31,6 +32,11 @@ namespace
 	bool IsPropOfType(iLuxEntity *apEntity, eLuxPropType aType)
 	{
 		return apEntity->GetEntityType() == eLuxEntityType_Prop && static_cast<iLuxProp*>(apEntity)->GetPropType() == aType;
+	}
+
+	bool IsAreaOfType(iLuxEntity *apEntity, eLuxAreaType aType)
+	{
+		return apEntity->GetEntityType() == eLuxEntityType_Area && static_cast<iLuxArea*>(apEntity)->GetAreaType() == aType;
 	}
 
 	// Tinderboxes, oil, sanity potions, and laudanum stay local.
@@ -97,6 +103,16 @@ void cLuxSharedCallbackHandler::OnItemPickedUp(cLuxProp_Item *apItem)
 	cGameInteractionSharedCallback callback;
 	callback.mKind = eGameInteractionSharedCallbackKind_Pickup;
 	callback.mlEntityId = apItem->GetID();
+	Publish(callback);
+}
+
+void cLuxSharedCallbackHandler::OnFlashbackStarting(cLuxArea_Flashback *apArea)
+{
+	if(!mModel.ReportsCallback() || !IsMapPlaced(apArea)) return;
+
+	cGameInteractionSharedCallback callback;
+	callback.mKind = eGameInteractionSharedCallbackKind_Flashback;
+	callback.mlEntityId = apArea->GetID();
 	Publish(callback);
 }
 
@@ -168,6 +184,8 @@ bool cLuxSharedCallbackHandler::RunRegistration(cLuxMap *apMap, const cGameInter
 		return apMap->RunUseItemCallback(aCallback.msItem, pEntity);
 	case eGameInteractionSharedCallbackKind_Pickup:
 		return PickUp(pEntity);
+	case eGameInteractionSharedCallbackKind_Flashback:
+		return StartFlashback(pEntity);
 	default:
 		return false;
 	}
@@ -180,6 +198,14 @@ bool cLuxSharedCallbackHandler::PickUp(iLuxEntity *apEntity)
 	if(apEntity->GetDestroyMe() || !apEntity->IsActive() || !IsPropOfType(apEntity, eLuxPropType_Item)) return false;
 	cLuxProp_Item *pItem = static_cast<cLuxProp_Item*>(apEntity);
 	return !IsConsumable(pItem->GetItemType()) && pItem->PickUp();
+}
+
+// Only an active Flashback area starts its flashback, so a player who already had it does not have it again.
+bool cLuxSharedCallbackHandler::StartFlashback(iLuxEntity *apEntity)
+{
+	if(!apEntity->IsActive() || !IsAreaOfType(apEntity, eLuxAreaType_Flashback)) return false;
+	static_cast<cLuxArea_Flashback*>(apEntity)->StartFlashback();
+	return true;
 }
 
 void cLuxSharedCallbackHandler::Publish(cGameInteractionSharedCallback& aCallback)

@@ -49,6 +49,9 @@ public:
 	//////////////////////
 	//General
 	void OnUpdate(float afTimeStep);
+	// Deactivates the area and starts its flashback. The local player walking in and a sharedcallback
+	// run both start it here.
+	void StartFlashback();
 
 	//////////////////////
 	//Connection callbacks
