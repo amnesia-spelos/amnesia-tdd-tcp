@@ -1015,11 +1015,19 @@ namespace
 			adapter.mvSharedCallbacks[6].mKind == eGameInteractionSharedCallbackKind_Combine &&
 			adapter.mvSharedCallbacks[6].msItem == "hollow_needle_1" &&
 			adapter.mvSharedCallbacks[6].msOtherItem == "stone_hammer_1", "the game receives both combined items");
+		Expect(Exchange(peer, gateway, adapter, "sharedcallback stickyattach 21 30 7 " + kCurrentMap +
+			"\nsharedcallback stickyattach 21 404 7 " + kCurrentMap + "\n") ==
+			"RESPONSE sharedcallback ok\nRESPONSE sharedcallback not-found\n",
+			"a stickyattach answers not-found when the area or entity is gone or the area already has a body");
+		Expect(adapter.mvSharedCallbacks.size() == 10 &&
+			adapter.mvSharedCallbacks[8].mKind == eGameInteractionSharedCallbackKind_StickyAttach &&
+			adapter.mvSharedCallbacks[8].mlParentEntityId == 21 && adapter.mvSharedCallbacks[8].mlEntityId == 30 &&
+			adapter.mvSharedCallbacks[8].mlBodyId == 7, "the game receives the sticky area, the entity, and its body");
 
 		adapter.mbMapLoaded = false;
 		Expect(Exchange(peer, gateway, adapter, "sharedcallback interact 5 " + kCurrentMap + "\n") ==
 			"RESPONSE sharedcallback wrong-map\n", "a sharedcallback without a loaded map is wrong-map");
-		Expect(adapter.mvSharedCallbacks.size() == 8, "a wrong-map sharedcallback does not reach the game");
+		Expect(adapter.mvSharedCallbacks.size() == 10, "a wrong-map sharedcallback does not reach the game");
 		Expect(cGameInteractionCommand(eGameInteractionCommand_SharedCallback,
 			cGameInteractionSharedCallbackRequest()).GetClassification() ==
 			eGameInteractionCommandClassification_StateChanging, "running a Shared Callback is state-changing");

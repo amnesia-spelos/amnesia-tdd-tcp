@@ -104,22 +104,28 @@ enum eGameInteractionSharedCallbackKind
 	// The local player set off a Flashback area, which started its flashback.
 	eGameInteractionSharedCallbackKind_Flashback,
 	// The local player combined two inventory items with a combine callback, not both consumables.
-	eGameInteractionSharedCallbackKind_Combine
+	eGameInteractionSharedCallbackKind_Combine,
+	// A sticky area attached a body of an entity the local player Holds.
+	eGameInteractionSharedCallbackKind_StickyAttach
 };
 
 // A Map Script callback registration, named by identifiers only, never by function or script text.
-// The parent applies to an entity collide, the state to both collides, the item to a use-item, and both
-// items, without an entity, to a combine.
+// The parent applies to an entity collide, the state to both collides, the item to a use-item, both
+// items, without an entity, to a combine, and the parent as the sticky area and the body to a sticky attach.
 struct cGameInteractionSharedCallback
 {
 	cGameInteractionSharedCallback()
-		: mKind(eGameInteractionSharedCallbackKind_Interact), mlParentEntityId(0), mlEntityId(0), mlState(1) {}
+		: mKind(eGameInteractionSharedCallbackKind_Interact), mlParentEntityId(0), mlEntityId(0), mlState(1),
+		mlBodyId(0) {}
 	eGameInteractionSharedCallbackKind mKind;
 	int mlParentEntityId;
-	// The collide's child entity, the entity interacted with or used an item on, the item picked up, or the Flashback area.
+	// The collide's child entity, the entity interacted with or used an item on, the item picked up, the
+	// Flashback area, or the entity attached to a sticky area.
 	int mlEntityId;
 	// 1 when the bodies started colliding and -1 when they stopped.
 	int mlState;
+	// The attached body of a sticky attach.
+	int mlBodyId;
 	std::string msItem;
 	std::string msOtherItem;
 	std::string msMapFile;

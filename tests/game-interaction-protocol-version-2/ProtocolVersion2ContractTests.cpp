@@ -320,6 +320,7 @@ namespace
 		if (name == "pickup") return eGameInteractionSharedCallbackKind_Pickup;
 		if (name == "flashback") return eGameInteractionSharedCallbackKind_Flashback;
 		if (name == "combine") return eGameInteractionSharedCallbackKind_Combine;
+		if (name == "stickyattach") return eGameInteractionSharedCallbackKind_StickyAttach;
 		return eGameInteractionSharedCallbackKind_Interact;
 	}
 
@@ -528,6 +529,7 @@ int main(int argc, char** argv)
 			std::istringstream(ReadString(line, "parent_id")) >> callback.mlParentEntityId;
 			std::istringstream(ReadString(line, "entity_id")) >> callback.mlEntityId;
 			std::istringstream(ReadString(line, "state")) >> callback.mlState;
+			std::istringstream(ReadString(line, "body_id")) >> callback.mlBodyId;
 			callback.msItem = ReadString(line, "item");
 			callback.msOtherItem = ReadString(line, "other_item");
 			callback.msMapFile = ReadString(line, "map");

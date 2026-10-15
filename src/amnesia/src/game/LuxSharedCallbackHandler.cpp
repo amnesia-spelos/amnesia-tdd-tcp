@@ -2,11 +2,13 @@
 
 #include "GameInteractionProtocolVersion2.h"
 #include "LuxArea_Flashback.h"
+#include "LuxArea_Sticky.h"
 #include "LuxEntity.h"
 #include "LuxInteractionReportHandler.h"
 #include "LuxInventory.h"
 #include "LuxMap.h"
 #include "LuxMapHandler.h"
+#include "LuxPeerDrivenEntityHandler.h"
 #include "LuxPlayer.h"
 #include "LuxProp_Button.h"
 #include "LuxProp_Item.h"
@@ -135,6 +137,30 @@ void cLuxSharedCallbackHandler::OnCombineCallbackRunning(cLuxInventory_Item *apI
 	Publish(callback);
 }
 
+void cLuxSharedCallbackHandler::OnStickyAreaAttached(cLuxArea_Sticky *apArea, iPhysicsBody *apBody)
+{
+	iLuxEntity *pEntity = static_cast<iLuxEntity*>(apBody->GetUserData());
+	if(!IsMapPlaced(apArea) || !IsMapPlaced(pEntity) || !mModel.ReportsStickyAttach(IsHeld(pEntity))) return;
+
+	cGameInteractionSharedCallback callback;
+	callback.mKind = eGameInteractionSharedCallbackKind_StickyAttach;
+	callback.mlParentEntityId = apArea->GetID();
+	callback.mlEntityId = pEntity->GetID();
+	callback.mlBodyId = apBody->GetUniqueID();
+	Publish(callback);
+}
+
+void cLuxSharedCallbackHandler::DetachForDrive(iLuxProp *apProp)
+{
+	cLuxMap *pMap = gpBase->mpMapHandler->GetCurrentMap();
+	if(pMap==NULL) return;
+
+	mModel.BeginRun();
+	for(int i=0; i<apProp->GetBodyNum(); ++i)
+		pMap->DetachBodyFromStickyArea(apProp->GetBody(i));
+	mModel.EndRun();
+}
+
 void cLuxSharedCallbackHandler::OnLocalEntityStateChanged(iLuxEntity *apEntity,
 	eGameInteractionEntityStateKind aKind, bool abBefore, bool abAfter)
 {
@@ -207,6 +233,8 @@ bool cLuxSharedCallbackHandler::RunRegistration(cLuxMap *apMap, const cGameInter
 		return PickUp(pEntity);
 	case eGameInteractionSharedCallbackKind_Flashback:
 		return StartFlashback(pEntity);
+	case eGameInteractionSharedCallbackKind_StickyAttach:
+		return AttachToStickyArea(apMap->GetEntityByID(aCallback.mlParentEntityId), pEntity, aCallback.mlBodyId);
 	default:
 		return false;
 	}
@@ -239,6 +267,26 @@ bool cLuxSharedCallbackHandler::Combine(const cGameInteractionSharedCallback& aC
 	cLuxCombineItemsCallback *pCallback = pInventory->GetCombineCallback(aCallback.msItem, aCallback.msOtherItem);
 	if(pCallback==NULL) return false;
 	pInventory->RunCombineCallback(pCallback);
+	return true;
+}
+
+// The Holder's game already decided, so the body attaches whatever AllowAttachment says. An area that
+// already holds a body, as when this game attached it first, does not take another.
+bool cLuxSharedCallbackHandler::AttachToStickyArea(iLuxEntity *apArea, iLuxEntity *apEntity, int alBodyId)
+{
+	if(!IsMapPlaced(apArea) || apArea->GetDestroyMe() || !apArea->IsActive() ||
+		!IsAreaOfType(apArea, eLuxAreaType_Sticky)) return false;
+	cLuxArea_Sticky *pArea = static_cast<cLuxArea_Sticky*>(apArea);
+	if(pArea->GetAttachedBody()) return false;
+
+	if(apEntity->GetDestroyMe() || !apEntity->IsActive() || apEntity->GetEntityType()!=eLuxEntityType_Prop) return false;
+	iPhysicsBody *pBody = static_cast<iLuxProp*>(apEntity)->GetBodyFromID(alBodyId);
+	if(pBody==NULL) return false;
+
+	// The entity stops following the Holder's samples, so local physics and the area take it from here.
+	if(apEntity->IsPeerDriven() && gpBase->mpPeerDrivenEntityHandler)
+		gpBase->mpPeerDrivenEntityHandler->ReleaseEntity(apEntity->GetID());
+	pArea->AttachBodyFromSharedCallback(pBody);
 	return true;
 }
 

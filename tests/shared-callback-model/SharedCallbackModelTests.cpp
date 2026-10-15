@@ -72,6 +72,19 @@ namespace
 		model.EndRun();
 	}
 
+	void OnlyTheHoldersGameDecidesAndReportsAStickyAttach()
+	{
+		cSharedCallbackModel model;
+		Expect(model.ReportsStickyAttach(true), "a held or Settling entity attaching to a sticky area is reported");
+		Expect(!model.ReportsStickyAttach(false), "an entity nobody here Holds attaching is not reported");
+		Expect(cSharedCallbackModel::ChecksStickyAttach(false), "a sticky area checks a local entity's bodies");
+		Expect(!cSharedCallbackModel::ChecksStickyAttach(true),
+			"a sticky area neither attaches nor runs its AttachFunction for a Peer-Driven Entity");
+		model.BeginRun();
+		Expect(!model.ReportsStickyAttach(true), "an attach a Peer's Command ran is not reported");
+		model.EndRun();
+	}
+
 	void ARunAndEverythingNestedInItIsNeverReported()
 	{
 		cSharedCallbackModel model;
@@ -204,6 +217,7 @@ int main()
 	LocalEntityStateChangesAreReportedOnlyOnceAndNeverDuringReplay();
 	OnlyALocalPickupOfANonConsumableIsReported();
 	OnlyALocalCombineOfNotTwoConsumablesIsReported();
+	OnlyTheHoldersGameDecidesAndReportsAStickyAttach();
 	ARunAndEverythingNestedInItIsNeverReported();
 	ACollideRunHonoursTheStatesFilter();
 	AnEntityCollideRunKeepsTheEdgeSoTheLocalCheckDoesNotFireAgain();

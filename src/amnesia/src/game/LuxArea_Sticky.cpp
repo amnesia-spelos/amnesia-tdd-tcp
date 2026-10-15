@@ -22,6 +22,7 @@
 #include "LuxMap.h"
 #include "LuxPlayer.h"
 #include "LuxPlayerState.h"
+#include "LuxSharedCallbackHandler.h"
 
 #include "LuxProp.h"
 
@@ -198,6 +199,14 @@ void cLuxArea_Sticky::AttachBody(iPhysicsBody *apBody)
 
 	mpAttachedBody = apBody;
 	mpLastAttachedBody = mpAttachedBody;
+}
+
+//-----------------------------------------------------------------------
+
+void cLuxArea_Sticky::AttachBodyFromSharedCallback(iPhysicsBody *apBody)
+{
+	if(msAttachFunction!="") mpMap->RunScript(GetCallbackFunc(msAttachFunction,apBody));
+	AttachBody(apBody);
 }
 
 //-----------------------------------------------------------------------
@@ -380,6 +389,11 @@ void cLuxArea_Sticky::UpdateCollision(float afTimeStep)
 		//If the previously attached body is still inside, then skip it.
 		if(pBody == mpLastAttachedBody) continue;
 
+		//////////////////////////
+		//The game of the player who Holds a Peer-Driven Entity decides whether it attaches.
+		iLuxEntity *pBodyEntity = static_cast<iLuxEntity*>(pBody->GetUserData());
+		if(pBodyEntity && !cSharedCallbackModel::ChecksStickyAttach(pBodyEntity->IsPeerDriven())) continue;
+
 		///////////////////////////
 		// See if body is right for attaching
 		mbAllowAttachment = false;
@@ -409,6 +423,8 @@ void cLuxArea_Sticky::UpdateCollision(float afTimeStep)
 		///////////////////////////
 		// Attach
 		AttachBody(pBody);
+		if(mpAttachedBody==pBody && gpBase->mpSharedCallbackHandler)
+			gpBase->mpSharedCallbackHandler->OnStickyAreaAttached(this, pBody);
 	}
 
 }

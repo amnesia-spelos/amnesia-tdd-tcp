@@ -7,6 +7,7 @@
 #include "LuxPlayerState_Interact.h"
 #include "LuxProp.h"
 #include "LuxProp_Object.h"
+#include "LuxSharedCallbackHandler.h"
 #include "LuxSocketServer.h"
 
 namespace
@@ -202,7 +203,12 @@ cLuxPeerDrivenEntityHandler::cLuxPeerDrivenEntityHandler() : iLuxUpdateable("Lux
 // The gateway calls the Commands only while a map is loaded, and only for the current map.
 eGameInteractionEntityOutcome cLuxPeerDrivenEntityHandler::DriveEntity(int alEntityId)
 {
-	cLuxPeerDrivenEntityWorld world(gpBase->mpMapHandler->GetCurrentMap(), m_mapBodyGravity);
+	cLuxMap *pMap = gpBase->mpMapHandler->GetCurrentMap();
+	cLuxPeerDrivenEntityWorld world(pMap, m_mapBodyGravity);
+	// Detaching restores the body's mass and gravity, so driving records and later restores those.
+	if(!mModel.IsDriving(alEntityId) && world.FindEntity(alEntityId)==eGameInteractionEntityOutcome_Success &&
+		gpBase->mpSharedCallbackHandler)
+		gpBase->mpSharedCallbackHandler->DetachForDrive(static_cast<iLuxProp*>(pMap->GetEntityByID(alEntityId)));
 	const eGameInteractionEntityOutcome outcome = mModel.Drive(alEntityId, world);
 	// A Peer-Driven Entity's motion is no longer the local game's to report.
 	if(outcome==eGameInteractionEntityOutcome_Success && gpBase->mpInteractionReportHandler)

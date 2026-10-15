@@ -78,6 +78,9 @@ public:
 	//Actions
 	void AttachBody(iPhysicsBody *apBody);
 	void DetachBody();
+	// The Holder's game attached the body, so this runs the AttachFunction and attaches it whatever
+	// AllowAttachment says.
+	void AttachBodyFromSharedCallback(iPhysicsBody *apBody);
 
 	//////////////////////
 	//Properties

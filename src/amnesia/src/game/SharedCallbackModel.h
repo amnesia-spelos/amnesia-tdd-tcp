@@ -37,6 +37,12 @@ public:
 	// A combine of two consumables stays local; a combine with at least one other item is shared.
 	bool ReportsCombine(bool abConsumable, bool abOtherConsumable) const
 	{ return !(abConsumable && abOtherConsumable) && ReportsCallback(); }
+	// A sticky area attaching an entity the local player Holds is shared, because the other games follow
+	// that entity rather than attach it themselves.
+	bool ReportsStickyAttach(bool abHeld) const { return abHeld && ReportsCallback(); }
+	// Whether a sticky area checks a body for attaching, and runs its AttachFunction. The Holder's game
+	// decides for a Peer-Driven Entity.
+	static bool ChecksStickyAttach(bool abPeerDriven) { return !abPeerDriven; }
 	// A collide callback is shared when the local player's body is its parent, or when the local player
 	// Holds either side, because the other games then follow that entity rather than collide it.
 	bool ReportsCollide(const cSharedCollide& aCollide) const;
