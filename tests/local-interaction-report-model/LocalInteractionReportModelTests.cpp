@@ -1,5 +1,6 @@
 #include "LocalInteractionReportModel.h"
 
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <map>
@@ -35,6 +36,18 @@ namespace
 		{
 			std::vector<cLocalInteractionBody>& vBodies = m_mapEntities[alEntityId];
 			for (size_t i = 0; i < vBodies.size(); ++i) vBodies[i].mState.mPosition.mfX = afX;
+		}
+
+		// Turns every body of the entity afDegrees about the y axis from no rotation.
+		void Turn(int alEntityId, float afDegrees)
+		{
+			const float fHalfRadians = afDegrees * 3.14159265f / 360.0f;
+			std::vector<cLocalInteractionBody>& vBodies = m_mapEntities[alEntityId];
+			for (size_t i = 0; i < vBodies.size(); ++i)
+			{
+				vBodies[i].mState.mOrientation = cGameInteractionQuaternion(0.0f, sinf(fHalfRadians), 0.0f,
+					cosf(fHalfRadians));
+			}
 		}
 
 		void SetAsleep(int alEntityId, bool abAsleep, size_t alBodyIndex = static_cast<size_t>(-1))
@@ -109,6 +122,8 @@ namespace
 		model.RecordContact(PlayerTouches(20));
 		Expect(TakeEvents(model).empty(), "a contact is acted on only by the next update");
 		model.Update(world, 100.0);
+		world.Move(20, 21.0f);
+		model.Update(world, 108.0);
 		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
 		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_ReportContact, 20),
 			"a prop the local player touched raises reportcontact");
@@ -140,6 +155,9 @@ namespace
 		model.RecordContact(EntityTouches(99, 21));
 		model.RecordContact(EntityTouches(10, 20));
 		model.Update(world, 16.0);
+		world.Move(20, 21.0f);
+		world.Move(21, 22.0f);
+		model.Update(world, 32.0);
 		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
 		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_ReportContact, 20),
 			"only the thrown prop's contact raises reportcontact");
@@ -183,25 +201,36 @@ namespace
 		model.Update(world, 0.0);
 		TakeEvents(model);
 
-		// In one physics step the thrown prop hits the bottom crate, which knocks the next one.
+		// The thrown prop hits the bottom crate, which rests against the next one. A step later the crate
+		// moves and knocks the next one, which in turn knocks the one after it.
 		model.RecordContact(EntityTouches(20, 21));
 		model.RecordContact(EntityTouches(10, 20));
 		model.Update(world, 16.0);
-		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
-		Expect(vEvents.size() == 2 && IsEvent(vEvents[0], eGameInteractionEvent_ReportContact, 20) &&
-			IsEvent(vEvents[1], eGameInteractionEvent_ReportContact, 21),
-			"a prop knocked by a knocked prop in the same step is reported after it");
-
-		model.RecordContact(EntityTouches(21, 22));
+		Expect(TakeEvents(model).empty(), "a knocked prop that has not moved yet knocks nothing");
+		world.Move(20, 21.0f);
+		model.RecordContact(EntityTouches(20, 21));
 		model.Update(world, 32.0);
+		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_ReportContact, 20),
+			"the knocked prop is reported once it moves");
+
+		world.Move(21, 22.0f);
+		model.RecordContact(EntityTouches(21, 22));
+		model.Update(world, 48.0);
+		vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_ReportContact, 21),
+			"a prop knocked in the step the knocked prop moved is reported after it");
+
+		world.Move(22, 23.0f);
+		model.Update(world, 64.0);
 		vEvents = TakeEvents(model);
 		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_ReportContact, 22),
-			"a prop knocked by a knocked prop in a later step is reported");
+			"a prop knocked further down the stack is reported");
 		Expect(Reports(model, 20) && Reports(model, 21) && Reports(model, 22), "the whole toppled stack is reported");
 		Expect(!Reports(model, 23), "an untouched prop is not");
 
 		for (int lEntityId = 10; lEntityId <= 22; ++lEntityId) world.SetAsleep(lEntityId, true);
-		model.Update(world, 48.0);
+		model.Update(world, 80.0);
 		vEvents = TakeEvents(model);
 		Expect(vEvents.size() == 4, "every prop of the stack settles");
 		Expect(model.GetReportedBodies().empty(), "a settled stack leaves the report");
@@ -231,6 +260,8 @@ namespace
 
 		model.RecordContact(EntityTouches(10, 22, 2));
 		model.Update(world, 48.0);
+		world.Move(22, 23.0f);
+		model.Update(world, 64.0);
 		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
 		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_ReportContact, 22),
 			"a prop that fits exactly into 32 bodies enters by contact");
@@ -264,14 +295,196 @@ namespace
 		cLocalInteractionReportModel model;
 		model.RecordContact(PlayerTouches(20));
 		model.Update(world, 1000.0);
-		TakeEvents(model);
+		world.Move(20, 21.0f);
+		model.Update(world, 1016.0);
+		Expect(TakeEvents(model).size() == 1, "the knocked prop moved");
 
 		model.Update(world, 1000.0 + cLocalInteractionReportModel::kSettlingCapMs - 1.0);
-		Expect(TakeEvents(model).empty(), "a knocked prop is reported until the cap");
+		Expect(TakeEvents(model).empty() && Reports(model, 20), "a knocked prop is reported until the cap");
 		model.Update(world, 1000.0 + cLocalInteractionReportModel::kSettlingCapMs);
 		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
 		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_ReportSettled, 20),
 			"a knocked prop settles at the cap counted from its contact");
+	}
+
+	void TestATouchThatDoesNotMoveThePropRaisesNothing()
+	{
+		cFakeWorld world;
+		world.Place(20);
+		cLocalInteractionReportModel model;
+
+		// The character's push wakes the prop, but the prop does not move.
+		model.RecordContact(PlayerTouches(20));
+		model.Update(world, 100.0);
+		world.Move(20, 20.005f);
+		model.Update(world, 116.0);
+		Expect(!Reports(model, 20), "a touched prop that has not moved is not reported");
+		world.SetAsleep(20, true);
+		model.Update(world, 132.0);
+		Expect(TakeEvents(model).empty(), "a touched prop that sleeps without moving raises nothing");
+		Expect(!Reports(model, 20), "a touched prop that sleeps without moving is never reported");
+	}
+
+	void TestATouchThatMovesThePropReportsItFromThenOn()
+	{
+		cFakeWorld world;
+		world.Place(20);
+		cLocalInteractionReportModel model;
+
+		model.RecordContact(PlayerTouches(20));
+		model.Update(world, 100.0);
+		world.Move(20, 20.02f);
+		model.Update(world, 116.0);
+		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_ReportContact, 20),
+			"a touched prop that moves about 2 cm raises reportcontact");
+		Expect(Reports(model, 20) && model.GetReportedBodies()[0].mState.mPosition.mfX == 20.02f,
+			"a touched prop that moved is reported from that update");
+
+		world.Move(20, 20.0f);
+		model.Update(world, 132.0);
+		Expect(TakeEvents(model).empty() && Reports(model, 20), "a prop that moved raises reportcontact once");
+		world.SetAsleep(20, true);
+		model.Update(world, 148.0);
+		vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_ReportSettled, 20),
+			"a touched prop that moved settles");
+	}
+
+	void TestATouchThatTurnsThePropReportsIt()
+	{
+		cFakeWorld world;
+		world.Place(20);
+		world.Place(21);
+		cLocalInteractionReportModel model;
+
+		model.RecordContact(PlayerTouches(20));
+		model.RecordContact(PlayerTouches(21));
+		model.Update(world, 100.0);
+		world.Turn(20, 3.0f);
+		world.Turn(21, 1.0f);
+		model.Update(world, 116.0);
+		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_ReportContact, 20),
+			"a touched prop that turns about 3 degrees in place raises reportcontact");
+		Expect(Reports(model, 20) && !Reports(model, 21), "a touched prop that turns about 1 degree is not reported");
+	}
+
+	void TestTheTouchSettleTouchLoopOfAPlayerRestingAgainstAPropRaisesNothing()
+	{
+		cFakeWorld world;
+		world.Place(20);
+		cLocalInteractionReportModel model;
+
+		double fTimeMs = 0.0;
+		for (int lRound = 0; lRound < 5; ++lRound)
+		{
+			// The character's push wakes the resting prop on every physics step, and it falls asleep again.
+			world.SetAsleep(20, false);
+			model.RecordContact(PlayerTouches(20));
+			model.Update(world, fTimeMs += 16.0);
+			model.RecordContact(PlayerTouches(20));
+			model.Update(world, fTimeMs += 16.0);
+			world.SetAsleep(20, true);
+			model.Update(world, fTimeMs += 16.0);
+		}
+		Expect(TakeEvents(model).empty(), "a player resting against a prop raises nothing round after round");
+		Expect(model.GetReportedBodies().empty(), "a player resting against a prop reports nothing");
+	}
+
+	void TestATouchedPropThatNeverMovesOrSleepsLeavesSilentlyAtTheCap()
+	{
+		cFakeWorld world;
+		world.Place(10, cLocalInteractionReportModel::kMaxBodies - 1);
+		world.Place(20);
+		world.Place(21);
+		cLocalInteractionReportModel model;
+		model.StartInteraction(10, 0, false, cLocalInteractionReportModel::kMaxBodies - 1);
+		TakeEvents(model);
+
+		model.RecordContact(PlayerTouches(20));
+		model.Update(world, 1000.0);
+		model.RecordContact(PlayerTouches(21));
+		model.Update(world, 1000.0 + cLocalInteractionReportModel::kSettlingCapMs - 1.0);
+		world.Move(21, 22.0f);
+		model.Update(world, 1000.0 + cLocalInteractionReportModel::kSettlingCapMs - 1.0);
+		Expect(TakeEvents(model).empty(), "a touched prop counts toward the 32 bodies until the cap");
+
+		model.Update(world, 1000.0 + cLocalInteractionReportModel::kSettlingCapMs);
+		Expect(TakeEvents(model).empty(), "a touched prop that never moved leaves at the cap without reportsettled");
+		model.RecordContact(PlayerTouches(21));
+		model.Update(world, 1000.0 + cLocalInteractionReportModel::kSettlingCapMs + 16.0);
+		world.Move(21, 23.0f);
+		model.Update(world, 1000.0 + cLocalInteractionReportModel::kSettlingCapMs + 32.0);
+		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_ReportContact, 21),
+			"a touched prop that left frees its bodies");
+	}
+
+	void TestOnlyATouchedPropThatMovedKnocksOthersIntoTheReport()
+	{
+		cFakeWorld world;
+		for (int lEntityId = 20; lEntityId <= 22; ++lEntityId) world.Place(lEntityId);
+		cLocalInteractionReportModel model;
+
+		// A resting pile: the player leans on the outer prop, which rests against the next one.
+		model.RecordContact(PlayerTouches(20));
+		model.Update(world, 0.0);
+		model.RecordContact(EntityTouches(20, 21));
+		model.Update(world, 16.0);
+		world.Move(21, 22.0f);
+		model.Update(world, 32.0);
+		Expect(TakeEvents(model).empty() && !Reports(model, 21),
+			"a touched prop that has not moved knocks nothing into the report");
+
+		world.Move(20, 21.0f);
+		model.Update(world, 48.0);
+		TakeEvents(model);
+		model.RecordContact(EntityTouches(20, 22));
+		model.Update(world, 64.0);
+		world.Move(22, 23.0f);
+		model.Update(world, 80.0);
+		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_ReportContact, 22),
+			"a touched prop that moved knocks others into the report");
+	}
+
+	void TestGrabbingATouchedPropThatHasNotMovedHoldsIt()
+	{
+		cFakeWorld world;
+		world.Place(20);
+		cLocalInteractionReportModel model;
+		model.RecordContact(PlayerTouches(20));
+		model.Update(world, 0.0);
+
+		model.StartInteraction(20, 0, false, 1);
+		std::vector<cLocalInteractionReportEvent> vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 1 && IsEvent(vEvents[0], eGameInteractionEvent_InteractionStarted, 20),
+			"grabbing a touched prop that has not moved raises interactionstart");
+		world.SetAsleep(20, true);
+		model.Update(world, 16.0);
+		Expect(TakeEvents(model).empty() && Reports(model, 20), "a grabbed prop is reported while held, even asleep");
+
+		model.EndInteraction(eGameInteractionEnding_Released, 32.0);
+		model.Update(world, 48.0);
+		vEvents = TakeEvents(model);
+		Expect(vEvents.size() == 2 && IsEvent(vEvents[1], eGameInteractionEvent_ReportSettled, 20),
+			"a grabbed prop settles after its release");
+	}
+
+	void TestATouchedPropThatBreaksBeforeMovingRaisesNothing()
+	{
+		cFakeWorld world;
+		world.Place(20);
+		cLocalInteractionReportModel model;
+		model.RecordContact(PlayerTouches(20));
+		model.Update(world, 0.0);
+
+		model.Break(20, cGameInteractionBodyState());
+		Expect(TakeEvents(model).empty(), "a touched prop no Peer heard of breaks without reportbroke");
+		world.Move(20, 21.0f);
+		model.Update(world, 16.0);
+		Expect(TakeEvents(model).empty() && !Reports(model, 20), "a touched prop that broke left the report");
 	}
 
 	void TestClearingDropsContactsNotYetActedOn()
@@ -809,6 +1022,14 @@ int main()
 	TestAHeldPropThatDidNotFitNeverEntersByContact();
 	TestAKnockedPropThatNeverSleepsSettlesAtTheCapFromItsContact();
 	TestClearingDropsContactsNotYetActedOn();
+	TestATouchThatDoesNotMoveThePropRaisesNothing();
+	TestATouchThatMovesThePropReportsItFromThenOn();
+	TestATouchThatTurnsThePropReportsIt();
+	TestTheTouchSettleTouchLoopOfAPlayerRestingAgainstAPropRaisesNothing();
+	TestATouchedPropThatNeverMovesOrSleepsLeavesSilentlyAtTheCap();
+	TestOnlyATouchedPropThatMovedKnocksOthersIntoTheReport();
+	TestGrabbingATouchedPropThatHasNotMovedHoldsIt();
+	TestATouchedPropThatBreaksBeforeMovingRaisesNothing();
 	std::cout << "Local interaction report model cases passed\n";
 	return 0;
 }

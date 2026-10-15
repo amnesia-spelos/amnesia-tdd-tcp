@@ -72,6 +72,10 @@ class cLocalInteractionReportModel
 public:
 	// A released entity whose bodies never all sleep settles this long after its interaction ended.
 	static const double kSettlingCapMs;
+	// A prop that entered by contact is reported only once a body moves this far, in world units, or turns
+	// this many degrees, from where the Update that acted on the contact read it.
+	static const float kContactMotionDistance;
+	static const float kContactMotionDegrees;
 	static const size_t kMaxBodies = 32;
 
 	cLocalInteractionReportModel();
@@ -85,7 +89,8 @@ public:
 	void EndInteraction(eGameInteractionEnding aEnding, double afTimeMs);
 
 	// A reported entity that broke raises reportbroke with the final state of its break body, and leaves
-	// the report. One the local player is holding raises reportbroke right after its interaction ends as
+	// the report. One that entered by contact and has not moved leaves it without an Event, since no Peer
+	// heard of it. One the local player is holding raises reportbroke right after its interaction ends as
 	// destroyed instead, whether it is reported or not.
 	void Break(int alEntityId, const cGameInteractionBodyState& aFinalState);
 
@@ -94,8 +99,10 @@ public:
 	void StopReporting(int alEntityId);
 
 	// A contact from the physics step, acted on by the next Update. A free, map-placed holdable entity
-	// whose moving body the local player or a reported entity's moving body touched enters the report,
-	// unless a Peer drives it or its bodies do not fit. One it touched in turn enters as well.
+	// whose moving body the local player or a reported entity's moving body touched enters the report
+	// tentatively, unless a Peer drives it or its bodies do not fit. It raises reportcontact and is
+	// reported only once the contact moves it; until then it raises nothing, knocks nothing into the
+	// report, and leaves silently when it settles. Once it has moved, one it touches enters as well.
 	void RecordContact(const cLocalInteractionContact& aContact);
 
 	// Reads every reported entity's bodies, and settles the released ones whose bodies all sleep or
@@ -115,17 +122,25 @@ public:
 private:
 	struct cReportedEntity
 	{
-		cReportedEntity() : mlEntityId(0), mlBodyCount(0), mbHeld(false), mfEndTimeMs(0.0) {}
+		cReportedEntity() : mlEntityId(0), mlBodyCount(0), mbHeld(false), mbTentative(false), mfEndTimeMs(0.0) {}
 		int mlEntityId;
 		size_t mlBodyCount;
 		bool mbHeld;
+		// Entered by a contact that has not yet moved it: it raises nothing and none of its bodies are
+		// reported until it moves.
+		bool mbTentative;
 		// When its interaction ended, while it is not held.
 		double mfEndTimeMs;
+		// Its bodies as the Update that acted on its contact read them, while it is tentative.
+		std::vector<cLocalInteractionBody> mvBaseline;
 	};
 
 	// Enters the free entities the recorded contacts touched, and forgets the contacts.
-	void EnterByContacts(double afTimeMs);
-	bool EnterByContact(const cLocalInteractionContact& aContact, double afTimeMs);
+	void EnterByContacts(const iLocalInteractionWorld& aWorld, double afTimeMs);
+	void EnterByContact(const cLocalInteractionContact& aContact, const iLocalInteractionWorld& aWorld,
+		double afTimeMs);
+	static bool HasMoved(const std::vector<cLocalInteractionBody>& avBaseline,
+		const std::vector<cLocalInteractionBody>& avBodies);
 	cReportedEntity* FindReported(int alEntityId);
 	size_t CountReportedBodies() const;
 	void Raise(eGameInteractionEventType aType, int alEntityId, int alBodyId = 0,

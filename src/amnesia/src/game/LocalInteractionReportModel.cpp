@@ -1,6 +1,15 @@
 #include "LocalInteractionReportModel.h"
 
+#include <cmath>
+
 const double cLocalInteractionReportModel::kSettlingCapMs = 3000.0;
+const float cLocalInteractionReportModel::kContactMotionDistance = 0.01f;
+const float cLocalInteractionReportModel::kContactMotionDegrees = 2.0f;
+
+namespace
+{
+	const float kPi = 3.14159265f;
+}
 
 cLocalInteractionReportModel::cLocalInteractionReportModel()
 	: mbInteracting(false), mlInteractionEntityId(0), mlInteractionBodyId(0), mbInteractionBroke(false) {}
@@ -25,6 +34,8 @@ void cLocalInteractionReportModel::StartInteraction(int alEntityId, int alBodyId
 		pReported->mlBodyCount = alBodyCount;
 	}
 	pReported->mbHeld = true;
+	pReported->mbTentative = false;
+	pReported->mvBaseline.clear();
 }
 
 void cLocalInteractionReportModel::EndInteraction(eGameInteractionEnding aEnding, double afTimeMs)
@@ -59,9 +70,11 @@ void cLocalInteractionReportModel::Break(int alEntityId, const cGameInteractionB
 		mInteractionBreakState = aFinalState;
 		return;
 	}
-	if (FindReported(alEntityId) == NULL) return;
+	const cReportedEntity* pReported = FindReported(alEntityId);
+	if (pReported == NULL) return;
+	const bool bTentative = pReported->mbTentative;
 	StopReporting(alEntityId);
-	RaiseReportBroke(alEntityId, aFinalState);
+	if (!bTentative) RaiseReportBroke(alEntityId, aFinalState);
 }
 
 void cLocalInteractionReportModel::StopReporting(int alEntityId)
@@ -86,13 +99,11 @@ void cLocalInteractionReportModel::RecordContact(const cLocalInteractionContact&
 
 void cLocalInteractionReportModel::Update(const iLocalInteractionWorld& aWorld, double afTimeMs)
 {
-	EnterByContacts(afTimeMs);
-
 	mvReportedBodies.clear();
 	std::vector<cLocalInteractionBody> vBodies;
 	for (size_t i = 0; i < mvReported.size();)
 	{
-		const cReportedEntity& reported = mvReported[i];
+		cReportedEntity& reported = mvReported[i];
 		if (!aWorld.GetBodies(reported.mlEntityId, vBodies))
 		{
 			mvReported.erase(mvReported.begin() + i);
@@ -101,7 +112,23 @@ void cLocalInteractionReportModel::Update(const iLocalInteractionWorld& aWorld, 
 
 		bool bAllAsleep = true;
 		for (size_t j = 0; j < vBodies.size(); ++j) bAllAsleep = bAllAsleep && vBodies[j].mbAsleep;
-		if (!reported.mbHeld && (bAllAsleep || afTimeMs - reported.mfEndTimeMs >= kSettlingCapMs))
+		const bool bSettled = bAllAsleep || afTimeMs - reported.mfEndTimeMs >= kSettlingCapMs;
+		bool bJustMoved = false;
+		if (reported.mbTentative)
+		{
+			if (!HasMoved(reported.mvBaseline, vBodies))
+			{
+				if (bSettled) mvReported.erase(mvReported.begin() + i);
+				else ++i;
+				continue;
+			}
+			reported.mbTentative = false;
+			reported.mvBaseline.clear();
+			bJustMoved = true;
+			Raise(eGameInteractionEvent_ReportContact, reported.mlEntityId);
+		}
+		// A prop the contact just moved is reported at least once before it settles.
+		if (!bJustMoved && !reported.mbHeld && bSettled)
 		{
 			Raise(eGameInteractionEvent_ReportSettled, reported.mlEntityId);
 			mvReported.erase(mvReported.begin() + i);
@@ -118,6 +145,9 @@ void cLocalInteractionReportModel::Update(const iLocalInteractionWorld& aWorld, 
 		}
 		++i;
 	}
+
+	// After the motion check, so that a prop moved in the last step already knocks others in.
+	EnterByContacts(aWorld, afTimeMs);
 }
 
 std::vector<cLocalInteractionReportEvent> cLocalInteractionReportModel::TakeEvents()
@@ -136,40 +166,60 @@ void cLocalInteractionReportModel::Clear()
 	mbInteracting = false;
 }
 
-void cLocalInteractionReportModel::EnterByContacts(double afTimeMs)
+void cLocalInteractionReportModel::EnterByContacts(const iLocalInteractionWorld& aWorld, double afTimeMs)
 {
-	// A prop knocked in this step may itself have knocked another one, recorded before it, so the
-	// contacts are gone over until none enters anything.
-	bool bEntered = true;
-	while (bEntered)
-	{
-		bEntered = false;
-		for (size_t i = 0; i < mvContacts.size(); ++i)
-		{
-			if (EnterByContact(mvContacts[i], afTimeMs)) bEntered = true;
-		}
-	}
+	for (size_t i = 0; i < mvContacts.size(); ++i) EnterByContact(mvContacts[i], aWorld, afTimeMs);
 	mvContacts.clear();
 }
 
-bool cLocalInteractionReportModel::EnterByContact(const cLocalInteractionContact& aContact, double afTimeMs)
+void cLocalInteractionReportModel::EnterByContact(const cLocalInteractionContact& aContact,
+	const iLocalInteractionWorld& aWorld, double afTimeMs)
 {
-	if (!aContact.mbByLocalPlayer && FindReported(aContact.mlSourceEntityId) == NULL) return false;
+	if (!aContact.mbByLocalPlayer)
+	{
+		const cReportedEntity* pSource = FindReported(aContact.mlSourceEntityId);
+		if (pSource == NULL || pSource->mbTentative) return;
+	}
 	const cLocalInteractionContactTarget& touched = aContact.mTouched;
 	if (!touched.mbBodyMoving || !touched.mbHoldable || touched.mbCreatedAtRuntime || touched.mbPeerDriven)
-		return false;
+		return;
 	// A held entity that did not fit stays out of the report until its interaction ends.
-	if (mbInteracting && touched.mlEntityId == mlInteractionEntityId) return false;
-	if (FindReported(touched.mlEntityId) != NULL) return false;
-	if (CountReportedBodies() + touched.mlBodyCount > kMaxBodies) return false;
+	if (mbInteracting && touched.mlEntityId == mlInteractionEntityId) return;
+	if (FindReported(touched.mlEntityId) != NULL) return;
+	if (CountReportedBodies() + touched.mlBodyCount > kMaxBodies) return;
 
 	cReportedEntity entered;
 	entered.mlEntityId = touched.mlEntityId;
 	entered.mlBodyCount = touched.mlBodyCount;
+	entered.mbTentative = true;
 	entered.mfEndTimeMs = afTimeMs;
+	if (!aWorld.GetBodies(touched.mlEntityId, entered.mvBaseline)) return;
 	mvReported.push_back(entered);
-	Raise(eGameInteractionEvent_ReportContact, touched.mlEntityId);
-	return true;
+}
+
+bool cLocalInteractionReportModel::HasMoved(const std::vector<cLocalInteractionBody>& avBaseline,
+	const std::vector<cLocalInteractionBody>& avBodies)
+{
+	const float fMinTurnCos = cosf(kContactMotionDegrees * kPi / 360.0f);
+	for (size_t i = 0; i < avBodies.size(); ++i)
+	{
+		const cGameInteractionBodyState& now = avBodies[i].mState;
+		for (size_t j = 0; j < avBaseline.size(); ++j)
+		{
+			if (avBaseline[j].mlBodyId != avBodies[i].mlBodyId) continue;
+			const cGameInteractionBodyState& then = avBaseline[j].mState;
+			const float fDx = now.mPosition.mfX - then.mPosition.mfX;
+			const float fDy = now.mPosition.mfY - then.mPosition.mfY;
+			const float fDz = now.mPosition.mfZ - then.mPosition.mfZ;
+			if (fDx * fDx + fDy * fDy + fDz * fDz > kContactMotionDistance * kContactMotionDistance) return true;
+			// Two orientations q and -q are the same, and |q . p| is the cosine of half the turn between them.
+			const cGameInteractionQuaternion& q = now.mOrientation;
+			const cGameInteractionQuaternion& p = then.mOrientation;
+			const float fDot = q.mfX * p.mfX + q.mfY * p.mfY + q.mfZ * p.mfZ + q.mfW * p.mfW;
+			if (fabsf(fDot) < fMinTurnCos) return true;
+		}
+	}
+	return false;
 }
 
 cLocalInteractionReportModel::cReportedEntity* cLocalInteractionReportModel::FindReported(int alEntityId)
