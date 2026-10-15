@@ -6,12 +6,13 @@
 #include "SharedCallbackModel.h"
 
 class cLuxArea_Flashback;
+class cLuxInventory_Item;
 class cLuxProp_Item;
 
 //----------------------------------------------
 
 // Shares Map Script callbacks between games (amnesia-multiplayer's ADR 0006, not this repository's). It reports the collide,
-// interact, and use-item callbacks, the item pickups, and the Flashback areas the local player triggers,
+// interact, use-item, and combine callbacks, the item pickups, and the Flashback areas the local player triggers,
 // naming each registration by identifiers only, and runs the registration a Peer's Command names as the
 // local trigger would. While it runs one, nothing that runs is reported back and scripts cannot take the
 // player's control or camera. Only map-placed entities are named, because an entity created at runtime
@@ -29,6 +30,9 @@ public:
 	void OnItemPickedUp(cLuxProp_Item *apItem);
 	// The Flashback area is about to start its flashback. Only the local player walking in is reported.
 	void OnFlashbackStarting(cLuxArea_Flashback *apArea);
+	// The local player combined the items and their combine callback is about to run. A combine of two
+	// consumables is not reported.
+	void OnCombineCallbackRunning(cLuxInventory_Item *apItem, cLuxInventory_Item *apOtherItem);
 
 	void OnLocalEntityStateChanged(iLuxEntity *apEntity, eGameInteractionEntityStateKind aKind,
 		bool abBefore, bool abAfter);
@@ -46,6 +50,7 @@ private:
 	bool RunRegistration(cLuxMap *apMap, const cGameInteractionSharedCallback& aCallback);
 	bool PickUp(iLuxEntity *apEntity);
 	bool StartFlashback(iLuxEntity *apEntity);
+	bool Combine(const cGameInteractionSharedCallback& aCallback);
 	void Publish(cGameInteractionSharedCallback& aCallback);
 
 	cSharedCallbackModel mModel;

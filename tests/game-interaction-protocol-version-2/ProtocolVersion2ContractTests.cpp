@@ -319,6 +319,7 @@ namespace
 		if (name == "useitem") return eGameInteractionSharedCallbackKind_UseItem;
 		if (name == "pickup") return eGameInteractionSharedCallbackKind_Pickup;
 		if (name == "flashback") return eGameInteractionSharedCallbackKind_Flashback;
+		if (name == "combine") return eGameInteractionSharedCallbackKind_Combine;
 		return eGameInteractionSharedCallbackKind_Interact;
 	}
 
@@ -528,6 +529,7 @@ int main(int argc, char** argv)
 			std::istringstream(ReadString(line, "entity_id")) >> callback.mlEntityId;
 			std::istringstream(ReadString(line, "state")) >> callback.mlState;
 			callback.msItem = ReadString(line, "item");
+			callback.msOtherItem = ReadString(line, "other_item");
 			callback.msMapFile = ReadString(line, "map");
 			actual = cGameInteractionProtocolVersion2::SerializeEvent(
 				cGameInteractionEvent(eGameInteractionEvent_SharedCallback, callback));

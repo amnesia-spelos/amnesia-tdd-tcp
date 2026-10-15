@@ -4,6 +4,7 @@
 #include "LuxArea_Flashback.h"
 #include "LuxEntity.h"
 #include "LuxInteractionReportHandler.h"
+#include "LuxInventory.h"
 #include "LuxMap.h"
 #include "LuxMapHandler.h"
 #include "LuxPlayer.h"
@@ -116,6 +117,24 @@ void cLuxSharedCallbackHandler::OnFlashbackStarting(cLuxArea_Flashback *apArea)
 	Publish(callback);
 }
 
+void cLuxSharedCallbackHandler::OnCombineCallbackRunning(cLuxInventory_Item *apItem, cLuxInventory_Item *apOtherItem)
+{
+	if(!mModel.ReportsCombine(IsConsumable(apItem->GetType()), IsConsumable(apOtherItem->GetType()))) return;
+	if(!cGameInteractionProtocolVersion2::IsValidItemName(apItem->GetName()) ||
+		!cGameInteractionProtocolVersion2::IsValidItemName(apOtherItem->GetName()))
+	{
+		Log("Game Interaction Protocol: combine callback of items '%s' and '%s' is not shared: their names cannot be sent\n",
+			apItem->GetName().c_str(), apOtherItem->GetName().c_str());
+		return;
+	}
+
+	cGameInteractionSharedCallback callback;
+	callback.mKind = eGameInteractionSharedCallbackKind_Combine;
+	callback.msItem = apItem->GetName();
+	callback.msOtherItem = apOtherItem->GetName();
+	Publish(callback);
+}
+
 void cLuxSharedCallbackHandler::OnLocalEntityStateChanged(iLuxEntity *apEntity,
 	eGameInteractionEntityStateKind aKind, bool abBefore, bool abAfter)
 {
@@ -165,6 +184,8 @@ bool cLuxSharedCallbackHandler::RunSharedCallback(const cGameInteractionSharedCa
 
 bool cLuxSharedCallbackHandler::RunRegistration(cLuxMap *apMap, const cGameInteractionSharedCallback& aCallback)
 {
+	if(aCallback.mKind == eGameInteractionSharedCallbackKind_Combine) return Combine(aCallback);
+
 	iLuxEntity *pEntity = apMap->GetEntityByID(aCallback.mlEntityId);
 	if(!IsMapPlaced(pEntity)) return false;
 
@@ -205,6 +226,19 @@ bool cLuxSharedCallbackHandler::StartFlashback(iLuxEntity *apEntity)
 {
 	if(!apEntity->IsActive() || !IsAreaOfType(apEntity, eLuxAreaType_Flashback)) return false;
 	static_cast<cLuxArea_Flashback*>(apEntity)->StartFlashback();
+	return true;
+}
+
+// Only a combine of two different items the inventory holds runs, so a combine never gives the player
+// items they did not hold. The callback's own script then changes the receiving player's inventory.
+bool cLuxSharedCallbackHandler::Combine(const cGameInteractionSharedCallback& aCallback)
+{
+	cLuxInventory *pInventory = gpBase->mpInventory;
+	if(aCallback.msItem == aCallback.msOtherItem || pInventory->GetItem(aCallback.msItem)==NULL ||
+		pInventory->GetItem(aCallback.msOtherItem)==NULL) return false;
+	cLuxCombineItemsCallback *pCallback = pInventory->GetCombineCallback(aCallback.msItem, aCallback.msOtherItem);
+	if(pCallback==NULL) return false;
+	pInventory->RunCombineCallback(pCallback);
 	return true;
 }
 

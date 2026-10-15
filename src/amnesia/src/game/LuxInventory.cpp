@@ -32,6 +32,7 @@
 #include "LuxJournal.h"
 #include "LuxGlobalDataHandler.h"
 #include "LuxAchievementHandler.h"
+#include "LuxSharedCallbackHandler.h"
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -323,24 +324,8 @@ bool cLuxInventory_Slot::OnMouseUp(iWidget* apWidget, const cGuiMessageData& aDa
 			cLuxCombineItemsCallback *pComb = mpInventory->GetCombineCallback(pItem->GetName(), pPickedItem->GetName());
 			if(pComb)
 			{
-				bool bAutoDestroy = pComb->mbAutoDestroy;
-				tString sCombName = pComb->msName;
-				mpInventory->RunScript(pComb->msFunction+ "(\"" + pComb->msItemA + "\", \"" + pComb->msItemB + "\")" );
-				
-				if(bAutoDestroy) 
-				{
-					tLuxCombineItemsCallbackListIt combIt = mpInventory->mlstCombineCallbacks.begin();
-                    for(; combIt != mpInventory->mlstCombineCallbacks.end(); ++combIt)
-					{
-						cLuxCombineItemsCallback *pCombCallback = *combIt;
-						if(pCombCallback == pComb && sCombName == pCombCallback->msName)
-						{
-							mpInventory->mlstCombineCallbacks.erase(combIt);
-							hplDelete(pComb);
-							break;
-						}
-					}
-				}
+				if(gpBase->mpSharedCallbackHandler) gpBase->mpSharedCallbackHandler->OnCombineCallbackRunning(pItem, pPickedItem);
+				mpInventory->RunCombineCallback(pComb);
 			}
 			else
 			{
@@ -1313,6 +1298,30 @@ cLuxCombineItemsCallback*  cLuxInventory::GetCombineCallback(const tString& asIt
 	}
 
 	return NULL;
+}
+
+//-----------------------------------------------------------------------
+
+void cLuxInventory::RunCombineCallback(cLuxCombineItemsCallback *apCallback)
+{
+	bool bAutoDestroy = apCallback->mbAutoDestroy;
+	tString sCombName = apCallback->msName;
+	RunScript(apCallback->msFunction+ "(\"" + apCallback->msItemA + "\", \"" + apCallback->msItemB + "\")" );
+
+	if(bAutoDestroy)
+	{
+		tLuxCombineItemsCallbackListIt combIt = mlstCombineCallbacks.begin();
+		for(; combIt != mlstCombineCallbacks.end(); ++combIt)
+		{
+			cLuxCombineItemsCallback *pCombCallback = *combIt;
+			if(pCombCallback == apCallback && sCombName == pCombCallback->msName)
+			{
+				mlstCombineCallbacks.erase(combIt);
+				hplDelete(apCallback);
+				break;
+			}
+		}
+	}
 }
 
 //-----------------------------------------------------------------------

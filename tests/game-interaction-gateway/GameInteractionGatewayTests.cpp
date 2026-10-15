@@ -157,7 +157,7 @@ namespace
 		virtual bool RunSharedCallback(const cGameInteractionSharedCallback& aCallback)
 		{
 			mvSharedCallbacks.push_back(aCallback);
-			return aCallback.mlEntityId != 404;
+			return aCallback.mlEntityId != 404 && aCallback.msOtherItem != "not_held";
 		}
 		virtual void SetPeerConnected(bool abConnected) { mbPeerConnected = abConnected; }
 
@@ -1007,11 +1007,19 @@ namespace
 		Expect(adapter.mvSharedCallbacks.size() == 6 &&
 			adapter.mvSharedCallbacks[4].mKind == eGameInteractionSharedCallbackKind_Flashback &&
 			adapter.mvSharedCallbacks[4].mlEntityId == 17, "the game receives the Flashback area's entity");
+		Expect(Exchange(peer, gateway, adapter, "sharedcallback combine hollow_needle_1 stone_hammer_1 " + kCurrentMap +
+			"\nsharedcallback combine hollow_needle_1 not_held " + kCurrentMap + "\n") ==
+			"RESPONSE sharedcallback ok\nRESPONSE sharedcallback not-found\n",
+			"a combine answers not-found when the inventory lacks an item or no combine callback matches");
+		Expect(adapter.mvSharedCallbacks.size() == 8 &&
+			adapter.mvSharedCallbacks[6].mKind == eGameInteractionSharedCallbackKind_Combine &&
+			adapter.mvSharedCallbacks[6].msItem == "hollow_needle_1" &&
+			adapter.mvSharedCallbacks[6].msOtherItem == "stone_hammer_1", "the game receives both combined items");
 
 		adapter.mbMapLoaded = false;
 		Expect(Exchange(peer, gateway, adapter, "sharedcallback interact 5 " + kCurrentMap + "\n") ==
 			"RESPONSE sharedcallback wrong-map\n", "a sharedcallback without a loaded map is wrong-map");
-		Expect(adapter.mvSharedCallbacks.size() == 6, "a wrong-map sharedcallback does not reach the game");
+		Expect(adapter.mvSharedCallbacks.size() == 8, "a wrong-map sharedcallback does not reach the game");
 		Expect(cGameInteractionCommand(eGameInteractionCommand_SharedCallback,
 			cGameInteractionSharedCallbackRequest()).GetClassification() ==
 			eGameInteractionCommandClassification_StateChanging, "running a Shared Callback is state-changing");

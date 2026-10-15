@@ -102,11 +102,14 @@ enum eGameInteractionSharedCallbackKind
 	// The local player picked up a map-placed item that is not a consumable.
 	eGameInteractionSharedCallbackKind_Pickup,
 	// The local player set off a Flashback area, which started its flashback.
-	eGameInteractionSharedCallbackKind_Flashback
+	eGameInteractionSharedCallbackKind_Flashback,
+	// The local player combined two inventory items with a combine callback, not both consumables.
+	eGameInteractionSharedCallbackKind_Combine
 };
 
 // A Map Script callback registration, named by identifiers only, never by function or script text.
-// The parent applies to an entity collide, the state to both collides, and the item to a use-item.
+// The parent applies to an entity collide, the state to both collides, the item to a use-item, and both
+// items, without an entity, to a combine.
 struct cGameInteractionSharedCallback
 {
 	cGameInteractionSharedCallback()
@@ -118,6 +121,7 @@ struct cGameInteractionSharedCallback
 	// 1 when the bodies started colliding and -1 when they stopped.
 	int mlState;
 	std::string msItem;
+	std::string msOtherItem;
 	std::string msMapFile;
 };
 

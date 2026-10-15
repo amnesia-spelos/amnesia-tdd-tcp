@@ -220,6 +220,9 @@ public:
 							const tString& asFunction, bool abAutoDestroy);
 	void RemoveCombineCallback(const tString& asName);
 	cLuxCombineItemsCallback* GetCombineCallback(const tString& asItemA, const tString& asItemB);
+	// Runs the combine callback and removes it when it auto-destroys, as combining its items in the
+	// inventory does, also when a Shared Callback replays the combine.
+	void RunCombineCallback(cLuxCombineItemsCallback *apCallback);
 
 	void RunScript(const tString& asCommand);
 	bool RecompileScript(tString *apOutput);

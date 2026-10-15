@@ -34,6 +34,9 @@ public:
 	{ return abBefore != abAfter && ReportsCallback(); }
 	// Consumables (tinderboxes, oil, sanity potions, and laudanum) stay local; every other item is shared.
 	bool ReportsPickup(bool abConsumable) const { return !abConsumable && ReportsCallback(); }
+	// A combine of two consumables stays local; a combine with at least one other item is shared.
+	bool ReportsCombine(bool abConsumable, bool abOtherConsumable) const
+	{ return !(abConsumable && abOtherConsumable) && ReportsCallback(); }
 	// A collide callback is shared when the local player's body is its parent, or when the local player
 	// Holds either side, because the other games then follow that entity rather than collide it.
 	bool ReportsCollide(const cSharedCollide& aCollide) const;

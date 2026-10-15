@@ -60,6 +60,18 @@ namespace
 		model.EndRun();
 	}
 
+	void OnlyALocalCombineOfNotTwoConsumablesIsReported()
+	{
+		cSharedCallbackModel model;
+		Expect(model.ReportsCombine(false, false), "combining two puzzle items is reported");
+		Expect(model.ReportsCombine(true, false) && model.ReportsCombine(false, true),
+			"combining a consumable with a puzzle item is reported");
+		Expect(!model.ReportsCombine(true, true), "combining two consumables is not reported");
+		model.BeginRun();
+		Expect(!model.ReportsCombine(false, false), "a combine a Peer's Command ran is not reported");
+		model.EndRun();
+	}
+
 	void ARunAndEverythingNestedInItIsNeverReported()
 	{
 		cSharedCallbackModel model;
@@ -191,6 +203,7 @@ int main()
 	LocalTriggersAreReportedOutsideASharedCallbackRun();
 	LocalEntityStateChangesAreReportedOnlyOnceAndNeverDuringReplay();
 	OnlyALocalPickupOfANonConsumableIsReported();
+	OnlyALocalCombineOfNotTwoConsumablesIsReported();
 	ARunAndEverythingNestedInItIsNeverReported();
 	ACollideRunHonoursTheStatesFilter();
 	AnEntityCollideRunKeepsTheEdgeSoTheLocalCheckDoesNotFireAgain();
