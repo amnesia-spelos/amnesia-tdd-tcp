@@ -34,6 +34,7 @@
 #include "LuxMoveState_Normal.h"
 #include "LuxDebugHandler.h"
 #include "LuxProgressLogHandler.h"
+#include "LuxSocketServer.h"
 #include "LuxHelpFuncs.h"
 
 #include "LuxProp.h"
@@ -1946,6 +1947,9 @@ bool iLuxEnemy::TriggersDisabled()
 bool iLuxEnemy::Attack(const cEnemyAttackSizeData &aSizeData, const cEnemyAttackDamageData &aDamageData, float afDamageMul)
 {
 	if(mbEnemyDriven) return false;
+	if(mEnemyType == eLuxEnemyType_Grunt && gpBase->mpSocketServer)
+		gpBase->mpSocketServer->PublishEvent(cGameInteractionEvent(eGameInteractionEvent_EnemyAttack,
+			GetEnemyAttack(aSizeData, aDamageData)));
 	bool bHitPlayer = false;
 	bool bHit = gpBase->mpMapHelper->ShapeDamage(GetAttackShape(aSizeData.mlShapeIdx), GetDamageShapeMatrix(aSizeData.mvOffset), mpCharBody->GetPosition(),
 												aDamageData.mfMinDamage*afDamageMul, aDamageData.mfMaxDamage*afDamageMul, 
@@ -3072,4 +3076,43 @@ void iLuxEnemy::UpdateEnemyCopy(float afTimeStep)
 	}
 	UpdateSoundState(afTimeStep);
 	UpdateDarknessGlow(afTimeStep);
+}
+
+cGameInteractionEnemyAttack iLuxEnemy::GetEnemyAttack(const cEnemyAttackSizeData &aSizeData, const cEnemyAttackDamageData &aDamageData)
+{
+	cGameInteractionEnemyAttack attack;
+	attack.mlEntityId = GetID();
+	attack.mKind = &aDamageData == &mBreakDoorAttackDamage ? eGameInteractionEnemyAttackKind_BreakDoor :
+		eGameInteractionEnemyAttackKind_Normal;
+	const cVector3f vSize = GetAttackShape(aSizeData.mlShapeIdx)->GetSize();
+	attack.mBoxSize = cGameInteractionVector(vSize.x, vSize.y, vSize.z);
+	attack.mBoxOffset = cGameInteractionVector(aSizeData.mvOffset.x, aSizeData.mvOffset.y, aSizeData.mvOffset.z);
+	attack.msMapFile = mpMap->GetMapPath();
+	return attack;
+}
+
+// The victim's game decides a hit: the reported box is tested against the local player alone, from
+// the copy as this game shows it, so an Avatar is never hit. False when the copy has no such box.
+bool iLuxEnemy::ResolveEnemyAttack(const cGameInteractionEnemyAttack& aAttack)
+{
+	const cVector3f vSize(aAttack.mBoxSize.mfX, aAttack.mBoxSize.mfY, aAttack.mBoxSize.mfZ);
+	iCollideShape *pShape = NULL;
+	for(size_t i=0; i<mvAttackShapes.size() && pShape==NULL; ++i)
+	{
+		if(mvAttackShapes[i]->GetType() == eCollideShapeType_Box &&
+			(mvAttackShapes[i]->GetSize() - vSize).SqrLength() < 0.0001f) pShape = mvAttackShapes[i];
+	}
+	if(pShape==NULL) return false;
+
+	const cEnemyAttackDamageData &damageData = aAttack.mKind == eGameInteractionEnemyAttackKind_BreakDoor ?
+		mBreakDoorAttackDamage : mNormalAttackDamage;
+	const cVector3f vOffset(aAttack.mBoxOffset.mfX, aAttack.mBoxOffset.mfY, aAttack.mBoxOffset.mfZ);
+	bool bHitPlayer = false;
+	gpBase->mpMapHelper->ShapeDamage(pShape, GetDamageShapeMatrix(vOffset), mpCharBody->GetPosition(),
+									damageData.mfMinDamage, damageData.mfMaxDamage, damageData.mfForce, damageData.mfMaxImpulse,
+									damageData.mlStrength, damageData.mfHitSpeed, damageData.mDamageType, damageData.mWeaponHitType,
+									false, true, false, true, &bHitPlayer,
+									gpBase->mpPlayer->GetCharacterBody()->GetCurrentBody());
+	if(bHitPlayer) PlaySound(damageData.msHitSound);
+	return true;
 }

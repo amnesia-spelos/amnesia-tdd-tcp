@@ -266,7 +266,7 @@ bool cLuxMapHelper::ShapeDamage(iCollideShape *apShape, const cMatrixf& a_mtxTra
 								float afMinDamage, float afMaxDamage, float afForce, float afMaxImpulse,
 								int alStrength, float afHitSpeed, eLuxDamageType aDamageType,eLuxWeaponHitType aWeaponHitType,
 								bool abCheckEnemies, bool abCheckPlayer, bool abCheckProps, bool abLethalForPlayer,
-								bool *apHitPlayer)
+								bool *apHitPlayer, iPhysicsBody *apOnlyBody)
 {
 	cLuxMap *pCurrentMap = gpBase->mpMapHandler->GetCurrentMap();
 	if(pCurrentMap==NULL) return  false;	
@@ -299,6 +299,7 @@ bool cLuxMapHelper::ShapeDamage(iCollideShape *apShape, const cMatrixf& a_mtxTra
 	{
 		iPhysicsBody *pBody = vBodies[i];
 
+		if(apOnlyBody && pBody != apOnlyBody) continue;
 		if(pBody->IsActive()==false) continue;
 		if(pBody->GetCollide()==false) continue;
 

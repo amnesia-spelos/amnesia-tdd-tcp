@@ -107,7 +107,7 @@ public:
 						float afMinDamage, float afMaxDamage, float afForce, float afMaxImpulse,
 						int alStrength, float afHitSpeed, eLuxDamageType aDamageType,eLuxWeaponHitType aWeaponHitType,
 						bool abCheckEnemies, bool abCheckPlayer, bool abCheckProps, bool abLethalForPlayer,
-						bool *apHitPlayer=NULL);
+						bool *apHitPlayer=NULL, iPhysicsBody *apOnlyBody=NULL);
 
 	bool CheckLineOfSight(const cVector3f& avStart, const cVector3f& avEnd, bool abCheckShadows);
 

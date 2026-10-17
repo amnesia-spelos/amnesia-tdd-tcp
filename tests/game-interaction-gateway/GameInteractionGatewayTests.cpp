@@ -8,6 +8,7 @@
 #include <iostream>
 #include <limits>
 #include <set>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -35,6 +36,7 @@ namespace
 			mLocalPoseAvailability(eGameInteractionLocalPoseAvailability_Live), mlReportReads(0),
 			mbPlayerInPlay(true), mbPeerConnected(false)
 		{
+			mEnemyAttackOutcome = eGameInteractionCommandOutcome_Success;
 			mLocalPose.mlTimeMs = 1000;
 			mLocalPose.mFeetPosition = cGameInteractionPosition(1.25f, -2.5f, 3.75f);
 			mLocalPose.mfBodyYawDegrees = 90.0f;
@@ -50,6 +52,17 @@ namespace
 		virtual eGameInteractionCommandOutcome ReleaseEnemy(int id)
 		{ mvEntityOperations.push_back("enemy release " + Text(id)); return eGameInteractionCommandOutcome_Success; }
 		virtual void ReleaseDrivenEnemies() { mvEntityOperations.push_back("enemies release all"); }
+		eGameInteractionCommandOutcome mEnemyAttackOutcome;
+		virtual eGameInteractionCommandOutcome ResolveEnemyAttack(const cGameInteractionEnemyAttack& attack)
+		{
+			std::ostringstream text;
+			text << "enemy attack " << attack.mlEntityId << " " <<
+				(attack.mKind == eGameInteractionEnemyAttackKind_BreakDoor ? "breakdoor" : "normal") << " " <<
+				attack.mBoxSize.mfX << " " << attack.mBoxSize.mfY << " " << attack.mBoxSize.mfZ << " " <<
+				attack.mBoxOffset.mfX << " " << attack.mBoxOffset.mfY << " " << attack.mBoxOffset.mfZ;
+			mvEntityOperations.push_back(text.str());
+			return mEnemyAttackOutcome;
+		}
 
 		virtual bool IsMapLoaded() const { return mbMapLoaded; }
 		virtual cGameInteractionPosition GetPosition() const { return mPosition; }
@@ -273,6 +286,7 @@ namespace
 	}
 
 	std::string ReceiveLines(SOCKET aPeer, int alLineCount);
+	std::string ReceiveAvailable(SOCKET aPeer, long alMilliseconds);
 
 	void EnemyReportsFollowSubscriptionAndSession()
 	{
@@ -346,6 +360,80 @@ namespace
 		Receive(peer);
 		SendCommands(peer, gateway, adapter, "protocol 2 enemies\n");
 		Expect(Receive(peer) == "RESPONSE protocol ok 2 enemies\n", "enemies Capability is granted");
+		closesocket(peer);
+	}
+
+	cGameInteractionEnemyAttack GruntAttack()
+	{
+		cGameInteractionEnemyAttack attack;
+		attack.mlEntityId = 7;
+		attack.mKind = eGameInteractionEnemyAttackKind_Normal;
+		attack.mBoxSize = cGameInteractionVector(1.0f, 1.5f, 1.25f);
+		attack.mBoxOffset = cGameInteractionVector(0, 0, 1.0f);
+		attack.msMapFile = "maps/main/level01.map";
+		return attack;
+	}
+
+	void EnemyAttacksAreReportedOnlyToEnemiesSessions()
+	{
+		cGameInteractionGateway gateway;
+		cFakeGameAdapter adapter;
+		Expect(gateway.Listen("127.0.0.1", 0), "listen");
+		SOCKET peer = Connect(gateway, adapter); Receive(peer);
+		SendCommands(peer, gateway, adapter, "protocol 2 interactions\n");
+		Expect(Receive(peer) == "RESPONSE protocol ok 2 interactions\n", "negotiated without enemies");
+		gateway.Report(cGameInteractionEvent(eGameInteractionEvent_EnemyAttack, GruntAttack()));
+		gateway.Update(adapter);
+		Expect(ReceiveAvailable(peer, 100).empty(), "Sessions without enemies receive no attack reports");
+		closesocket(peer);
+		gateway.Shutdown();
+		Expect(gateway.Listen("127.0.0.1", 0), "listen again");
+		peer = Connect(gateway, adapter); Receive(peer);
+		SendCommands(peer, gateway, adapter, "protocol 2 enemies\n");
+		Receive(peer);
+		cGameInteractionEnemyAttack attack = GruntAttack();
+		gateway.Report(cGameInteractionEvent(eGameInteractionEvent_EnemyAttack, attack));
+		attack.mKind = eGameInteractionEnemyAttackKind_BreakDoor;
+		gateway.Report(cGameInteractionEvent(eGameInteractionEvent_EnemyAttack, attack));
+		gateway.Update(adapter);
+		Expect(ReceiveLines(peer, 2) ==
+			"EVENT enemyattack 7 normal 1.0000 1.5000 1.2500 0.0000 0.0000 1.0000 maps/main/level01.map\n"
+			"EVENT enemyattack 7 breakdoor 1.0000 1.5000 1.2500 0.0000 0.0000 1.0000 maps/main/level01.map\n",
+			"each attack is reported with its kind, box, and map");
+		closesocket(peer);
+	}
+
+	void EnemyAttackCommandsReachTheDrivenCopy()
+	{
+		cGameInteractionGateway gateway;
+		cFakeGameAdapter adapter;
+		Expect(gateway.Listen("127.0.0.1", 0), "listen");
+		SOCKET peer = Connect(gateway, adapter); Receive(peer);
+		SendCommands(peer, gateway, adapter, "protocol 2\nenemyattack 7 normal 1 1.5 1.25 0 0 1 maps/main/level01.map\n");
+		Expect(ReceiveLines(peer, 2) == "RESPONSE protocol ok 2\nRESPONSE enemyattack not-granted\n",
+			"attacks require enemies");
+		Expect(adapter.mvEntityOperations.empty(), "an ungranted attack never reaches the game");
+		closesocket(peer);
+		gateway.Shutdown();
+		Expect(gateway.Listen("127.0.0.1", 0), "listen again");
+		peer = Connect(gateway, adapter); Receive(peer);
+		SendCommands(peer, gateway, adapter, "protocol 2 enemies\n"
+			"enemyattack 7 breakdoor 1 1.5 1.25 0.5 0 1 maps/main/level01.map\n");
+		Expect(ReceiveLines(peer, 2) == "RESPONSE protocol ok 2 enemies\nRESPONSE enemyattack ok 7\n",
+			"a granted attack is resolved");
+		Expect(adapter.mvEntityOperations.size() == 1 &&
+			adapter.mvEntityOperations[0] == "enemy attack 7 breakdoor 1 1.5 1.25 0.5 0 1",
+			"the attack's kind and box reach the game");
+		adapter.mEnemyAttackOutcome = eGameInteractionCommandOutcome_EntityNotFound;
+		SendCommands(peer, gateway, adapter, "enemyattack 7 normal 1 1.5 1.25 0 0 1 maps/main/level01.map\n"
+			"enemyattack 7 normal 1 1.5 1.25 0 0 1 other.map\n"
+			"enemyattack 7 kick 1 1.5 1.25 0 0 1 maps/main/level01.map\n"
+			"enemyattack 7 normal 0 1.5 1.25 0 0 1 maps/main/level01.map\n"
+			"enemyattack 7 normal 1 1.5 1.25 0 0 maps/main/level01.map\n");
+		Expect(ReceiveLines(peer, 5) == "RESPONSE enemyattack not-found 7\nRESPONSE enemyattack wrong-map 7\n"
+			"RESPONSE enemyattack invalid\nRESPONSE enemyattack invalid\nRESPONSE enemyattack invalid\n",
+			"failures name the enemy; malformed attacks are invalid");
+		Expect(adapter.mvEntityOperations.size() == 2, "only attacks on the current map reach the game");
 		closesocket(peer);
 	}
 
@@ -1611,6 +1699,8 @@ int main()
 	EnemyCommandsAreScopedToMapAndSession();
 	EnemyReportsFollowSubscriptionAndSession();
 	EnemiesRequireTheirCapability();
+	EnemyAttacksAreReportedOnlyToEnemiesSessions();
+	EnemyAttackCommandsReachTheDrivenCopy();
 	ProtocolVersion2NegotiationGrantsSupportedRequestedCapabilities();
 	ChatEntryCarriesItsChatColorsToTheGameAdapter();
 	ResponseIsDeliveredWithinTheUpdateThatProcessedItsCommand();

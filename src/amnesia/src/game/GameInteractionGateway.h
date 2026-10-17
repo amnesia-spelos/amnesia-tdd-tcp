@@ -85,7 +85,9 @@ enum eGameInteractionEventType
 	// The local player triggered a Shared Callback, which only a Session granted sharedcallbacks receives.
 	eGameInteractionEvent_SharedCallback,
 	eGameInteractionEvent_ButtonState,
-	eGameInteractionEvent_LampState
+	eGameInteractionEvent_LampState,
+	// A simulated enemy attacked, which only a Session granted enemies receives.
+	eGameInteractionEvent_EnemyAttack
 };
 
 // The kinds of Map Script callback that are Shared Callbacks.
@@ -177,6 +179,24 @@ struct cGameInteractionEntityEvent
 	std::string msMapFile;
 };
 
+enum eGameInteractionEnemyAttackKind
+{
+	eGameInteractionEnemyAttackKind_Normal,
+	eGameInteractionEnemyAttackKind_BreakDoor
+};
+
+// One enemy attack at its clip's special-event time. The box is the one the attack tests: its size,
+// and its center offset along the enemy body's right, up, and forward axes.
+struct cGameInteractionEnemyAttack
+{
+	cGameInteractionEnemyAttack() : mlEntityId(0), mKind(eGameInteractionEnemyAttackKind_Normal) {}
+	int mlEntityId;
+	eGameInteractionEnemyAttackKind mKind;
+	cGameInteractionVector mBoxSize;
+	cGameInteractionVector mBoxOffset;
+	std::string msMapFile;
+};
+
 class cGameInteractionEvent
 {
 public:
@@ -188,6 +208,8 @@ public:
 	cGameInteractionEvent(eGameInteractionEventType aType, const cGameInteractionEntityEvent& aEntityEvent);
 	cGameInteractionEvent(eGameInteractionEventType aType, const cGameInteractionSharedCallback& aSharedCallback);
 	cGameInteractionEvent(eGameInteractionEventType aType, const cGameInteractionEntityState& aState);
+	cGameInteractionEvent(eGameInteractionEventType aType, const cGameInteractionEnemyAttack& aAttack);
+	const cGameInteractionEnemyAttack& GetEnemyAttack() const { return mEnemyAttack; }
 	const cGameInteractionEntityState& GetEntityState() const { return mEntityState; }
 	eGameInteractionEventType GetType() const { return mType; }
 	bool IsInteractionsEvent() const;
@@ -207,6 +229,7 @@ private:
 	cGameInteractionEntityEvent mEntityEvent;
 	cGameInteractionSharedCallback mSharedCallback;
 	cGameInteractionEntityState mEntityState;
+	cGameInteractionEnemyAttack mEnemyAttack;
 };
 
 enum eGameInteractionCommandType
@@ -241,7 +264,8 @@ enum eGameInteractionCommandType
 	eGameInteractionCommand_EnemyPoses,
 	eGameInteractionCommand_EnemyDrive,
 	eGameInteractionCommand_EnemyPose,
-	eGameInteractionCommand_EnemyRelease
+	eGameInteractionCommand_EnemyRelease,
+	eGameInteractionCommand_EnemyAttack
 };
 
 enum eGameInteractionCapability
@@ -293,6 +317,13 @@ struct cGameInteractionEnemyPose
 	std::string msClip;
 	float mfAnimationTime;
 	bool mbLoop;
+};
+
+struct cGameInteractionEnemyAttackRequest
+{
+	cGameInteractionEnemyAttackRequest() : mbValid(false) {}
+	bool mbValid;
+	cGameInteractionEnemyAttack mAttack;
 };
 
 struct cGameInteractionEnemyRequest
@@ -408,6 +439,8 @@ public:
 	cGameInteractionCommand(eGameInteractionCommandType aType, const cGameInteractionPlacementRequest& aRequest);
 	cGameInteractionCommand(eGameInteractionCommandType aType, const cGameInteractionEnemyRequest& aRequest);
 	const cGameInteractionEnemyRequest& GetEnemyRequest() const { return mEnemyRequest; }
+	cGameInteractionCommand(eGameInteractionCommandType aType, const cGameInteractionEnemyAttackRequest& aRequest);
+	const cGameInteractionEnemyAttackRequest& GetEnemyAttackRequest() const { return mEnemyAttackRequest; }
 	const cGameInteractionEntityStateRequest& GetEntityStateRequest() const { return mEntityStateRequest; }
 	const cGameInteractionPlacementRequest& GetPlacementRequest() const { return mPlacementRequest; }
 	eGameInteractionCommandType GetType() const { return mType; }
@@ -434,6 +467,7 @@ private:
 	unsigned int mlSubscriptionRate;
 	cGameInteractionAvatarRequest mAvatarRequest;
 	cGameInteractionEnemyRequest mEnemyRequest;
+	cGameInteractionEnemyAttackRequest mEnemyAttackRequest;
 	cGameInteractionEntityRequest mEntityRequest;
 	cGameInteractionSharedCallbackRequest mSharedCallbackRequest;
 	cGameInteractionEntityStateRequest mEntityStateRequest;
@@ -555,6 +589,9 @@ public:
 	virtual eGameInteractionCommandOutcome PoseEnemy(const cGameInteractionEnemyPose& aPose) = 0;
 	virtual eGameInteractionCommandOutcome ReleaseEnemy(int alEntityId) = 0;
 	virtual void ReleaseDrivenEnemies() = 0;
+	// Tests a reported attack against the local player from the driven copy as this game shows it,
+	// and applies any hit. An attack never hits an Avatar.
+	virtual eGameInteractionCommandOutcome ResolveEnemyAttack(const cGameInteractionEnemyAttack& aAttack) = 0;
 	// Avatars belong to the Session, so the gateway creates, poses, and removes each one it accepted,
 	// whether or not a map is loaded. Creation fails only when the model cannot be found.
 	virtual bool CreateAvatar(const std::string& asIdentifier, const std::string& asEntityFile) = 0;

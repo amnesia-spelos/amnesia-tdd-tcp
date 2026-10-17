@@ -328,8 +328,21 @@ Responses are `RESPONSE enemyposes ok subscribe <clampedHz>` or `RESPONSE enemyp
 
 Drive and release answer `RESPONSE <keyword> <outcome> <entityId>`. Outcomes are `ok`, `wrong-map`, `not-found`, or `wrong-type`; malformed lines answer `invalid` without an identifier. Driving again is idempotent. Only a map-placed Grunt can be driven; release and pose require an already driven enemy. An unknown animation is `invalid`. Successful `enemypose` is silent; only the first failure of a consecutive failure streak is reported. A successful sample or a new Map Visit ends that streak. Capability failures answer `not-granted` without an identifier.
 
-Copies buffer sender-timestamped motion using the Avatar's 100 ms interpolation delay, shortest-path yaw, clock alignment, and discontinuity rules. Animation time interpolates within a monotonically advancing clip; clip changes, restarts, and wraps switch at their sample time. A stalled stream holds its last pose and animation. Local AI, senses, pathfinding, attacks, damage reactions, and enemy-triggered Map Script callbacks are suppressed, including collide callbacks in which the copy is the child. Local ambient sound and darkness glow remain. Hit relay and target selection are separate work.
+Copies buffer sender-timestamped motion using the Avatar's 100 ms interpolation delay, shortest-path yaw, clock alignment, and discontinuity rules. Animation time interpolates within a monotonically advancing clip; clip changes, restarts, and wraps switch at their sample time. A stalled stream holds its last pose and animation. Local AI, senses, pathfinding, attacks, damage reactions, and enemy-triggered Map Script callbacks are suppressed, including collide callbacks in which the copy is the child. Local ambient sound and darkness glow remain. A copy attacks only when an `enemyattack` Command delivers an attack.
 
 Release, Session end, and leaving the Map Visit discard buffered samples and restore vanilla simulation from the current position, restoring gravity, collision testing, and the prior active flag. A save does not store driven mode. A checkpoint death within the same Map Visit does not reset a driven copy. The Peer must drive it again after loading a save or entering another Map Visit. The multiplayer consumer must add negotiation, relay, and map/Session handoff in its own repository; this change does not enable enemy sharing there by itself.
 
 See [the Controller checklist](../../docs/testing/enemy-copies.md) for game adapter verification.
+
+### Enemy attacks
+
+```
+EVENT enemyattack <entityId> <attack> <sizeX> <sizeY> <sizeZ> <offsetX> <offsetY> <offsetZ> <map>
+enemyattack <entityId> <attack> <sizeX> <sizeY> <sizeZ> <offsetX> <offsetY> <offsetZ> <map>
+```
+
+The game that simulates an enemy reports each Grunt attack at the clip's special-event time, the moment it tests for a hit, to a Session granted `enemies`. `<attack>` is `normal` or `breakdoor`, which selects the enemy's attack damage. The box is the one the attack tests: its size, then its center offset along the enemy body's right, up, and forward axes, in metres, using the ordinary Version 2 number grammar. The Event is reported whether or not the attack hits anything locally, and it never carries damage: each game rolls its own.
+
+The `enemyattack` Command takes the same fields, so a Peer can deliver a reported attack to a driven copy unchanged apart from its prefix. The game tests the box from the copy's position and yaw as this game shows it, against the local player only, and applies a hit the vanilla way: damage within the attack's range, blood splash, red flash, head spin, knockback, and the enemy's hit sound. A miss does nothing. Attacks never hit an Avatar, in the simulating game or on a copy; the simulating game's own player is hit as before.
+
+Responses are `RESPONSE enemyattack <outcome> <entityId>`, with outcome `ok` whether the attack hits or misses, `wrong-map`, `not-found` (including an enemy that is not driven), or `wrong-type`. A malformed line, an unknown attack, a size that is not positive, or a box size that none of the copy's own attacks uses answers `invalid` without an identifier. Without `enemies`, the Command answers `not-granted` and no attacks are reported.

@@ -172,6 +172,16 @@ namespace
 			return eGameInteractionCommandOutcome_Success;
 		}
 
+		virtual eGameInteractionCommandOutcome ResolveEnemyAttack(const cGameInteractionEnemyAttack& aAttack)
+		{
+			iLuxEnemy* enemy = NULL;
+			const eGameInteractionCommandOutcome outcome = FindEnemy(aAttack.mlEntityId, enemy);
+			if(outcome != eGameInteractionCommandOutcome_Success) return outcome;
+			if(!enemy->IsEnemyDriven()) return eGameInteractionCommandOutcome_EntityNotFound;
+			return enemy->ResolveEnemyAttack(aAttack) ? eGameInteractionCommandOutcome_Success :
+				eGameInteractionCommandOutcome_Invalid;
+		}
+
 		virtual void ReleaseDrivenEnemies()
 		{
 			if(!IsMapLoaded()) return;

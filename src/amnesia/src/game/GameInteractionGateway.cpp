@@ -14,6 +14,12 @@ cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aTy
 	  mSubscriptionRequest(eGameInteractionSubscriptionRequest_Invalid), mlSubscriptionRate(0),
 	  mEnemyRequest(aRequest) {}
 
+cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
+	const cGameInteractionEnemyAttackRequest& aRequest)
+	: mType(aType), mlProtocolVersion(0), mlCapabilities(0),
+	  mSubscriptionRequest(eGameInteractionSubscriptionRequest_Invalid), mlSubscriptionRate(0),
+	  mEnemyAttackRequest(aRequest) {}
+
 cGameInteractionEvent::cGameInteractionEvent(eGameInteractionEventType aType,
 	const std::string& asData)
 	: mType(aType), msData(asData)
@@ -46,6 +52,9 @@ cGameInteractionEvent::cGameInteractionEvent(eGameInteractionEventType aType,
 
 cGameInteractionEvent::cGameInteractionEvent(eGameInteractionEventType aType,
 	const cGameInteractionEntityState& aState) : mType(aType), mEntityState(aState) {}
+
+cGameInteractionEvent::cGameInteractionEvent(eGameInteractionEventType aType,
+	const cGameInteractionEnemyAttack& aAttack) : mType(aType), mEnemyAttack(aAttack) {}
 
 cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
 	const cGameInteractionEntityStateRequest& aRequest)
@@ -135,7 +144,7 @@ eGameInteractionCommandClassification cGameInteractionCommand::GetClassification
 		mType == eGameInteractionCommand_EntityBreak || mType == eGameInteractionCommand_EntityRelease ||
 		mType == eGameInteractionCommand_ButtonState || mType == eGameInteractionCommand_LampState ||
 		mType == eGameInteractionCommand_EnemyDrive || mType == eGameInteractionCommand_EnemyPose ||
-		mType == eGameInteractionCommand_EnemyRelease ||
+		mType == eGameInteractionCommand_EnemyRelease || mType == eGameInteractionCommand_EnemyAttack ||
 		mType == eGameInteractionCommand_SharedCallback || mType == eGameInteractionCommand_PlayerPlace ?
 		eGameInteractionCommandClassification_StateChanging :
 		eGameInteractionCommandClassification_Observational;
@@ -447,6 +456,18 @@ namespace
 		return EntityResponse(aCommand.GetType(), outcome, id);
 	}
 
+	cGameInteractionResponse ExecuteEnemyAttack(const cGameInteractionCommand& aCommand,
+		iGameInteractionGameAdapter& aGameAdapter)
+	{
+		const cGameInteractionEnemyAttackRequest& request = aCommand.GetEnemyAttackRequest();
+		const cGameInteractionEnemyAttack& attack = request.mAttack;
+		eGameInteractionCommandOutcome outcome = eGameInteractionCommandOutcome_Success;
+		if (!request.mbValid) outcome = eGameInteractionCommandOutcome_Invalid;
+		else if (!IsCurrentMap(aGameAdapter, attack.msMapFile)) outcome = eGameInteractionCommandOutcome_WrongMap;
+		else outcome = aGameAdapter.ResolveEnemyAttack(attack);
+		return EntityResponse(aCommand.GetType(), outcome, attack.mlEntityId);
+	}
+
 	cGameInteractionResponse ExecuteEntityCommand(const cGameInteractionCommand& aCommand,
 		iGameInteractionGameAdapter& aGameAdapter, cSessionEntities& aEntities)
 	{
@@ -620,6 +641,7 @@ namespace
 		case eGameInteractionCommand_EnemyDrive:
 		case eGameInteractionCommand_EnemyPose:
 		case eGameInteractionCommand_EnemyRelease:
+		case eGameInteractionCommand_EnemyAttack:
 			return eGameInteractionCapability_Enemies;
 		case eGameInteractionCommand_LocalPose:
 			return eGameInteractionCapability_LocalPose;
@@ -669,6 +691,8 @@ namespace
 		case eGameInteractionCommand_EnemyPose:
 		case eGameInteractionCommand_EnemyRelease:
 			return ExecuteEnemyCommand(aCommand, aGameAdapter, aSession);
+		case eGameInteractionCommand_EnemyAttack:
+			return ExecuteEnemyAttack(aCommand, aGameAdapter);
 		case eGameInteractionCommand_EnemyPoses:
 			return ChangeSubscription(aCommand, aSession.mEnemySubscription);
 		case eGameInteractionCommand_LocalPose:
@@ -961,6 +985,13 @@ void cGameInteractionGateway::Report(const cGameInteractionEvent& aEvent)
 		mpImplementation->mSession.mbEnemyPoseFailing = false;
 	}
 	if (!mpImplementation->mTransport.HasPeer()) return;
+	if (aEvent.GetType() == eGameInteractionEvent_EnemyAttack)
+	{
+		if (mpImplementation->mSession.mlGrantedCapabilities & eGameInteractionCapability_Enemies)
+			mpImplementation->mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(
+				cGameInteractionProtocolVersion2::SerializeEvent(aEvent)));
+		return;
+	}
 	if (aEvent.GetType() == eGameInteractionEvent_SharedCallback ||
 		aEvent.GetType() == eGameInteractionEvent_ButtonState || aEvent.GetType() == eGameInteractionEvent_LampState)
 	{

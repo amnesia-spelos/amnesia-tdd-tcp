@@ -53,6 +53,8 @@ Enemy perception and sticky target selection have a standalone harness:
 
 See [enemy perception Controller checks](docs/testing/enemy-avatar-perception.md) for real-game lighting, chase, and search verification.
 
+See [enemy attack Controller checks](docs/testing/enemy-attacks.md) for reporting attacks and resolving them on a driven copy.
+
 The check that an Avatar faces where its posing player looks links the engine's math, so it needs `build-windows.ps1` to have built HPL2 first:
 
 ```powershell

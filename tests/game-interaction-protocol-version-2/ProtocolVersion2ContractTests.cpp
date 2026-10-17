@@ -138,6 +138,7 @@ namespace
 		virtual eGameInteractionCommandOutcome PoseEnemy(const cGameInteractionEnemyPose&) { return eGameInteractionCommandOutcome_EntityNotFound; }
 		virtual eGameInteractionCommandOutcome ReleaseEnemy(int) { return eGameInteractionCommandOutcome_EntityNotFound; }
 		virtual void ReleaseDrivenEnemies() {}
+		virtual eGameInteractionCommandOutcome ResolveEnemyAttack(const cGameInteractionEnemyAttack&) { return eGameInteractionCommandOutcome_EntityNotFound; }
 		virtual bool IsMapLoaded() const { return true; }
 		virtual cGameInteractionPosition GetPosition() const { return cGameInteractionPosition(); }
 		virtual cGameInteractionRotation GetRotation() const { return cGameInteractionRotation(); }

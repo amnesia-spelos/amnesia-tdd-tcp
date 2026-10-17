@@ -452,6 +452,7 @@ public:
 	void SetEnemyDriven(bool abDriven);
 	cGameInteractionEnemyPose GetEnemyPose();
 	bool AddEnemyPose(const cGameInteractionEnemyPose& aPose);
+	bool ResolveEnemyAttack(const cGameInteractionEnemyAttack& aAttack);
 	void UpdateEnemyCopy(float afTimeStep);
 
 	eLuxEnemyType GetEnemyType(){ return mEnemyType;}
@@ -583,6 +584,7 @@ protected:
 	int CreateAttackShape(cWorld *apWorld, cVector3f &avSize, eCollideShapeType aType=eCollideShapeType_Box);
 
 	cMatrixf GetDamageShapeMatrix(const cVector3f& avOffset);
+	cGameInteractionEnemyAttack GetEnemyAttack(const cEnemyAttackSizeData &aSizeData, const cEnemyAttackDamageData &aDamageData);
 
 	cLuxProp_Object* GetClosestFood(float afMaxDist, float afMaxHeightDist);
 

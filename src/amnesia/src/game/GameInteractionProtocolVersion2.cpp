@@ -75,7 +75,8 @@ namespace
 		{ eGameInteractionCommand_EnemyPoses, "enemyposes" },
 		{ eGameInteractionCommand_EnemyDrive, "enemydrive" },
 		{ eGameInteractionCommand_EnemyPose, "enemypose" },
-		{ eGameInteractionCommand_EnemyRelease, "enemyrelease" }
+		{ eGameInteractionCommand_EnemyRelease, "enemyrelease" },
+		{ eGameInteractionCommand_EnemyAttack, "enemyattack" }
 	};
 	const int kCommandKeywordCount = sizeof(kCommandKeywords) / sizeof(kCommandKeywords[0]);
 
@@ -394,6 +395,36 @@ namespace
 		return true;
 	}
 
+	bool TryReadEnemyAttackKind(cGameInteractionFieldReader& aReader, eGameInteractionEnemyAttackKind& aKind)
+	{
+		std::string field;
+		if (!aReader.TryReadField(field)) return false;
+		if (field == "normal") aKind = eGameInteractionEnemyAttackKind_Normal;
+		else if (field == "breakdoor") aKind = eGameInteractionEnemyAttackKind_BreakDoor;
+		else return false;
+		return true;
+	}
+
+	cGameInteractionCommand ParseEnemyAttack(const std::string& asLine)
+	{
+		cGameInteractionFieldReader reader(asLine);
+		std::string field;
+		reader.TryReadField(field);
+		cGameInteractionEnemyAttackRequest request;
+		cGameInteractionEnemyAttack& attack = request.mAttack;
+		cGameInteractionVector& size = attack.mBoxSize;
+		cGameInteractionVector& offset = attack.mBoxOffset;
+		request.mbValid = reader.TryReadField(field) &&
+			cGameInteractionProtocolVersion2::TryParseEntityIdentifier(field, attack.mlEntityId) &&
+			TryReadEnemyAttackKind(reader, attack.mKind) &&
+			TryReadBoundedVector(reader, size.mfX, size.mfY, size.mfZ) &&
+			size.mfX > 0 && size.mfY > 0 && size.mfZ > 0 &&
+			TryReadBoundedVector(reader, offset.mfX, offset.mfY, offset.mfZ) &&
+			reader.TryReadRest(attack.msMapFile) && attack.msMapFile.size() <= kMaximumPlacementMapPathLength &&
+			reader.IsAtEnd();
+		return cGameInteractionCommand(eGameInteractionCommand_EnemyAttack, request);
+	}
+
 	// The orientation is kept as sent; only its length is checked.
 	bool TryReadOrientation(cGameInteractionFieldReader& aReader, cGameInteractionQuaternion& aOrientation)
 	{
@@ -562,6 +593,20 @@ namespace
 		return cGameInteractionProtocolVersion2::FormatNumber(BoundedNumber(afX)) + " " +
 			cGameInteractionProtocolVersion2::FormatNumber(BoundedNumber(afY)) + " " +
 			cGameInteractionProtocolVersion2::FormatNumber(BoundedNumber(afZ));
+	}
+
+	const char* EnemyAttackKindToken(eGameInteractionEnemyAttackKind aKind)
+	{
+		return aKind == eGameInteractionEnemyAttackKind_BreakDoor ? "breakdoor" : "normal";
+	}
+
+	std::string FormatEnemyAttack(const cGameInteractionEnemyAttack& aAttack)
+	{
+		const cGameInteractionVector& size = aAttack.mBoxSize;
+		const cGameInteractionVector& offset = aAttack.mBoxOffset;
+		return cGameInteractionProtocolVersion2::FormatEntityIdentifier(aAttack.mlEntityId) + " " + EnemyAttackKindToken(aAttack.mKind) + " " +
+			FormatBoundedVector(size.mfX, size.mfY, size.mfZ) + " " +
+			FormatBoundedVector(offset.mfX, offset.mfY, offset.mfZ) + " " + aAttack.msMapFile;
 	}
 
 	// Normalized, so a reader never rejects it; one without a direction is written as the identity.
@@ -766,6 +811,7 @@ cGameInteractionCommand cGameInteractionProtocolVersion2::ParseCommand(const std
 	if (type == eGameInteractionCommand_Unknown) return cLegacyGameInteractionProtocol::ParseCommand(asLine);
 	if (type == eGameInteractionCommand_EnemyDrive || type == eGameInteractionCommand_EnemyPose ||
 		type == eGameInteractionCommand_EnemyRelease) return ParseEnemyCommand(type, asLine);
+	if (type == eGameInteractionCommand_EnemyAttack) return ParseEnemyAttack(asLine);
 	if (type == eGameInteractionCommand_Chat) return ParseChatEntry(asLine);
 	if (type == eGameInteractionCommand_SharedCallback) return ParseSharedCallback(asLine);
 	if (type == eGameInteractionCommand_PlayerPlace) return ParsePlayerPlace(asLine);
@@ -861,6 +907,8 @@ std::string cGameInteractionProtocolVersion2::SerializeEvent(const cGameInteract
 	}
 	case eGameInteractionEvent_SharedCallback:
 		return "EVENT sharedcallback " + FormatSharedCallback(aEvent.GetSharedCallback());
+	case eGameInteractionEvent_EnemyAttack:
+		return "EVENT enemyattack " + FormatEnemyAttack(aEvent.GetEnemyAttack());
 	default:
 		return std::string();
 	}
