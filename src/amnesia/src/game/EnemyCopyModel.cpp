@@ -45,3 +45,10 @@ bool cEnemyCopyModel::Sample(double afLocalTimeMs, const std::string& asMap, cGa
 	}
 	return true;
 }
+
+bool cEnemyCopyModel::NewestPose(const std::string& asMap, cGameInteractionEnemyPose& aPose) const
+{
+	if (mvSamples.empty() || mvSamples.back().mPose.msMapFile != asMap) return false;
+	aPose = mvSamples.back();
+	return true;
+}

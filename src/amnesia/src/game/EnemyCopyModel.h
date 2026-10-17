@@ -10,6 +10,8 @@ class cEnemyCopyModel
 public:
 	void AddPose(const cGameInteractionEnemyPose& aPose, double afLocalTimeMs);
 	bool Sample(double afLocalTimeMs, const std::string& asMap, cGameInteractionEnemyPose& aPose);
+	// The last pose received for this map, undelayed, which a released enemy resumes from.
+	bool NewestPose(const std::string& asMap, cGameInteractionEnemyPose& aPose) const;
 private:
 	cAvatarPoseModel mMotion;
 	std::deque<cGameInteractionEnemyPose> mvSamples;

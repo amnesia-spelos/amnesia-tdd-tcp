@@ -33,5 +33,18 @@ int main()
 	Expect(transition.Sample(5300, "map", rendered) && rendered.mPose.mFeetPosition.mfX == 3, "teleport snaps");
 	Expect(!transition.Sample(5350, "other map", rendered), "another Map Visit cannot use the old samples");
 	Expect(!transition.Sample(5400, "map", rendered), "returning does not resurrect old samples");
+	// A release continues from the newest driven pose, not the delayed one on show.
+	cEnemyCopyModel release;
+	Expect(!release.NewestPose("map", rendered), "an undriven copy has no newest pose");
+	sample.mPose.mlTimeMs = 1000; sample.mPose.mlTeleportCounter = 0; sample.mPose.mFeetPosition.mfX = 0;
+	sample.mPose.mfBodyYawDegrees = 0; sample.msClip = "Walk";
+	release.AddPose(sample, 5000);
+	sample.mPose.mlTimeMs = 1100; sample.mPose.mFeetPosition.mfX = 2; sample.mPose.mfBodyYawDegrees = 90;
+	sample.msClip = "Run";
+	release.AddPose(sample, 5100);
+	Expect(release.Sample(5150, "map", rendered) && rendered.mPose.mFeetPosition.mfX < 2, "shown pose lags");
+	Expect(release.NewestPose("map", rendered) && rendered.mPose.mFeetPosition.mfX == 2 &&
+		rendered.mPose.mfBodyYawDegrees == 90 && rendered.msClip == "Run", "newest pose is the last driven one");
+	Expect(!release.NewestPose("other map", rendered), "another map's pose is not resumed");
 	std::cout << "Enemy copy model cases passed\n";
 }

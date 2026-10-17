@@ -2775,6 +2775,7 @@ void iLuxEnemy::SaveToSaveData(iLuxEntity_SaveData* apSaveData)
 		pData->mbCanSeePlayer = pData->mbPlayerDetected = pData->mbPlayerInRange = false;
 		pData->mlPlayerInLOSCount = 0;
 		pData->mMover.mbOverideMoveState = false;
+		pData->mMover.mbTurning = false;
 		for(size_t i=0; i<pData->mMeshEntity.mvAnimations.Size(); ++i)
 			pData->mMeshEntity.mvAnimations[i].mfSpeed = mvCopyAnimationSpeeds[i];
 	}
@@ -2992,6 +2993,16 @@ void iLuxEnemy::SetEnemyDriven(bool abDriven)
 		mbCopyHadGravity = mpCharBody->GravityIsActive();
 		mbCopyTestedCollision = mpCharBody->GetTestCollision();
 		mbCopyWasActive = IsActive();
+		// Taking over a chase ends its state as a state change would, so the chase's speed and FOV
+		// do not outlive it. The copy has no state of its own until a release resumes it.
+		if(mCurrentState != eLuxEnemyState_LastEnum)
+		{
+			mNextState = eLuxEnemyState_Idle; // Leave handlers read where the enemy goes next.
+			StateEvent(mCurrentState, eLuxEnemyStateEvent_Leave, NULL);
+			mPreviousState = mCurrentState;
+		}
+		mCurrentState = mNextState = eLuxEnemyState_Idle;
+		if(mSoundState != eLuxEnemySoundState_Silent) ChangeSoundState(eLuxEnemySoundState_Idle);
 		mvCopyAnimationSpeeds.clear();
 		for(int i=0; i<mpMeshEntity->GetAnimationStateNum(); ++i)
 			mvCopyAnimationSpeeds.push_back(mpMeshEntity->GetAnimationState(i)->GetSpeed());
@@ -3009,6 +3020,15 @@ void iLuxEnemy::SetEnemyDriven(bool abDriven)
 	}
 	else
 	{
+		// The enemy resumes from the newest driven pose, not the delayed one on show.
+		cGameInteractionEnemyPose newest;
+		if(mEnemyCopy.NewestPose(mpMap->GetMapPath(), newest))
+		{
+			const cGameInteractionPosition& feet = newest.mPose.mFeetPosition;
+			mpCharBody->SetFeetPosition(cVector3f(feet.mfX, feet.mfY, feet.mfZ), true);
+			mpCharBody->SetYaw(cMath::ToRad(newest.mPose.mfBodyYawDegrees));
+		}
+		mpMover->TurnToAngle(mpCharBody->GetYaw());
 		mbEnemyDriven = false;
 		mpCharBody->SetGravityActive(mbCopyHadGravity);
 		mpCharBody->SetTestCollision(mbCopyTestedCollision);

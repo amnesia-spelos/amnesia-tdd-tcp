@@ -54,4 +54,20 @@ The base fixture contains one Grunt. Multiple-enemy enumeration, runtime spawnin
 
    Expect `RESPONSE enemypose not-found 139`, and a vanilla enemy. A fresh `enemydrive` must be required. A checkpoint death without leaving the Map Visit should retain the driven copy. Save while driving and load it: no frozen animation or interrupted local attack should be resurrected.
 
+6. Take over a chasing Grunt and hand it back. Load the fixture with the Grunt vanilla, as step 5 left it, and enter `SpawnGruntArea` and let the Grunt see and chase you until the chase music plays. While it chases, type:
+
+   ```text
+   enemydrive 139 custom_stories/mp-test-cs/maps/multiplayer-test.map
+   enemypose 139 3000 0 -2 0 28.25 0 Walk 0.2 1 custom_stories/mp-test-cs/maps/multiplayer-test.map
+   ```
+
+   Expect `RESPONSE enemydrive ok 139` and no new error lines in `hpl.log`. The chase music and screen terror stop, and the Grunt jumps to `(-2, 0, 28.25)` and holds there. Then type:
+
+   ```text
+   enemypose 139 3100 0 -2 0 27.25 90 Walk 0.4 1 custom_stories/mp-test-cs/maps/multiplayer-test.map
+   enemyrelease 139 custom_stories/mp-test-cs/maps/multiplayer-test.map
+   ```
+
+   Expect `RESPONSE enemyrelease ok 139`. The Grunt stays at `(-2, 0, 27.25)` facing yaw 90, without turning back to its old heading, then walks on with vanilla AI. Stand in its view: it notices and chases you again at normal speed, with chase music. Hide until it gives up: it searches, then waits or patrols as vanilla.
+
 Automated loopback tests cover wire parsing, Capability gating, and Session cleanup; model tests cover interpolation and delayed animation selection. The real-game checks above remain manual.
