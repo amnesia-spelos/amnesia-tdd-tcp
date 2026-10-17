@@ -133,6 +133,11 @@ namespace
 		bool mbChatAvailable;
 		std::vector<std::string> mvDisplayedChatEntries;
 
+		virtual std::vector<cGameInteractionEnemyPose> GetEnemyPoses() const { return std::vector<cGameInteractionEnemyPose>(); }
+		virtual eGameInteractionCommandOutcome DriveEnemy(int) { return eGameInteractionCommandOutcome_EntityNotFound; }
+		virtual eGameInteractionCommandOutcome PoseEnemy(const cGameInteractionEnemyPose&) { return eGameInteractionCommandOutcome_EntityNotFound; }
+		virtual eGameInteractionCommandOutcome ReleaseEnemy(int) { return eGameInteractionCommandOutcome_EntityNotFound; }
+		virtual void ReleaseDrivenEnemies() {}
 		virtual bool IsMapLoaded() const { return true; }
 		virtual cGameInteractionPosition GetPosition() const { return cGameInteractionPosition(); }
 		virtual cGameInteractionRotation GetRotation() const { return cGameInteractionRotation(); }

@@ -435,6 +435,10 @@ iLuxEnemy::iLuxEnemy(const tString &asName, int alID, cLuxMap *apMap, eLuxEnemyT
 {
 	mEnemyType = aEnemyType;
 
+	mbEnemyDriven = false;
+	mbCopyHadGravity = true;
+	mbCopyTestedCollision = true;
+	mbCopyWasActive = true;
 	mbUseAnimations = true;
 
 	mfInLanternLightCount =0;
@@ -624,6 +628,7 @@ void iLuxEnemy::OnMapEnter()
 
 void iLuxEnemy::OnUpdate(float afTimeStep)
 {
+	if(mbEnemyDriven) { UpdateEnemyCopy(afTimeStep); return; }
 	if(mbDisabled) return;
 
 	//In case the update is called in save or anyhting else that just want a quick update, we do not want to be updated.
@@ -795,6 +800,7 @@ iEntity3D* iLuxEnemy::GetAttachEntity()
 
 void iLuxEnemy::GiveDamage(float afAmount, int alStrength)
 {
+	if(mbEnemyDriven) return;
 	if(mfHealth > 0)
 
 	if(alStrength < mlToughness-1)			afAmount =0;
@@ -842,6 +848,7 @@ void iLuxEnemy::AlertOfPlayerPresence()
 
 void iLuxEnemy::ChangeState(eLuxEnemyState aState)
 {
+	if(mbEnemyDriven) return;
 	if(aState == eLuxEnemyState_LastEnum) return;
 	if(mCurrentState == aState) return;
 
@@ -855,6 +862,7 @@ void iLuxEnemy::ChangeState(eLuxEnemyState aState)
 
 void iLuxEnemy::SendMessage(eLuxEnemyMessage aType, float afTime, bool abLocalScope, const cVector3f& avX,float afX, int alX)
 {
+	if(mbEnemyDriven) return;
 	if(mbDisabled) return;
 	if(	TriggersDisabled() && 
 		aType > eLuxEnemyMessage_EndOfPath && 
@@ -1785,6 +1793,7 @@ bool iLuxEnemy::TriggersDisabled()
 
 bool iLuxEnemy::Attack(const cEnemyAttackSizeData &aSizeData, const cEnemyAttackDamageData &aDamageData, float afDamageMul)
 {
+	if(mbEnemyDriven) return false;
 	bool bHitPlayer = false;
 	bool bHit = gpBase->mpMapHelper->ShapeDamage(GetAttackShape(aSizeData.mlShapeIdx), GetDamageShapeMatrix(aSizeData.mvOffset), mpCharBody->GetPosition(),
 												aDamageData.mfMinDamage*afDamageMul, aDamageData.mfMaxDamage*afDamageMul, 
@@ -2561,6 +2570,21 @@ void iLuxEnemy::SaveToSaveData(iLuxEntity_SaveData* apSaveData)
 	{
 		pData->mCharBody.FromBody(mpCharBody);
 	}
+
+	// Loading a save starts a new Map Visit, without the Session's driven mode.
+	// Save a resumable vanilla enemy, not a frozen animation or an interrupted attack.
+	if(mbEnemyDriven)
+	{
+		pData->mbActive = mbCopyWasActive;
+		pData->mCharBody.mbActive = mbCopyWasActive;
+		pData->mlCurrentState = eLuxEnemyState_Idle;
+		pData->mlNextState = eLuxEnemyState_Wait;
+		pData->mbCanSeePlayer = pData->mbPlayerDetected = pData->mbPlayerInRange = false;
+		pData->mlPlayerInLOSCount = 0;
+		pData->mMover.mbOverideMoveState = false;
+		for(size_t i=0; i<pData->mMeshEntity.mvAnimations.Size(); ++i)
+			pData->mMeshEntity.mvAnimations[i].mfSpeed = mvCopyAnimationSpeeds[i];
+	}
 }
 
 //-----------------------------------------------------------------------
@@ -2765,3 +2789,101 @@ void iLuxEnemy::SetupSaveData(iLuxEntity_SaveData *apSaveData)
 
 //-----------------------------------------------------------------------
 
+
+// A copy keeps the original map entity, but none of its locally simulated decisions.
+void iLuxEnemy::SetEnemyDriven(bool abDriven)
+{
+	if(mbEnemyDriven == abDriven) return;
+	if(abDriven)
+	{
+		mbCopyHadGravity = mpCharBody->GravityIsActive();
+		mbCopyTestedCollision = mpCharBody->GetTestCollision();
+		mbCopyWasActive = IsActive();
+		mvCopyAnimationSpeeds.clear();
+		for(int i=0; i<mpMeshEntity->GetAnimationStateNum(); ++i)
+			mvCopyAnimationSpeeds.push_back(mpMeshEntity->GetAnimationState(i)->GetSpeed());
+		mbEnemyDriven = true;
+		mpPathfinder->Stop();
+		mlstMessages.clear();
+		mpCharBody->StopMovement();
+		mpCharBody->SetForce(0); mpCharBody->SetForceVelocity(0);
+		mpCharBody->SetGravityActive(false);
+		mpCharBody->SetTestCollision(false);
+		gpBase->mpMusicHandler->RemoveEnemy(eLuxEnemyMusic_Attack, this);
+		gpBase->mpMusicHandler->RemoveEnemy(eLuxEnemyMusic_Search, this);
+		gpBase->mpPlayer->RemoveTerrorEnemy(this);
+		SetActive(true);
+	}
+	else
+	{
+		mbEnemyDriven = false;
+		mpCharBody->SetGravityActive(mbCopyHadGravity);
+		mpCharBody->SetTestCollision(mbCopyTestedCollision);
+		mEnemyCopy = cEnemyCopyModel();
+		mlstMessages.clear();
+		mbCanSeePlayer = mbPlayerDetected = mbPlayerInRange = false;
+		mlPlayerInLOSCount = 0;
+		mCurrentState = eLuxEnemyState_Idle;
+		mNextState = eLuxEnemyState_Wait;
+		for(size_t i=0; i<mvCopyAnimationSpeeds.size(); ++i)
+			mpMeshEntity->GetAnimationState(static_cast<int>(i))->SetSpeed(mvCopyAnimationSpeeds[i]);
+		mvCopyAnimationSpeeds.clear();
+		mpMover->SetOverideMoveState(true);
+		mpMover->UseMoveStateAnimations();
+		SetActive(mbCopyWasActive);
+	}
+}
+
+cGameInteractionEnemyPose iLuxEnemy::GetEnemyPose()
+{
+	cGameInteractionEnemyPose sample;
+	sample.mlEntityId = GetID();
+	sample.mPose.mlTimeMs = static_cast<unsigned long long>(gpBase->mpEngine->GetGameTime() * 1000.0);
+	sample.mPose.msMapFile = mpMap->GetMapPath();
+	const cVector3f feet = mpCharBody->GetFeetPosition();
+	sample.mPose.mFeetPosition = cGameInteractionPosition(feet.x, feet.y, feet.z);
+	sample.mPose.mfBodyYawDegrees = cMath::ToDeg(mpCharBody->GetYaw());
+	if(mpCurrentAnimation && mpCurrentAnimation->IsActive())
+	{
+		sample.msClip = mpCurrentAnimation->GetName();
+		sample.mfAnimationTime = mpCurrentAnimation->GetTimePosition();
+		sample.mbLoop = mpCurrentAnimation->IsLooping();
+	}
+	return sample;
+}
+
+bool iLuxEnemy::AddEnemyPose(const cGameInteractionEnemyPose& aPose)
+{
+	if(!mbEnemyDriven) return false;
+	if(!aPose.msClip.empty() && !mpMeshEntity->GetAnimationStateFromName(aPose.msClip)) return false;
+	mEnemyCopy.AddPose(aPose, gpBase->mpEngine->GetGameTime() * 1000.0);
+	return true;
+}
+
+void iLuxEnemy::UpdateEnemyCopy(float afTimeStep)
+{
+	mpCharBody->StopMovement();
+	mpCharBody->SetForce(0); mpCharBody->SetForceVelocity(0);
+	cGameInteractionEnemyPose sample;
+	if(mEnemyCopy.Sample(gpBase->mpEngine->GetGameTime() * 1000.0, mpMap->GetMapPath(), sample))
+	{
+		const cGameInteractionPosition& feet = sample.mPose.mFeetPosition;
+		mpCharBody->SetFeetPosition(cVector3f(feet.mfX, feet.mfY, feet.mfZ), true);
+		mpCharBody->SetYaw(cMath::ToRad(sample.mPose.mfBodyYawDegrees));
+		cAnimationState* clip = sample.msClip.empty() ? NULL : mpMeshEntity->GetAnimationStateFromName(sample.msClip);
+		for(int i=0; i<mpMeshEntity->GetAnimationStateNum(); ++i)
+		{
+			cAnimationState* state = mpMeshEntity->GetAnimationState(i);
+			state->SetActive(state == clip);
+		}
+		mpCurrentAnimation = clip;
+		if(clip)
+		{
+			clip->SetFadeStep(0); clip->SetWeight(1); clip->SetSpeed(0);
+			clip->SetLoop(sample.mbLoop);
+			clip->SetTimePosition(cMath::Min(sample.mfAnimationTime, clip->GetLength()));
+		}
+	}
+	UpdateSoundState(afTimeStep);
+	UpdateDarknessGlow(afTimeStep);
+}

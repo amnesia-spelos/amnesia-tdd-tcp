@@ -10,6 +10,7 @@ namespace
 	// Holding a Pose or snapping between two discontinuous ones has no meaningful motion (issue #50).
 	void Render(const cAvatarPoseSample& aPose, cAvatarRenderedPose& aRendered)
 	{
+		aRendered.mfSenderTimeMs = aPose.mfSenderTimeMs;
 		aRendered.mfX = aPose.mfX;
 		aRendered.mfY = aPose.mfY;
 		aRendered.mfZ = aPose.mfZ;
@@ -99,6 +100,7 @@ bool cAvatarPoseModel::Sample(double afLocalTimeMs, const std::string& asCurrent
 	const cAvatarPoseSample& to = mvPoses[1];
 	const float fFraction = static_cast<float>(
 		(fRenderTimeMs - from.mfSenderTimeMs) / (to.mfSenderTimeMs - from.mfSenderTimeMs));
+	aPose.mfSenderTimeMs = fRenderTimeMs;
 	aPose.mfX = Lerp(from.mfX, to.mfX, fFraction);
 	aPose.mfY = Lerp(from.mfY, to.mfY, fFraction);
 	aPose.mfZ = Lerp(from.mfZ, to.mfZ, fFraction);

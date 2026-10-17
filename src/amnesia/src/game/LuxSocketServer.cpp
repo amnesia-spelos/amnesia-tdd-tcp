@@ -4,6 +4,7 @@
 #include "LuxPeerDrivenEntityHandler.h"
 #include "LuxSharedCallbackHandler.h"
 #include "LuxMap.h"
+#include "LuxEnemy.h"
 #include "LuxMapHandler.h"
 #include "LuxPlayer.h"
 #include "LuxPlayerHelpers.h"
@@ -130,6 +131,54 @@ namespace
 			return pose;
 		}
 
+		virtual std::vector<cGameInteractionEnemyPose> GetEnemyPoses() const
+		{
+			std::vector<cGameInteractionEnemyPose> poses;
+			if(!IsMapLoaded()) return poses;
+			cLuxEnemyIterator it = gpBase->mpMapHandler->GetCurrentMap()->GetEnemyIterator();
+			while(it.HasNext())
+			{
+				iLuxEnemy* enemy = it.Next();
+				if(enemy->GetEnemyType() == eLuxEnemyType_Grunt && enemy->IsActive() &&
+					!enemy->GetDestroyMe()) poses.push_back(enemy->GetEnemyPose());
+			}
+			return poses;
+		}
+
+		virtual eGameInteractionCommandOutcome DriveEnemy(int alEntityId)
+		{
+			iLuxEnemy* enemy = NULL;
+			const eGameInteractionCommandOutcome outcome = FindEnemy(alEntityId, enemy);
+			if(outcome == eGameInteractionCommandOutcome_Success) enemy->SetEnemyDriven(true);
+			return outcome;
+		}
+
+		virtual eGameInteractionCommandOutcome PoseEnemy(const cGameInteractionEnemyPose& aPose)
+		{
+			iLuxEnemy* enemy = NULL;
+			const eGameInteractionCommandOutcome outcome = FindEnemy(aPose.mlEntityId, enemy);
+			if(outcome != eGameInteractionCommandOutcome_Success) return outcome;
+			if(!enemy->IsEnemyDriven()) return eGameInteractionCommandOutcome_EntityNotFound;
+			return enemy->AddEnemyPose(aPose) ? eGameInteractionCommandOutcome_Success : eGameInteractionCommandOutcome_Invalid;
+		}
+
+		virtual eGameInteractionCommandOutcome ReleaseEnemy(int alEntityId)
+		{
+			iLuxEnemy* enemy = NULL;
+			const eGameInteractionCommandOutcome outcome = FindEnemy(alEntityId, enemy);
+			if(outcome != eGameInteractionCommandOutcome_Success) return outcome;
+			if(!enemy->IsEnemyDriven()) return eGameInteractionCommandOutcome_EntityNotFound;
+			enemy->SetEnemyDriven(false);
+			return eGameInteractionCommandOutcome_Success;
+		}
+
+		virtual void ReleaseDrivenEnemies()
+		{
+			if(!IsMapLoaded()) return;
+			cLuxEnemyIterator it = gpBase->mpMapHandler->GetCurrentMap()->GetEnemyIterator();
+			while(it.HasNext()) it.Next()->SetEnemyDriven(false);
+		}
+
 		virtual bool CreateAvatar(const std::string& asIdentifier, const std::string& asEntityFile)
 		{
 			return gpBase->mpAvatarHandler && gpBase->mpAvatarHandler->CreateAvatar(asIdentifier, asEntityFile);
@@ -228,6 +277,18 @@ namespace
 		}
 
 	private:
+		static eGameInteractionCommandOutcome FindEnemy(int alEntityId, iLuxEnemy*& apEnemy)
+		{
+			cLuxMap* map = gpBase->mpMapHandler->GetCurrentMap();
+			iLuxEntity* entity = map ? map->GetEntityByID(alEntityId) : NULL;
+			if(!entity || entity->GetDestroyMe()) return eGameInteractionCommandOutcome_EntityNotFound;
+			if(entity->GetEntityType() != eLuxEntityType_Enemy || entity->IsCreatedAtRuntime())
+				return eGameInteractionCommandOutcome_EntityWrongType;
+			apEnemy = static_cast<iLuxEnemy*>(entity);
+			return apEnemy->GetEnemyType() == eLuxEnemyType_Grunt ? eGameInteractionCommandOutcome_Success :
+				eGameInteractionCommandOutcome_EntityWrongType;
+		}
+
 		static bool IsInMainMenu()
 		{
 			return gpBase->mpInputHandler->GetState() == eLuxInputState_MainMenu &&
@@ -328,4 +389,10 @@ cLuxSocketServer::~cLuxSocketServer()
 {
 	mGateway.Shutdown();
     Log("cLuxSocketServer destroyed!\n");
+}
+
+void cLuxSocketServer::DestroyWorldEntities(cLuxMap* apMap)
+{
+	cLuxEnemyIterator it = apMap->GetEnemyIterator();
+	while(it.HasNext()) it.Next()->SetEnemyDriven(false);
 }

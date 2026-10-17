@@ -23,6 +23,7 @@
 //----------------------------------------------
 
 #include "LuxEntity.h"
+#include "EnemyCopyModel.h"
 #include "LuxSavedEngineTypes.h"
 
 //----------------------------------------------
@@ -446,6 +447,12 @@ public:
 
 	//////////////////////
 	//Properties
+	virtual bool IsEnemyDriven() const { return mbEnemyDriven; }
+	void SetEnemyDriven(bool abDriven);
+	cGameInteractionEnemyPose GetEnemyPose();
+	bool AddEnemyPose(const cGameInteractionEnemyPose& aPose);
+	void UpdateEnemyCopy(float afTimeStep);
+
 	eLuxEnemyType GetEnemyType(){ return mEnemyType;}
 
 	void SetDisabled(bool abX);
@@ -605,6 +612,12 @@ protected:
 
 	//////////////
 	//Variables
+	bool mbEnemyDriven;
+	bool mbCopyHadGravity;
+	bool mbCopyTestedCollision;
+	bool mbCopyWasActive;
+	std::vector<float> mvCopyAnimationSpeeds;
+	cEnemyCopyModel mEnemyCopy;
 	bool mbDisabled;
 
 	bool mbDisableTriggers;

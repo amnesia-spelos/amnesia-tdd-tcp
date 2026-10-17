@@ -41,7 +41,8 @@ namespace
 		{ eGameInteractionCapability_LocalPose, "localpose" },
 		{ eGameInteractionCapability_Interactions, "interactions" },
 		{ eGameInteractionCapability_SharedCallbacks, "sharedcallbacks" },
-		{ eGameInteractionCapability_PlayerPlace, "playerplace" }
+		{ eGameInteractionCapability_PlayerPlace, "playerplace" },
+		{ eGameInteractionCapability_Enemies, "enemies" }
 	};
 	const int kCapabilityNameCount = sizeof(kCapabilityNames) / sizeof(kCapabilityNames[0]);
 
@@ -69,7 +70,11 @@ namespace
 		{ eGameInteractionCommand_SharedCallback, "sharedcallback" },
 		{ eGameInteractionCommand_ButtonState, "buttonstate" },
 		{ eGameInteractionCommand_LampState, "lampstate" },
-		{ eGameInteractionCommand_PlayerPlace, "playerplace" }
+		{ eGameInteractionCommand_PlayerPlace, "playerplace" },
+		{ eGameInteractionCommand_EnemyPoses, "enemyposes" },
+		{ eGameInteractionCommand_EnemyDrive, "enemydrive" },
+		{ eGameInteractionCommand_EnemyPose, "enemypose" },
+		{ eGameInteractionCommand_EnemyRelease, "enemyrelease" }
 	};
 	const int kCommandKeywordCount = sizeof(kCommandKeywords) / sizeof(kCommandKeywords[0]);
 
@@ -268,6 +273,37 @@ namespace
 			pose.mlTeleportCounter = static_cast<unsigned int>(teleportCounter);
 		}
 		request.mbValid = valid && reader.IsAtEnd();
+		return cGameInteractionCommand(aType, request);
+	}
+
+	cGameInteractionCommand ParseEnemyCommand(eGameInteractionCommandType aType, const std::string& asLine)
+	{
+		cGameInteractionFieldReader reader(asLine);
+		std::string field;
+		reader.TryReadField(field);
+		cGameInteractionEnemyRequest request;
+		cGameInteractionEnemyPose& enemy = request.mEnemy;
+		cGameInteractionPose& pose = enemy.mPose;
+		bool valid = reader.TryReadField(field) &&
+			cGameInteractionProtocolVersion2::TryParseEntityIdentifier(field, enemy.mlEntityId);
+		if (valid && aType == eGameInteractionCommand_EnemyPose)
+		{
+			unsigned long long teleport = 0;
+			valid = TryReadUnsignedInteger(reader, kMaximumTimeMs, pose.mlTimeMs) &&
+				TryReadUnsignedInteger(reader, kMaximumTeleportCounter, teleport) &&
+				TryReadNumber(reader, pose.mFeetPosition.mfX) && TryReadNumber(reader, pose.mFeetPosition.mfY) &&
+				TryReadNumber(reader, pose.mFeetPosition.mfZ) && TryReadNumber(reader, pose.mfBodyYawDegrees) &&
+				reader.TryReadField(enemy.msClip) && enemy.msClip.size() <= 128 &&
+				TryReadNumber(reader, enemy.mfAnimationTime) && enemy.mfAnimationTime >= 0 &&
+				enemy.mfAnimationTime <= 1.0e9f && TryReadFlag(reader, enemy.mbLoop);
+			pose.mlTeleportCounter = static_cast<unsigned int>(teleport);
+			if (enemy.msClip == "-") enemy.msClip.clear();
+			valid = valid && std::fabs(pose.mFeetPosition.mfX) <= 1.0e9f &&
+				std::fabs(pose.mFeetPosition.mfY) <= 1.0e9f && std::fabs(pose.mFeetPosition.mfZ) <= 1.0e9f &&
+				std::fabs(pose.mfBodyYawDegrees) <= 1.0e9f;
+		}
+		request.mbValid = valid && reader.TryReadRest(pose.msMapFile) &&
+			pose.msMapFile.size() <= kMaximumPlacementMapPathLength && reader.IsAtEnd();
 		return cGameInteractionCommand(aType, request);
 	}
 
@@ -725,12 +761,15 @@ cGameInteractionCommand cGameInteractionProtocolVersion2::ParseCommand(const std
 	const eGameInteractionCommandType type = reader.TryReadField(keyword) ? CommandTypeFor(keyword) :
 		eGameInteractionCommand_Unknown;
 	if (type == eGameInteractionCommand_Unknown) return cLegacyGameInteractionProtocol::ParseCommand(asLine);
+	if (type == eGameInteractionCommand_EnemyDrive || type == eGameInteractionCommand_EnemyPose ||
+		type == eGameInteractionCommand_EnemyRelease) return ParseEnemyCommand(type, asLine);
 	if (type == eGameInteractionCommand_Chat) return ParseChatEntry(asLine);
 	if (type == eGameInteractionCommand_SharedCallback) return ParseSharedCallback(asLine);
 	if (type == eGameInteractionCommand_PlayerPlace) return ParsePlayerPlace(asLine);
 	if (type == eGameInteractionCommand_ButtonState || type == eGameInteractionCommand_LampState)
 		return ParseEntityState(asLine, type);
-	if (type == eGameInteractionCommand_LocalPose || type == eGameInteractionCommand_ReportedBodies)
+	if (type == eGameInteractionCommand_LocalPose || type == eGameInteractionCommand_ReportedBodies ||
+		type == eGameInteractionCommand_EnemyPoses)
 		return ParseSubscription(type, asLine);
 	if (type == eGameInteractionCommand_EntityDrive || type == eGameInteractionCommand_EntityBodies ||
 		type == eGameInteractionCommand_EntityInteracting || type == eGameInteractionCommand_EntityBreak ||
@@ -832,4 +871,16 @@ std::string cGameInteractionProtocolVersion2::SerializeLocalPose(const cGameInte
 		" " + FormatNumber(aPose.mFeetPosition.mfZ) + " " + FormatNumber(aPose.mfBodyYawDegrees) + " " +
 		FormatNumber(aPose.mfCameraPitchDegrees) + " " + FormatFlag(aPose.mbCrouching) + " " +
 		FormatFlag(aPose.mbLanternRaised) + " " + aPose.msMapFile;
+}
+
+std::string cGameInteractionProtocolVersion2::SerializeEnemyPose(const cGameInteractionEnemyPose& aEnemy)
+{
+	const cGameInteractionPose& pose = aEnemy.mPose;
+	char clock[64];
+	sprintf(clock, " %llu %u ", pose.mlTimeMs, pose.mlTeleportCounter);
+	return "STATE enemypose " + FormatEntityIdentifier(aEnemy.mlEntityId) + clock +
+		FormatNumber(pose.mFeetPosition.mfX) + " " + FormatNumber(pose.mFeetPosition.mfY) + " " +
+		FormatNumber(pose.mFeetPosition.mfZ) + " " + FormatNumber(pose.mfBodyYawDegrees) + " " +
+		(aEnemy.msClip.empty() ? "-" : aEnemy.msClip) + " " + FormatNumber(aEnemy.mfAnimationTime) + " " +
+		(aEnemy.mbLoop ? "1" : "0") + " " + pose.msMapFile;
 }

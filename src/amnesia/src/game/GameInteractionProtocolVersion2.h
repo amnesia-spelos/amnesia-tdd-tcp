@@ -28,6 +28,7 @@ public:
 	static bool IsNegotiation(const std::string& asLine);
 	static cGameInteractionCommand ParseCommand(const std::string& asLine);
 	static std::string SerializeResponse(const cGameInteractionResponse& aResponse);
+	static std::string SerializeEnemyPose(const cGameInteractionEnemyPose& aPose);
 	static std::string SerializeLocalPose(const cGameInteractionPose& aPose);
 	static std::string SerializeReportedBodies(const cGameInteractionBodySamples& aBodies);
 	// Only the interactions and sharedcallbacks Events have a Protocol Version 2 form.

@@ -96,8 +96,11 @@ void iLuxEntity::UpdateLogic(float afTimeStep)
 {	
 	//////////////////////
 	// Normal update
-	UpdateCheckCollideCallback(afTimeStep);
-	UpdatePlayerLookAt(afTimeStep);
+	if(!IsEnemyDriven())
+	{
+		UpdateCheckCollideCallback(afTimeStep);
+		UpdatePlayerLookAt(afTimeStep);
+	}
 
 
 	///////////////////////
@@ -126,6 +129,7 @@ cSoundEntity* iLuxEntity::PlaySound(const tString& asName, const tString& asFile
 
 void iLuxEntity::RunCallbackFunc(const tString& asType)
 {
+	if(IsEnemyDriven()) return;
 	if(msCallbackFunc=="")return;
 
 	mpMap->RunScript(msCallbackFunc + "(\""+msName+"\", \""+asType+"\")" );
@@ -135,6 +139,7 @@ void iLuxEntity::RunCallbackFunc(const tString& asType)
 
 bool iLuxEntity::RunInteractCallbackFunc()
 {
+	if(IsEnemyDriven()) return false;
 	if(msInteractCallback=="")return false;
 
 	if(gpBase->mpSharedCallbackHandler) gpBase->mpSharedCallbackHandler->OnInteractCallbackRunning(this);

@@ -5,7 +5,14 @@
 
 #include <algorithm>
 #include <set>
+#include <map>
 #include <vector>
+
+cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
+	const cGameInteractionEnemyRequest& aRequest)
+	: mType(aType), mlProtocolVersion(0), mlCapabilities(0),
+	  mSubscriptionRequest(eGameInteractionSubscriptionRequest_Invalid), mlSubscriptionRate(0),
+	  mEnemyRequest(aRequest) {}
 
 cGameInteractionEvent::cGameInteractionEvent(eGameInteractionEventType aType,
 	const std::string& asData)
@@ -127,6 +134,8 @@ eGameInteractionCommandClassification cGameInteractionCommand::GetClassification
 		mType == eGameInteractionCommand_EntityBodies || mType == eGameInteractionCommand_EntityInteracting ||
 		mType == eGameInteractionCommand_EntityBreak || mType == eGameInteractionCommand_EntityRelease ||
 		mType == eGameInteractionCommand_ButtonState || mType == eGameInteractionCommand_LampState ||
+		mType == eGameInteractionCommand_EnemyDrive || mType == eGameInteractionCommand_EnemyPose ||
+		mType == eGameInteractionCommand_EnemyRelease ||
 		mType == eGameInteractionCommand_SharedCallback || mType == eGameInteractionCommand_PlayerPlace ?
 		eGameInteractionCommandClassification_StateChanging :
 		eGameInteractionCommandClassification_Observational;
@@ -152,7 +161,7 @@ namespace
 	const unsigned int kSupportedCapabilities =
 		eGameInteractionCapability_Avatars | eGameInteractionCapability_LocalPose |
 		eGameInteractionCapability_Interactions | eGameInteractionCapability_SharedCallbacks |
-		eGameInteractionCapability_PlayerPlace;
+		eGameInteractionCapability_PlayerPlace | eGameInteractionCapability_Enemies;
 
 	const unsigned int kMinimumSubscriptionRate = 1;
 	const unsigned int kMaximumSubscriptionRate = 60;
@@ -222,11 +231,15 @@ namespace
 	struct cSessionProtocol
 	{
 		cSessionProtocol()
-			: mbNegotiated(false), mbCommandProcessed(false), mlGrantedCapabilities(eGameInteractionCapability_None) {}
+			: mbNegotiated(false), mbCommandProcessed(false), mlGrantedCapabilities(eGameInteractionCapability_None), mbDroveEnemy(false), mbEnemyPoseFailing(false) {}
 		bool mbNegotiated;
 		// Set by any Command other than a failed negotiation, after which negotiating is too late.
 		bool mbCommandProcessed;
 		unsigned int mlGrantedCapabilities;
+		bool mbDroveEnemy;
+		bool mbEnemyPoseFailing;
+		cStateUpdateSubscription mEnemySubscription;
+		std::map<int, std::string> mEnemyUpdates;
 		cStateUpdateSubscription mLocalPoseSubscription;
 		cStateUpdateSubscription mReportedBodiesSubscription;
 		cSessionAvatars mAvatars;
@@ -330,6 +343,23 @@ namespace
 			cGameInteractionProtocolVersion2::SerializeLocalPose(pose));
 	}
 
+	void SampleEnemies(iGameInteractionGameAdapter& aGameAdapter, cSessionProtocol& aSession)
+	{
+		cStateUpdateSubscription& subscription = aSession.mEnemySubscription;
+		if (!subscription.mbSubscribed) { aSession.mEnemyUpdates.clear(); return; }
+		if (aGameAdapter.GetLocalPoseAvailability() == eGameInteractionLocalPoseAvailability_Unavailable)
+		{ aSession.mEnemyUpdates.clear(); subscription.mbScheduled = false; return; }
+		const unsigned long long now = aGameAdapter.GetLocalPose().mlTimeMs;
+		if (!IsSampleDue(subscription, now)) return;
+		const std::vector<cGameInteractionEnemyPose> enemies = aGameAdapter.GetEnemyPoses();
+		// Replace the complete set so inactive enemies and previous maps cannot leave stale slots.
+		aSession.mEnemyUpdates.clear();
+		for (size_t index = 0; index < enemies.size(); ++index)
+			aSession.mEnemyUpdates[enemies[index].mlEntityId] =
+				cGameInteractionProtocolVersion2::SerializeEnemyPose(enemies[index]);
+		KeepSample(subscription, eGameInteractionLocalPoseAvailability_Live, now, "", "");
+	}
+
 	// Follows the local Pose's availability, because the report exists only while the local player is
 	// on a map. An empty report is not sampled, but an undelivered earlier one is still delivered.
 	void SampleReportedBodies(iGameInteractionGameAdapter& aGameAdapter, cStateUpdateSubscription& aSubscription)
@@ -390,6 +420,31 @@ namespace
 		cGameInteractionResponse response(aType, eGameInteractionResponse_Entity, aOutcome);
 		if (aOutcome != eGameInteractionCommandOutcome_Invalid) response.SetEntityId(alEntityId);
 		return response;
+	}
+
+	cGameInteractionResponse ExecuteEnemyCommand(const cGameInteractionCommand& aCommand,
+		iGameInteractionGameAdapter& aGameAdapter, cSessionProtocol& aSession)
+	{
+		const cGameInteractionEnemyRequest& request = aCommand.GetEnemyRequest();
+		const int id = request.mEnemy.mlEntityId;
+		eGameInteractionCommandOutcome outcome = eGameInteractionCommandOutcome_Success;
+		if (!request.mbValid) outcome = eGameInteractionCommandOutcome_Invalid;
+		else if (!IsCurrentMap(aGameAdapter, request.mEnemy.mPose.msMapFile)) outcome = eGameInteractionCommandOutcome_WrongMap;
+		else if (aCommand.GetType() == eGameInteractionCommand_EnemyDrive)
+		{
+			outcome = aGameAdapter.DriveEnemy(id);
+			if (outcome == eGameInteractionCommandOutcome_Success) aSession.mbDroveEnemy = true;
+		}
+		else if (aCommand.GetType() == eGameInteractionCommand_EnemyRelease) outcome = aGameAdapter.ReleaseEnemy(id);
+		else outcome = aGameAdapter.PoseEnemy(request.mEnemy);
+		if (aCommand.GetType() == eGameInteractionCommand_EnemyPose)
+		{
+			const bool failed = outcome != eGameInteractionCommandOutcome_Success;
+			const bool report = failed && !aSession.mbEnemyPoseFailing;
+			aSession.mbEnemyPoseFailing = failed;
+			if (!report) return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_None);
+		}
+		return EntityResponse(aCommand.GetType(), outcome, id);
 	}
 
 	cGameInteractionResponse ExecuteEntityCommand(const cGameInteractionCommand& aCommand,
@@ -558,6 +613,11 @@ namespace
 		case eGameInteractionCommand_AvatarCollision:
 		case eGameInteractionCommand_AvatarPose:
 			return eGameInteractionCapability_Avatars;
+		case eGameInteractionCommand_EnemyPoses:
+		case eGameInteractionCommand_EnemyDrive:
+		case eGameInteractionCommand_EnemyPose:
+		case eGameInteractionCommand_EnemyRelease:
+			return eGameInteractionCapability_Enemies;
 		case eGameInteractionCommand_LocalPose:
 			return eGameInteractionCapability_LocalPose;
 		case eGameInteractionCommand_ReportedBodies:
@@ -602,6 +662,12 @@ namespace
 		{
 		case eGameInteractionCommand_NegotiateProtocol:
 			return NegotiateProtocol(aCommand, aSession);
+		case eGameInteractionCommand_EnemyDrive:
+		case eGameInteractionCommand_EnemyPose:
+		case eGameInteractionCommand_EnemyRelease:
+			return ExecuteEnemyCommand(aCommand, aGameAdapter, aSession);
+		case eGameInteractionCommand_EnemyPoses:
+			return ChangeSubscription(aCommand, aSession.mEnemySubscription);
 		case eGameInteractionCommand_LocalPose:
 			return ChangeSubscription(aCommand, aSession.mLocalPoseSubscription);
 		case eGameInteractionCommand_ReportedBodies:
@@ -731,13 +797,15 @@ public:
 	// Whether an ended Session may have left Peer-Driven Entities that the game has not released yet.
 	bool mbEndedSessionDroveEntities;
 
-	cImplementation() : mbEndedSessionDroveEntities(false) {}
+	bool mbEndedSessionDroveEnemies;
+	cImplementation() : mbEndedSessionDroveEntities(false), mbEndedSessionDroveEnemies(false) {}
 
 	void EndSession()
 	{
 		const std::vector<std::string>& avatars = mSession.mAvatars.mvIdentifiers;
 		mvEndedSessionAvatars.insert(mvEndedSessionAvatars.end(), avatars.begin(), avatars.end());
 		mbEndedSessionDroveEntities = mbEndedSessionDroveEntities || mSession.mEntities.mbDroveEntity;
+		mbEndedSessionDroveEnemies = mbEndedSessionDroveEnemies || mSession.mbDroveEnemy;
 		mSession = cSessionProtocol();
 	}
 
@@ -747,6 +815,8 @@ public:
 		avatars.swap(mvEndedSessionAvatars);
 		for (std::vector<std::string>::const_iterator avatar = avatars.begin(); avatar != avatars.end(); ++avatar)
 			aGameAdapter.RemoveAvatar(*avatar);
+		if (mbEndedSessionDroveEnemies) aGameAdapter.ReleaseDrivenEnemies();
+		mbEndedSessionDroveEnemies = false;
 		if (!mbEndedSessionDroveEntities) return;
 		mbEndedSessionDroveEntities = false;
 		aGameAdapter.ReleaseDrivenEntities();
@@ -774,10 +844,14 @@ public:
 	{
 		std::string& localPose = mSession.mLocalPoseSubscription.msUndeliveredStateUpdate;
 		std::string& reportedBodies = mSession.mReportedBodiesSubscription.msUndeliveredStateUpdate;
-		if ((localPose.empty() && reportedBodies.empty()) || !mTransport.HasPeer() ||
+		if ((localPose.empty() && reportedBodies.empty() && mSession.mEnemyUpdates.empty()) || !mTransport.HasPeer() ||
 			mTransport.GetPendingDeliveryByteCount() != 0) return;
 		if (!localPose.empty()) mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(localPose));
 		if (!reportedBodies.empty()) mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(reportedBodies));
+		for (std::map<int, std::string>::const_iterator it = mSession.mEnemyUpdates.begin();
+			it != mSession.mEnemyUpdates.end(); ++it)
+			mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(it->second));
+		mSession.mEnemyUpdates.clear();
 		localPose.clear();
 		reportedBodies.clear();
 		mTransport.Flush();
@@ -859,6 +933,7 @@ void cGameInteractionGateway::Update(iGameInteractionGameAdapter& aGameAdapter)
 	}
 	// Delivering Responses now rather than on the next update removes a tick of latency.
 	mpImplementation->mTransport.Flush();
+	SampleEnemies(aGameAdapter, mpImplementation->mSession);
 	SampleLocalPose(aGameAdapter, mpImplementation->mSession.mLocalPoseSubscription);
 	SampleReportedBodies(aGameAdapter, mpImplementation->mSession.mReportedBodiesSubscription);
 	mpImplementation->DeliverStateUpdates();
@@ -875,6 +950,12 @@ void cGameInteractionGateway::Update(iGameInteractionGameAdapter& aGameAdapter)
 
 void cGameInteractionGateway::Report(const cGameInteractionEvent& aEvent)
 {
+	if (aEvent.GetType() == eGameInteractionEvent_MapEntered || aEvent.GetType() == eGameInteractionEvent_MapChanged)
+	{
+		mpImplementation->mSession.mEnemyUpdates.clear();
+		mpImplementation->mSession.mEnemySubscription.mbScheduled = false;
+		mpImplementation->mSession.mbEnemyPoseFailing = false;
+	}
 	if (!mpImplementation->mTransport.HasPeer()) return;
 	if (aEvent.GetType() == eGameInteractionEvent_SharedCallback ||
 		aEvent.GetType() == eGameInteractionEvent_ButtonState || aEvent.GetType() == eGameInteractionEvent_LampState)

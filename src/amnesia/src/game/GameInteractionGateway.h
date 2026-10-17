@@ -236,7 +236,11 @@ enum eGameInteractionCommandType
 	eGameInteractionCommand_SharedCallback,
 	eGameInteractionCommand_ButtonState,
 	eGameInteractionCommand_LampState,
-	eGameInteractionCommand_PlayerPlace
+	eGameInteractionCommand_PlayerPlace,
+	eGameInteractionCommand_EnemyPoses,
+	eGameInteractionCommand_EnemyDrive,
+	eGameInteractionCommand_EnemyPose,
+	eGameInteractionCommand_EnemyRelease
 };
 
 enum eGameInteractionCapability
@@ -246,7 +250,8 @@ enum eGameInteractionCapability
 	eGameInteractionCapability_LocalPose = 1 << 1,
 	eGameInteractionCapability_Interactions = 1 << 2,
 	eGameInteractionCapability_SharedCallbacks = 1 << 3,
-	eGameInteractionCapability_PlayerPlace = 1 << 4
+	eGameInteractionCapability_PlayerPlace = 1 << 4,
+	eGameInteractionCapability_Enemies = 1 << 5
 };
 
 struct cGameInteractionRotation
@@ -275,6 +280,25 @@ struct cGameInteractionPose
 	// Whether the lantern is raised. Its oil level and flicker are not part of the Pose.
 	bool mbLanternRaised;
 	std::string msMapFile;
+};
+
+// One active map-placed Grunt at the sending game's clock. Rotation is its character-body yaw.
+struct cGameInteractionEnemyPose
+{
+	cGameInteractionEnemyPose() : mlEntityId(0), mfAnimationTime(0), mbLoop(false) {}
+	int mlEntityId;
+	cGameInteractionPose mPose;
+	// Empty means no animation. Time is in seconds within the clip.
+	std::string msClip;
+	float mfAnimationTime;
+	bool mbLoop;
+};
+
+struct cGameInteractionEnemyRequest
+{
+	cGameInteractionEnemyRequest() : mbValid(false) {}
+	bool mbValid;
+	cGameInteractionEnemyPose mEnemy;
 };
 
 // What an Avatar Command asks for. The Avatar Identifier is kept whenever its field is valid, even
@@ -380,6 +404,8 @@ public:
 		const cGameInteractionSharedCallbackRequest& aSharedCallbackRequest);
 	cGameInteractionCommand(eGameInteractionCommandType aType, const cGameInteractionEntityStateRequest& aRequest);
 	cGameInteractionCommand(eGameInteractionCommandType aType, const cGameInteractionPlacementRequest& aRequest);
+	cGameInteractionCommand(eGameInteractionCommandType aType, const cGameInteractionEnemyRequest& aRequest);
+	const cGameInteractionEnemyRequest& GetEnemyRequest() const { return mEnemyRequest; }
 	const cGameInteractionEntityStateRequest& GetEntityStateRequest() const { return mEntityStateRequest; }
 	const cGameInteractionPlacementRequest& GetPlacementRequest() const { return mPlacementRequest; }
 	eGameInteractionCommandType GetType() const { return mType; }
@@ -405,6 +431,7 @@ private:
 	eGameInteractionSubscriptionRequest mSubscriptionRequest;
 	unsigned int mlSubscriptionRate;
 	cGameInteractionAvatarRequest mAvatarRequest;
+	cGameInteractionEnemyRequest mEnemyRequest;
 	cGameInteractionEntityRequest mEntityRequest;
 	cGameInteractionSharedCallbackRequest mSharedCallbackRequest;
 	cGameInteractionEntityStateRequest mEntityStateRequest;
@@ -521,6 +548,11 @@ public:
 	virtual eGameInteractionLocalPoseAvailability GetLocalPoseAvailability() const = 0;
 	// Called only while the local Pose is available.
 	virtual cGameInteractionPose GetLocalPose() const = 0;
+	virtual std::vector<cGameInteractionEnemyPose> GetEnemyPoses() const = 0;
+	virtual eGameInteractionCommandOutcome DriveEnemy(int alEntityId) = 0;
+	virtual eGameInteractionCommandOutcome PoseEnemy(const cGameInteractionEnemyPose& aPose) = 0;
+	virtual eGameInteractionCommandOutcome ReleaseEnemy(int alEntityId) = 0;
+	virtual void ReleaseDrivenEnemies() = 0;
 	// Avatars belong to the Session, so the gateway creates, poses, and removes each one it accepted,
 	// whether or not a map is loaded. Creation fails only when the model cannot be found.
 	virtual bool CreateAvatar(const std::string& asIdentifier, const std::string& asEntityFile) = 0;

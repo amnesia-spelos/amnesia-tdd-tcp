@@ -304,3 +304,30 @@ Use a map with a switchable button and an unlit candle, with a button connection
 6. Type `buttonstate 12 1 maps/other.map` on the test map. Expect `RESPONSE buttonstate wrong-map` and no effects.
 
 7. Use a momentary button whose connection callback resets it to switched off. Press it locally: expect one `EVENT buttonstate 12 1 maps/test.map` even though it ends switched off. Type `buttonstate 12 1 maps/test.map` in the other game: expect `RESPONSE buttonstate ok`, the same connection effect and reset, and no report back.
+
+## Enemy reporting and driven copies (`enemies`)
+
+Negotiate `protocol 2 enemies` to grant this Capability. It is independent of `avatars`, `localpose`, and `interactions`; without it, the Commands below answer `not-granted` and no enemies are sampled. Legacy Sessions are unchanged.
+
+```
+enemyposes subscribe <hz>
+enemyposes unsubscribe
+STATE enemypose <entityId> <timeMs> <teleportCounter> <x> <y> <z> <yaw> <clip> <clipTime> <loop> <map>
+enemydrive <entityId> <map>
+enemypose <entityId> <timeMs> <teleportCounter> <x> <y> <z> <yaw> <clip> <clipTime> <loop> <map>
+enemyrelease <entityId> <map>
+```
+
+Subscribe at the same rate as `localpose` (normally 20 Hz); rates clamp to 1–60 Hz. Subscribing again restarts sampling. Each active `Enemy_Grunt` entity (including models using that class) produces one line per interval, including driven copies. Runtime-created Grunts are reported too; other classes are excluded in this slice. Driving still requires a map-placed enemy. No reports are produced in the main menu or while loading. There is one replaceable pending line per enemy; a new report replaces the complete pending set, so inactive enemies cannot retain stale pending samples. Reports do not describe activation/death transitions.
+
+Position is the character body's feet, and rotation is body yaw in degrees. `<clip>` is the case-sensitive mesh animation name, one non-space field of at most 128 characters; `-` means no clip. `<clipTime>` is seconds within the clip, from 0 to 1000000000; `<loop>` is `0` or `1`. Position and yaw magnitudes cannot exceed 1000000000. Maps are nonempty rest-of-line paths of at most 1024 bytes. The ordinary Version 2 numeric grammar applies. The current game report emits teleport counter zero; recipients still honor a changed counter supplied by a Peer, and jumps over three meters snap automatically.
+
+Responses are `RESPONSE enemyposes ok subscribe <clampedHz>` or `RESPONSE enemyposes ok unsubscribe`. Malformed subscriptions answer `RESPONSE enemyposes invalid`.
+
+Drive and release answer `RESPONSE <keyword> <outcome> <entityId>`. Outcomes are `ok`, `wrong-map`, `not-found`, or `wrong-type`; malformed lines answer `invalid` without an identifier. Driving again is idempotent. Only a map-placed Grunt can be driven; release and pose require an already driven enemy. An unknown animation is `invalid`. Successful `enemypose` is silent; only the first failure of a consecutive failure streak is reported. A successful sample or a new Map Visit ends that streak. Capability failures answer `not-granted` without an identifier.
+
+Copies buffer sender-timestamped motion using the Avatar's 100 ms interpolation delay, shortest-path yaw, clock alignment, and discontinuity rules. Animation time interpolates within a monotonically advancing clip; clip changes, restarts, and wraps switch at their sample time. A stalled stream holds its last pose and animation. Local AI, senses, pathfinding, attacks, damage reactions, and enemy-triggered Map Script callbacks are suppressed, including collide callbacks in which the copy is the child. Local ambient sound and darkness glow remain. Hit relay and target selection are separate work.
+
+Release, Session end, and leaving the Map Visit discard buffered samples and restore vanilla simulation from the current position, restoring gravity, collision testing, and the prior active flag. A save does not store driven mode. A checkpoint death within the same Map Visit does not reset a driven copy. The Peer must drive it again after loading a save or entering another Map Visit. The multiplayer consumer must add negotiation, relay, and map/Session handoff in its own repository; this change does not enable enemy sharing there by itself.
+
+See [the Controller checklist](../../docs/testing/enemy-copies.md) for game adapter verification.

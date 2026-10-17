@@ -41,6 +41,16 @@ namespace
 			mLocalPose.msMapFile = "maps/main/level01.map";
 		}
 
+		std::vector<cGameInteractionEnemyPose> mvEnemies;
+		virtual std::vector<cGameInteractionEnemyPose> GetEnemyPoses() const { return mvEnemies; }
+		virtual eGameInteractionCommandOutcome DriveEnemy(int id)
+		{ mvEntityOperations.push_back("enemy drive " + Text(id)); return eGameInteractionCommandOutcome_Success; }
+		virtual eGameInteractionCommandOutcome PoseEnemy(const cGameInteractionEnemyPose& pose)
+		{ mvEntityOperations.push_back("enemy pose " + Text(pose.mlEntityId)); return eGameInteractionCommandOutcome_Success; }
+		virtual eGameInteractionCommandOutcome ReleaseEnemy(int id)
+		{ mvEntityOperations.push_back("enemy release " + Text(id)); return eGameInteractionCommandOutcome_Success; }
+		virtual void ReleaseDrivenEnemies() { mvEntityOperations.push_back("enemies release all"); }
+
 		virtual bool IsMapLoaded() const { return mbMapLoaded; }
 		virtual cGameInteractionPosition GetPosition() const { return mPosition; }
 		virtual cGameInteractionRotation GetRotation() const { return mRotation; }
@@ -257,6 +267,83 @@ namespace
 		SOCKET peer = Connect(aGateway, aAdapter);
 		Expect(Receive(peer) == "Hello, from Amnesia: The Dark Descent!\n", "every Session opens with the greeting");
 		return peer;
+	}
+
+	std::string ReceiveLines(SOCKET aPeer, int alLineCount);
+
+	void EnemyReportsFollowSubscriptionAndSession()
+	{
+		cGameInteractionGateway gateway;
+		cFakeGameAdapter adapter;
+		cGameInteractionEnemyPose enemy;
+		enemy.mlEntityId = 7;
+		enemy.mPose = adapter.mLocalPose;
+		enemy.msClip = "Walk";
+		enemy.mfAnimationTime = 0.25f;
+		enemy.mbLoop = true;
+		adapter.mvEnemies.push_back(enemy);
+		enemy.mlEntityId = 8;
+		adapter.mvEnemies.push_back(enemy);
+		Expect(gateway.Listen("127.0.0.1", 0), "listen");
+		SOCKET peer = Connect(gateway, adapter);
+		Receive(peer);
+		SendCommands(peer, gateway, adapter, "protocol 2 enemies\nenemyposes subscribe 20\n");
+		Expect(ReceiveLines(peer, 4) == "RESPONSE protocol ok 2 enemies\nRESPONSE enemyposes ok subscribe 20\n"
+			"STATE enemypose 7 1000 0 1.2500 -2.5000 3.7500 90.0000 Walk 0.2500 1 maps/main/level01.map\n"
+			"STATE enemypose 8 1000 0 1.2500 -2.5000 3.7500 90.0000 Walk 0.2500 1 maps/main/level01.map\n",
+			"every enemy is reported at the subscribed Pose rate");
+		SendCommands(peer, gateway, adapter, "ping\n");
+		Expect(Receive(peer) == "RESPONSE:ping:pong\n", "same tick does not resample enemies");
+		SendCommands(peer, gateway, adapter, "enemyposes unsubscribe\n");
+		Expect(Receive(peer) == "RESPONSE enemyposes ok unsubscribe\n", "unsubscribe ends reports");
+		closesocket(peer);
+	}
+
+	void EnemyCommandsRequireCapability()
+	{
+		cGameInteractionGateway gateway;
+		cFakeGameAdapter adapter;
+		Expect(gateway.Listen("127.0.0.1", 0), "listen");
+		SOCKET peer = Connect(gateway, adapter); Receive(peer);
+		SendCommands(peer, gateway, adapter, "protocol 2\nenemyposes subscribe 20\nenemydrive 7 maps/main/level01.map\n");
+		Expect(ReceiveLines(peer, 3) == "RESPONSE protocol ok 2\nRESPONSE enemyposes not-granted\n"
+			"RESPONSE enemydrive not-granted\n", "ungranted enemy Commands are rejected and report nothing");
+		Expect(adapter.mvEntityOperations.empty(), "ungranted Commands change nothing");
+		closesocket(peer);
+	}
+
+	void EnemyCommandsAreScopedToMapAndSession()
+	{
+		cGameInteractionGateway gateway;
+		cFakeGameAdapter adapter;
+		Expect(gateway.Listen("127.0.0.1", 0), "listen");
+		SOCKET peer = Connect(gateway, adapter); Receive(peer);
+		SendCommands(peer, gateway, adapter, "protocol 2 enemies\nenemydrive 7 maps/main/level01.map\n"
+			"enemypose 7 1000 0 1 2 3 90 Walk 0.25 1 maps/main/level01.map\n");
+		Expect(ReceiveLines(peer, 2) == "RESPONSE protocol ok 2 enemies\nRESPONSE enemydrive ok 7\n",
+			"drive is answered; streamed samples succeed silently");
+		Expect(adapter.mvEntityOperations.size() == 2 && adapter.mvEntityOperations[1] == "enemy pose 7",
+			"enemy sample reaches game");
+		SendCommands(peer, gateway, adapter, "enemydrive 7 other.map\nenemypose 7 1000 0 1 2 3 90 Walk -1 1 maps/main/level01.map\n"
+			"enemyrelease 7 maps/main/level01.map\n");
+		Expect(ReceiveLines(peer, 3) == "RESPONSE enemydrive wrong-map 7\nRESPONSE enemypose invalid\nRESPONSE enemyrelease ok 7\n",
+			"wrong maps and malformed samples never reach game");
+		Expect(adapter.mvEntityOperations.size() == 3, "only valid release reaches game");
+		gateway.Shutdown(); gateway.Update(adapter);
+		Expect(adapter.mvEntityOperations.back() == "enemies release all", "Session end releases driven enemies");
+		closesocket(peer);
+	}
+
+	void EnemiesRequireTheirCapability()
+	{
+		cGameInteractionGateway gateway;
+		cFakeGameAdapter adapter;
+		Expect(gateway.Listen("127.0.0.1", 0), "listen");
+		SOCKET peer = Connect(gateway, adapter);
+		Receive(peer);
+		SendCommands(peer, gateway, adapter, "protocol 2 enemies\n");
+		Expect(Receive(peer) == "RESPONSE protocol ok 2 enemies\n", "enemies Capability is granted");
+		closesocket(peer);
 	}
 
 	void ProtocolVersion2NegotiationGrantsSupportedRequestedCapabilities()
@@ -1487,6 +1574,10 @@ int main()
 	gateway.Shutdown();
 	Expect(!gateway.IsListening(), "a shut-down gateway is not listening");
 
+	EnemyCommandsRequireCapability();
+	EnemyCommandsAreScopedToMapAndSession();
+	EnemyReportsFollowSubscriptionAndSession();
+	EnemiesRequireTheirCapability();
 	ProtocolVersion2NegotiationGrantsSupportedRequestedCapabilities();
 	ChatEntryCarriesItsChatColorsToTheGameAdapter();
 	ResponseIsDeliveredWithinTheUpdateThatProcessedItsCommand();

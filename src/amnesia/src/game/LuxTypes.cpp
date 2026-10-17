@@ -166,6 +166,8 @@ void iLuxCollideCallbackContainer::CheckCollisionCallback(const tString& asName,
 		bool bCollide=false;
 
 		if(pEntity==NULL) continue;
+		if(pEntity->IsEnemyDriven() || (GetCollideCallbackParentEntity() &&
+			GetCollideCallbackParentEntity()->IsEnemyDriven())) continue;
 		if(pEntity->IsActive()==false) continue;
 
 		bCollide = CheckEntityCollision(pEntity, apMap);
@@ -212,7 +214,8 @@ bool iLuxCollideCallbackContainer::RunSharedCollideCallback(iLuxEntity *apChild,
 		break;
 	}
 	// As in the collide check, an inactive child never collides.
-	if(pCallback==NULL || apChild->IsActive()==false) return false;
+	if(pCallback==NULL || apChild->IsActive()==false || apChild->IsEnemyDriven() ||
+		(GetCollideCallbackParentEntity() && GetCollideCallbackParentEntity()->IsEnemyDriven())) return false;
 
 	cSharedCollide collide;
 	iLuxEntity *pParent = GetCollideCallbackParentEntity();

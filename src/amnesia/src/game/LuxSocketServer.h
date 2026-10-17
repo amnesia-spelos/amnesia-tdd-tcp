@@ -12,6 +12,7 @@ public:
     ~cLuxSocketServer();
 
     void Update(float afTimeStep);
+	void DestroyWorldEntities(cLuxMap* apMap);
 	void PublishEvent(const cGameInteractionEvent& aEvent);
 	virtual void ReportLocalChatEntry(const cChatEntry& aEntry);
 	void SetConnectionSettings(const tString& host, int port);

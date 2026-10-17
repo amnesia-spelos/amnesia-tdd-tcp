@@ -29,8 +29,10 @@ struct cAvatarPoseSample
 struct cAvatarRenderedPose
 {
 	cAvatarRenderedPose()
-		: mfX(0.0f), mfY(0.0f), mfZ(0.0f), mfYawDegrees(0.0f), mfCameraPitchDegrees(0.0f),
+		: mfSenderTimeMs(0.0), mfX(0.0f), mfY(0.0f), mfZ(0.0f), mfYawDegrees(0.0f), mfCameraPitchDegrees(0.0f),
 		  mbCrouching(false), mbLanternRaised(false), mfHorizontalSpeedMps(0.0f), mfForwardSpeedMps(0.0f) {}
+	// Sender time actually rendered, clamped at holds and discontinuities.
+	double mfSenderTimeMs;
 	float mfX;
 	float mfY;
 	float mfZ;

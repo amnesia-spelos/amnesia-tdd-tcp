@@ -523,6 +523,7 @@ void cLuxMap::LoadCheckPoint()
 	for(; it != mlstEnemies.end(); ++it)
 	{
 		iLuxEnemy *pEnemy = *it;
+		if(pEnemy->IsEnemyDriven()) continue;
 		pEnemy->SetActive(false);
 		pEnemy->ResetProperties();
 	}
