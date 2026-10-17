@@ -31,6 +31,18 @@ public:
 	bool CreateAvatar(const tString& asIdentifier, const tString& asEntityFile);
 	void RemoveAvatar(const tString& asIdentifier);
 	void PoseAvatar(const tString& asIdentifier, const cGameInteractionPose& aPose);
+	// Copies only awake, opted-in Avatars; no body pointer is retained by an enemy between updates.
+	struct cEnemyTarget
+	{
+		tString msIdentifier;
+		iCharacterBody *mpBody;
+		bool mbCrouching, mbLanternRaised;
+		cVector3f mvVelocity;
+		float mfPitch;
+	};
+	std::vector<cEnemyTarget> GetEnemyTargets();
+	bool GetEnemyTarget(const tString& asIdentifier, cEnemyTarget& aTarget);
+	void SetAvatarEnemySight(const tString& asIdentifier, bool abEnabled);
 	void SetAvatarCollision(const tString& asIdentifier, bool abCollides);
 
 	void Update(float afTimeStep);
@@ -73,7 +85,7 @@ private:
 	struct cAvatar
 	{
 		cAvatar() : mbMeshBroken(false), mpMap(NULL), mpMeshEntity(NULL),
-			mpBody(NULL), mbCrouching(false), mlCrouchSizeIndex(-1), mpLantern(NULL)
+			mpBody(NULL), mbEnemySight(false), mbLanternRaised(false), mvVelocity(0), mfPitch(0), mbCrouching(false), mlCrouchSizeIndex(-1), mpLantern(NULL)
 		{
 			for(int i = 0; i < eAvatarClip_LastEnum; ++i) mvClipAnimations[i] = NULL;
 		}
@@ -98,6 +110,9 @@ private:
 		// A Pose drives only this body, which carries the mesh with it. A future mode could drive an
 		// existing enemy's character body the same way while its AI is disabled.
 		iCharacterBody *mpBody;
+		bool mbEnemySight, mbLanternRaised;
+		cVector3f mvVelocity;
+		float mfPitch;
 		// The body's active size as last applied; toggled on a change in the rendered Pose's crouch flag.
 		bool mbCrouching;
 		// The index AddExtraSize returned for the crouch body size, resolved once per body (#51).

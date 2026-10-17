@@ -225,6 +225,7 @@ enum eGameInteractionCommandType
 	eGameInteractionCommand_AvatarCreate,
 	eGameInteractionCommand_AvatarRemove,
 	eGameInteractionCommand_AvatarCollision,
+	eGameInteractionCommand_AvatarEnemySight,
 	eGameInteractionCommand_AvatarPose,
 	eGameInteractionCommand_LocalPose,
 	eGameInteractionCommand_ReportedBodies,
@@ -306,13 +307,14 @@ struct cGameInteractionEnemyRequest
 // Peer named no model.
 struct cGameInteractionAvatarRequest
 {
-	cGameInteractionAvatarRequest() : mbValid(false), mbCollides(false) {}
+	cGameInteractionAvatarRequest() : mbValid(false), mbCollides(false), mbEnemySight(false) {}
 	bool mbValid;
 	std::string msIdentifier;
 	std::string msEntityFile;
 	cGameInteractionPose mPose;
 	// Whether an avatarcollision Command turns the Avatar's collision with the local player on.
 	bool mbCollides;
+	bool mbEnemySight;
 };
 
 // Where a playerplace Command asks to place the local player. Unlike a Pose it has no time, teleport
@@ -559,6 +561,7 @@ public:
 	virtual void RemoveAvatar(const std::string& asIdentifier) = 0;
 	virtual void PoseAvatar(const std::string& asIdentifier, const cGameInteractionPose& aPose) = 0;
 	// Whether the local player collides with the Avatar while it is awake. It is on until turned off.
+	virtual void SetAvatarEnemySight(const std::string& asIdentifier, bool abEnabled) = 0;
 	virtual void SetAvatarCollision(const std::string& asIdentifier, bool abCollides) = 0;
 	// The bodies whose motion the local player decides, on the current map. Called only while the
 	// local Pose is available.

@@ -146,6 +146,7 @@ void iLuxEnemyLoader::AfterLoad(cXmlElement *apRootElem, const cMatrixf &a_mtxTr
 	pEnemy->mlToughness = GetVarInt("Toughness", 0);
 
 	pEnemy->mfSightRange = GetVarFloat("SightRange", 0);
+	pEnemy->mfSharedSightRange = pEnemy->mfSightRange;
 	pEnemy->mfDarknessSightRange = GetVarFloat("DarknessSightRange", 0);
 	pEnemy->mfHearVolume = GetVarFloat("HearVolume", 0);
 
@@ -279,6 +280,7 @@ void iLuxEnemyLoader::AfterLoad(cXmlElement *apRootElem, const cMatrixf &a_mtxTr
 	if (gpBase->mbHardMode)
 	{
 		pEnemy->mfSightRange *= 1.15f;
+		pEnemy->mfSharedSightRange = pEnemy->mfSightRange;
 		pEnemy->mfDarknessSightRange *= 1.15f;
 		pEnemy->mfHearVolume *= 0.6f;
 
@@ -456,6 +458,9 @@ iLuxEnemy::iLuxEnemy(const tString &asName, int alID, cLuxMap *apMap, eLuxEnemyT
 	mfAmbientSoundCount = 0;
 
 	mfLookForPlayerCount =0;
+	mPerception = cEnemyPerceptionModel();
+	mbAvatarPerception = false;
+	mfAvatarTerror = 0;
 	mbCanSeePlayer = false;
 	mlPlayerInLOSCount =0;
 	mbPlayerDetected = false;
@@ -675,6 +680,7 @@ void iLuxEnemy::OnUpdate(float afTimeStep)
 	
 	//////////////////////
 	// Specific
+	if(AvatarSeesPosition(mpCharBody->GetPosition(), true, true)) mbIsSeenByPlayer = true;
 	UpdateEnemySpecific(afTimeStep);
 
 	//////////////////////
@@ -863,6 +869,8 @@ void iLuxEnemy::ChangeState(eLuxEnemyState aState)
 void iLuxEnemy::SendMessage(eLuxEnemyMessage aType, float afTime, bool abLocalScope, const cVector3f& avX,float afX, int alX)
 {
 	if(mbEnemyDriven) return;
+	// A local death does not announce the loss of an Avatar being pursued.
+	if(aType == eLuxEnemyMessage_PlayerDead && IsAvatarTarget() && !IsTargetDead()) return;
 	if(mbDisabled) return;
 	if(	TriggersDisabled() && 
 		aType > eLuxEnemyMessage_EndOfPath && 
@@ -1013,6 +1021,9 @@ void iLuxEnemy::ResetProperties()
 
 	mbDisabled = false;
 	mfLookForPlayerCount =0;
+	mPerception = cEnemyPerceptionModel();
+	mbAvatarPerception = false;
+	mfAvatarTerror = 0;
 	mbCanSeePlayer = false;
 	mlPlayerInLOSCount =0;
 	mbPlayerDetected = false;
@@ -1384,8 +1395,144 @@ void iLuxEnemy::UpdateCharBody(float afTimeStep)
 
 //-----------------------------------------------------------------------
 
+// Vanilla geometry and light rules, evaluated independently for each candidate.
+bool iLuxEnemy::TargetInSight(iCharacterBody* body, bool crouch, bool lantern, float light, float speed)
+{
+	const float distance = cMath::Vector3Dist(body->GetPosition(), mpCharBody->GetPosition());
+	const float range = cEnemyPerceptionModel::SightRange(mfSharedSightRange, mfDarknessSightRange,
+		mfCrouchVisibleRangeMul, crouch, lantern, light, speed, mfPlayerInDarknessLightLevel,
+		mbSkipVisibilityRangeHandicaps);
+	if(distance > range) return false;
+	const float minDistance = mpCharBody->GetCurrentBody()->GetBoundingVolume()->GetRadius() +
+		body->GetCurrentBody()->GetBoundingVolume()->GetRadius() + 0.05f;
+	return LineOfSight(body->GetPosition(), body->GetSize(), distance >= minDistance);
+}
+
+bool iLuxEnemy::PerceivesTarget(iCharacterBody* body, bool sight)
+{
+	return sight || (DistToChar(body) < mpCharBody->GetSize().x && InFOV(body->GetPosition()));
+}
+
+int iLuxEnemy::TargetDetectionChecks(iCharacterBody* body)
+{
+	// Vanilla proximity detection and the Kaernk's water sense do not wait for sight confirmation.
+	return mEnemyType == eLuxEnemyType_WaterLurker ||
+		(DistToChar(body) < mpCharBody->GetSize().x && InFOV(body->GetPosition())) ? 1 : 3;
+}
+
+bool iLuxEnemy::UpdateAvatarPerception(float afTimeStep)
+{
+	const std::vector<cLuxAvatarHandler::cEnemyTarget> avatars = gpBase->mpAvatarHandler->GetEnemyTargets();
+	if(avatars.empty())
+	{
+		if(mbAvatarPerception)
+		{
+			mPerception = cEnemyPerceptionModel();
+			mbCanSeePlayer = mbPlayerDetected = false;
+			mlPlayerInLOSCount = 0;
+			mfLastPlayerPosCount = 0;
+		}
+		mbAvatarPerception = false;
+		return false;
+	}
+	if(!mbAvatarPerception) mPerception = cEnemyPerceptionModel(mbCanSeePlayer);
+	mbAvatarPerception = true;
+	if(IsAvatarTarget() && mCurrentState == eLuxEnemyState_Alert)
+		mfAvatarTerror = cMath::Min(1.0f, mfAvatarTerror + afTimeStep *
+			gpBase->mpGameCfg->GetFloat("Player_General", "TerrorIncSpeed", 0));
+	mfLookForPlayerCount -= afTimeStep;
+	if(mfLookForPlayerCount > 0) return true;
+	mfLookForPlayerCount = 0.3f;
+	std::vector<cEnemyPerceptionCandidate> candidates;
+	cLuxPlayer* player = gpBase->mpPlayer;
+	bool crouch = false;
+	if(player->GetCurrentMoveState() == eLuxMoveState_Normal)
+		crouch = static_cast<cLuxMoveState_Normal*>(player->GetCurrentMoveStateData())->IsCrouching();
+	iCharacterBody* body = player->GetCharacterBody();
+	bool sight = !player->IsDead() && !TriggersDisabled() && TargetInSight(body, crouch,
+		player->GetHelperLantern()->IsActive(), player->GetHelperLightLevel()->GetNormalLightLevel(), player->GetAvgSpeed());
+	candidates.push_back(cEnemyPerceptionCandidate("", !player->IsDead() && !TriggersDisabled() &&
+		PerceivesTarget(body, sight), DistToChar(body), TargetDetectionChecks(body)));
+	std::vector<iLight*> skipLights;
+	skipLights.push_back(player->GetHelperInDarkness()->GetAmbientLight());
+	for(size_t i = 0; i < avatars.size(); ++i)
+	{
+		const cLuxAvatarHandler::cEnemyTarget& avatar = avatars[i];
+		body = avatar.mpBody;
+		const cVector3f position = body->GetPosition(), size = body->GetSize(), forward = body->GetForward();
+		// Same five sample positions and ambient-light exclusion as cLuxPlayerLightLevel.
+		const cVector3f points[] = { position, position + cVector3f(0,size.y-0.1f,0),
+			position - cVector3f(0,size.y-0.1f,0), position + forward * size.z*0.8f,
+			position - cVector3f(0,size.y-0.1f,0) + forward * size.z*0.8f };
+		float light = 0;
+		for(int j = 0; j < 5; ++j)
+			light = cMath::Max(light, gpBase->mpMapHelper->GetLightLevelAtPos(points[j], &skipLights, 0));
+		cVector3f velocity = avatar.mvVelocity; velocity.y = 0;
+		sight = !TriggersDisabled() && TargetInSight(body, avatar.mbCrouching, avatar.mbLanternRaised, light, velocity.Length());
+		candidates.push_back(cEnemyPerceptionCandidate(avatar.msIdentifier, !TriggersDisabled() &&
+			PerceivesTarget(body, sight), DistToChar(body), TargetDetectionChecks(body)));
+	}
+	const tString previous = mPerception.GetTarget();
+	mPerception.Update(candidates);
+	if(previous != mPerception.GetTarget())
+	{
+		mfAvatarTerror = 0;
+		if(IsAvatarTarget()) gpBase->mpPlayer->RemoveTerrorEnemy(this);
+		else if(mCurrentState == eLuxEnemyState_Alert || mCurrentState == eLuxEnemyState_Hunt)
+			gpBase->mpPlayer->AddTerrorEnemy(this);
+	}
+	if(!mPerception.IsVisible()) mfAvatarTerror = 0;
+	const bool visible = mPerception.IsVisible();
+	if(visible != mbCanSeePlayer) SendMessage(visible ? eLuxEnemyMessage_PlayerSeen : eLuxEnemyMessage_PlayerUnseen, 0, false);
+	mbCanSeePlayer = visible;
+	return true;
+}
+
+void iLuxEnemy::FollowEnemyHelp(int enemyId)
+{
+	if(mbAvatarPerception && mPerception.IsVisible())
+	{
+		mvLastKnownPlayerPos = GetPlayerFeetPos();
+		return;
+	}
+	iLuxEntity* entity = mpMap->GetEntityByID(enemyId);
+	if(entity && entity->GetEntityType() == eLuxEntityType_Enemy)
+	{
+		iLuxEnemy* caller = static_cast<iLuxEnemy*>(entity);
+		if(caller->IsAvatarTarget())
+		{
+			mbAvatarPerception = true;
+			mPerception.RememberTarget(caller->mPerception.GetTarget());
+			mvLastKnownPlayerPos = caller->GetPlayerFeetPos();
+			return;
+		}
+	}
+	ShowPlayerPosition();
+}
+
+bool iLuxEnemy::IsTargetDead()
+{
+	return IsAvatarTarget() ? GetTargetBody() == NULL : gpBase->mpPlayer->IsDead();
+}
+
+iCharacterBody* iLuxEnemy::GetTargetBody()
+{
+	if(IsAvatarTarget())
+	{
+		cLuxAvatarHandler::cEnemyTarget target;
+		return gpBase->mpAvatarHandler->GetEnemyTarget(mPerception.GetTarget(), target) ? target.mpBody : NULL;
+	}
+	return gpBase->mpPlayer->GetCharacterBody();
+}
+
+float iLuxEnemy::GetTargetTerror()
+{
+	return IsAvatarTarget() ? mfAvatarTerror : gpBase->mpPlayer->GetTerror();
+}
+
 void iLuxEnemy::UpdateCanSeePlayer(float afTimeStep)
 {
+	if(UpdateAvatarPerception(afTimeStep)) return;
 	cLuxPlayer *pPlayer = gpBase->mpPlayer;
 
 	if(pPlayer->IsDead()) return;
@@ -1491,9 +1638,9 @@ void iLuxEnemy::UpdateCanSeePlayer(float afTimeStep)
 
 void iLuxEnemy::UpdatePlayerDetected(float afTimeStep)
 {
-	if(gpBase->mpPlayer->IsDead()) return;
+	if(!mbAvatarPerception && IsTargetDead()) return;
 
-	bool bDetected = PlayerIsDetected();
+	bool bDetected = mbAvatarPerception ? mPerception.IsVisible() : PlayerIsDetected();
 
 	if(bDetected && mbPlayerDetected==false)
 	{
@@ -1511,9 +1658,14 @@ void iLuxEnemy::UpdatePlayerDetected(float afTimeStep)
 
 void iLuxEnemy::UpdatePlayerInRange(float afTimeStep)
 {
-	if(gpBase->mpPlayer->IsDead()) return;
+	if(!mbAvatarPerception && IsTargetDead()) return;
 
-	float fDistance = DistToPlayer();
+	float fDistance = gpBase->mpPlayer->IsDead() ? 100000.0f : DistToChar(gpBase->mpPlayer->GetCharacterBody());
+	if(mbAvatarPerception)
+	{
+		const std::vector<cLuxAvatarHandler::cEnemyTarget> targets = gpBase->mpAvatarHandler->GetEnemyTargets();
+		for(size_t i = 0; i < targets.size(); ++i) fDistance = cMath::Min(fDistance, DistToChar(targets[i].mpBody));
+	}
 
 	if(fDistance <= mfActivationDistance && mbPlayerInRange==false)
 	{
@@ -1632,7 +1784,7 @@ void iLuxEnemy::UpdateCheckLastPlayerPos(float afTimeStep)
 
 	if(mfLastPlayerPosCount > 0)
 	{
-		mvLastKnownPlayerPos = gpBase->mpPlayer->GetCharacterBody()->GetFeetPosition();
+		mvLastKnownPlayerPos = GetPlayerFeetPos();
 	}
 }
 
@@ -1836,7 +1988,7 @@ cAINode *iLuxEnemy::GetSearchForPlayerNode(int alMaxIterations, float afMaxAngle
 		float fAngle = cMath::RandRectf(-fMaxAngle, fMaxAngle);
 
 		//Get the distance and direction to player
-		cVector3f vToPlayer = gpBase->mpPlayer->GetCharacterBody()->GetFeetPosition() - mpCharBody->GetFeetPosition();
+		cVector3f vToPlayer = GetPlayerFeetPos() - mpCharBody->GetFeetPosition();
 		float fToPlayerDist = vToPlayer.Length();
 		vToPlayer.Normalize();
 
@@ -1869,7 +2021,7 @@ cAINode *iLuxEnemy::GetPatrolAroundPlayerNode(int alMaxIterations, float afMaxAn
 {
 	float fMaxAngle = mfPlayerPatrolMaxAngle * afMaxAngleMul;
 
-	cVector3f vPlayerFeetPos = gpBase->mpPlayer->GetCharacterBody()->GetFeetPosition();
+	cVector3f vPlayerFeetPos = GetPlayerFeetPos();
 
 	////////////////////
 	//Iterate until a node is found or max iterations is reached.
@@ -2076,7 +2228,8 @@ cLuxProp_Object* iLuxEnemy::GetClosestFood(float afMaxDist, float afMaxHeightDis
 
 cVector3f iLuxEnemy::GetPlayerFeetPos()
 {
-	return gpBase->mpPlayer->GetCharacterBody()->GetFeetPosition();
+	iCharacterBody* body = GetTargetBody();
+	return body ? body->GetFeetPosition() : mvLastKnownPlayerPos;
 }
 
 //-----------------------------------------------------------------------
@@ -2123,39 +2276,64 @@ cVector3f iLuxEnemy::GetDirection2D(const cVector3f &avPos)
 
 float iLuxEnemy::DistToPlayer()
 {
-	if(gpBase->mpPlayer->IsDead()) return 100000.0f;
+	if(IsTargetDead()) return 100000.0f;
 
-	return DistToChar(gpBase->mpPlayer->GetCharacterBody());
+	return DistToChar(GetTargetBody());
 }
 
 float iLuxEnemy::DistToPlayer2D()
 {
-	if(gpBase->mpPlayer->IsDead()) return 100000.0f;
+	if(IsTargetDead()) return 100000.0f;
 
-	return DistToChar2D(gpBase->mpPlayer->GetCharacterBody());
+	return DistToChar2D(GetTargetBody());
 }
 
 float iLuxEnemy::DistToPlayer2D(const cVector3f& avPos)
 {
-	return cMath::Vector2DistXZ(gpBase->mpPlayer->GetCharacterBody()->GetPosition(), avPos);
+	return cMath::Vector2DistXZ(GetPlayerFeetPos(), avPos);
 }
 
 float iLuxEnemy::AbsHeightDistToPlayer()
 {
-	if(gpBase->mpPlayer->IsDead()) return 100000.0f;
+	if(IsTargetDead()) return 100000.0f;
 
-	return AbsHeightDistToChar(gpBase->mpPlayer->GetCharacterBody());
+	return AbsHeightDistToChar(GetTargetBody());
 }
 
 cVector3f iLuxEnemy::GetDirection2DToPlayer()
 {
-	return GetDirection2D(gpBase->mpPlayer->GetCharacterBody()->GetPosition());
+	return GetDirection2D(GetPlayerFeetPos());
 }
 
 //-----------------------------------------------------------------------
 
+// An Avatar's view uses its Pose and the local camera's projection settings.
+bool iLuxEnemy::AvatarSeesPosition(const cVector3f& position, bool checkFOV, bool checkLOS)
+{
+	const std::vector<cLuxAvatarHandler::cEnemyTarget> targets = gpBase->mpAvatarHandler->GetEnemyTargets();
+	for(size_t i = 0; i < targets.size(); ++i)
+	{
+		iCharacterBody* body = targets[i].mpBody;
+		const cVector3f eye = body->GetFeetPosition() + cVector3f(0, body->GetSize().y, 0);
+		if(checkFOV)
+		{
+			cCamera camera;
+			cCamera* local = gpBase->mpPlayer->GetCamera();
+			camera.SetFOV(local->GetFOV()); camera.SetAspect(local->GetAspect());
+			camera.SetNearClipPlane(local->GetNearClipPlane()); camera.SetFarClipPlane(local->GetFarClipPlane());
+			camera.SetPosition(eye); camera.SetYaw(body->GetYaw()); camera.SetPitch(targets[i].mfPitch);
+			cBoundingVolume bounds = *mpCharBody->GetCurrentBody()->GetBoundingVolume();
+			bounds.SetPosition(position);
+			if(camera.GetFrustum()->CollideBoundingVolume(&bounds) == eCollision_Outside) continue;
+		}
+		if(!checkLOS || LineOfSight(position, mpCharBody->GetSize(), false, eye)) return true;
+	}
+	return false;
+}
+
 bool iLuxEnemy::IsSeenByPlayer()
 {
+	if(AvatarSeesPosition(mpCharBody->GetPosition(), true, true)) return true;
 	///////////////////////////////
 	// Check frustum
 	cFrustum *pFrustum = gpBase->mpPlayer->GetCamera()->GetFrustum();
@@ -2175,6 +2353,7 @@ bool iLuxEnemy::IsSeenByPlayer()
 
 bool iLuxEnemy::IsInPlayerFovAtFeetPos(const cVector3f& avFeetPos)
 {
+	if(AvatarSeesPosition(avFeetPos + cVector3f(0, mpCharBody->GetSize().y/2, 0), true, false)) return true;
 	cBoundingVolume bv;
 	bv = *mpCharBody->GetCurrentBody()->GetBoundingVolume();
 	bv.SetPosition(avFeetPos + cVector3f(0, mpCharBody->GetSize().y/2, 0) );
@@ -2187,6 +2366,7 @@ bool iLuxEnemy::IsInPlayerFovAtFeetPos(const cVector3f& avFeetPos)
 
 bool iLuxEnemy::IsVisibleToPlayerAtFeetPos(const cVector3f& avFeetPos)
 {
+	if(AvatarSeesPosition(avFeetPos + cVector3f(0, mpCharBody->GetSize().y/2, 0), false, true)) return true;
 	cVector3f vPlayerEyePos = gpBase->mpPlayer->GetCamera()->GetPosition();
 	cVector3f vCharPos = avFeetPos;
 	vCharPos.y += mpCharBody->GetSize().y/2;
@@ -2198,9 +2378,15 @@ bool iLuxEnemy::IsVisibleToPlayerAtFeetPos(const cVector3f& avFeetPos)
 
 float iLuxEnemy::GetPlayerMovementTowardEnemyAmount()
 {
-	iCharacterBody *pPlayerBody = gpBase->mpPlayer->GetCharacterBody();
+	iCharacterBody *pPlayerBody = GetTargetBody();
+	if(!pPlayerBody) return -1;
 	
 	cVector3f vPlayerDir = pPlayerBody->GetVelocity(gpBase->mpEngine->GetStepSize());
+	if(IsAvatarTarget())
+	{
+		cLuxAvatarHandler::cEnemyTarget target;
+		if(gpBase->mpAvatarHandler->GetEnemyTarget(mPerception.GetTarget(), target)) vPlayerDir = target.mvVelocity;
+	}
 	vPlayerDir.y =0;
 	
 	//If not moving much, return lowest amount
@@ -2248,7 +2434,7 @@ bool iLuxEnemy::InFOV(const cVector3f &avPos)
 
 bool iLuxEnemy::PlayerInFOV()
 {
-	return InFOV(gpBase->mpPlayer->GetCharacterBody()->GetPosition());
+	return GetTargetBody() && InFOV(GetTargetBody()->GetPosition());
 }
 
 //-----------------------------------------------------------------------

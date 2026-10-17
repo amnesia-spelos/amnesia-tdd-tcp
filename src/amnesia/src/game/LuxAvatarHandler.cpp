@@ -81,6 +81,38 @@ void cLuxAvatarHandler::SetAvatarCollision(const tString& asIdentifier, bool abC
 	it->second.mCollision.SetEnabled(abCollides);
 }
 
+void cLuxAvatarHandler::SetAvatarEnemySight(const tString& asIdentifier, bool abEnabled)
+{
+	tAvatarMapIt it = m_mapAvatars.find(asIdentifier);
+	if(it != m_mapAvatars.end()) it->second.mbEnemySight = abEnabled;
+}
+
+bool cLuxAvatarHandler::GetEnemyTarget(const tString& asIdentifier, cEnemyTarget& target)
+{
+	tAvatarMapIt it = m_mapAvatars.find(asIdentifier);
+	if(it == m_mapAvatars.end()) return false;
+	cAvatar& avatar = it->second;
+	if(!avatar.mbEnemySight || !avatar.mpBody || !avatar.mpBody->IsActive()) return false;
+	target.msIdentifier = it->first;
+	target.mpBody = avatar.mpBody;
+	target.mbCrouching = avatar.mbCrouching;
+	target.mbLanternRaised = avatar.mbLanternRaised;
+	target.mvVelocity = avatar.mvVelocity;
+	target.mfPitch = avatar.mfPitch;
+	return true;
+}
+
+std::vector<cLuxAvatarHandler::cEnemyTarget> cLuxAvatarHandler::GetEnemyTargets()
+{
+	std::vector<cEnemyTarget> targets;
+	for(tAvatarMapIt it = m_mapAvatars.begin(); it != m_mapAvatars.end(); ++it)
+	{
+		cEnemyTarget target;
+		if(GetEnemyTarget(it->first, target)) targets.push_back(target);
+	}
+	return targets;
+}
+
 // The Pose is applied every update and the body cannot be pushed, so nothing moves the Avatar away from it.
 void cLuxAvatarHandler::Update(float afTimeStep)
 {
@@ -108,7 +140,12 @@ void cLuxAvatarHandler::Update(float afTimeStep)
 		// the Pose may place it.
 		avatar.mpBody->SetForce(0);
 		avatar.mpBody->SetForceVelocity(0);
-		avatar.mpBody->SetFeetPosition(cVector3f(pose.mfX, pose.mfY, pose.mfZ));
+		const cVector3f vFeet(pose.mfX, pose.mfY, pose.mfZ);
+		avatar.mvVelocity = avatar.mpBody->IsActive() && afTimeStep > 0 ?
+			(vFeet - avatar.mpBody->GetFeetPosition()) / afTimeStep : cVector3f(0);
+		avatar.mbLanternRaised = pose.mbLanternRaised;
+		avatar.mfPitch = cMath::ToRad(pose.mfCameraPitchDegrees);
+		avatar.mpBody->SetFeetPosition(vFeet);
 		avatar.mpBody->SetYaw(cMath::ToRad(pose.mfYawDegrees));
 		UpdateStance(avatar, pose.mbCrouching);
 		UpdateCollision(avatar, true);

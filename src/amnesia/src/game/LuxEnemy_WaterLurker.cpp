@@ -409,7 +409,7 @@ bool cLuxEnemy_WaterLurker::StateEventImplement(int alState, eLuxEnemyStateEvent
 		///////////////////////
 		//Update the player position	
 		kLuxOnMessage(eLuxEnemyMessage_TimeOut)
-			mpPathfinder->MoveTo(gpBase->mpPlayer->GetCharacterBody()->GetFeetPosition());
+			mpPathfinder->MoveTo(GetPlayerFeetPos());
 			SendMessage(eLuxEnemyMessage_TimeOut, 0.4f, true);
 			if(PlayerIsDetected()==false)
 			{
@@ -595,9 +595,14 @@ void cLuxEnemy_WaterLurker::SplashWater(eWaterLurkerSplash aType)
 
 //-----------------------------------------------------------------------
 
+bool cLuxEnemy_WaterLurker::PerceivesTarget(iCharacterBody* apBody, bool)
+{
+	return AbsHeightDistToChar(apBody) <= mfPlayerDetectionHeight;
+}
+
 bool cLuxEnemy_WaterLurker::PlayerIsDetected()
 {
-	return AbsHeightDistToPlayer() <= mfPlayerDetectionHeight; 
+	return mbAvatarPerception ? mPerception.IsVisible() : AbsHeightDistToPlayer() <= mfPlayerDetectionHeight;
 }
 
 //-----------------------------------------------------------------------

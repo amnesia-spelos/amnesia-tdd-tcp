@@ -129,7 +129,7 @@ eGameInteractionCommandClassification cGameInteractionCommand::GetClassification
 {
 	return mType == eGameInteractionCommand_ExecuteScript || mType == eGameInteractionCommand_Chat ||
 		mType == eGameInteractionCommand_StartCustomStory || mType == eGameInteractionCommand_AvatarCreate ||
-		mType == eGameInteractionCommand_AvatarRemove || mType == eGameInteractionCommand_AvatarCollision ||
+		mType == eGameInteractionCommand_AvatarEnemySight || mType == eGameInteractionCommand_AvatarRemove || mType == eGameInteractionCommand_AvatarCollision ||
 		mType == eGameInteractionCommand_AvatarPose || mType == eGameInteractionCommand_EntityDrive ||
 		mType == eGameInteractionCommand_EntityBodies || mType == eGameInteractionCommand_EntityInteracting ||
 		mType == eGameInteractionCommand_EntityBreak || mType == eGameInteractionCommand_EntityRelease ||
@@ -572,7 +572,7 @@ namespace
 		return AvatarResponse(aCommand.GetType(), eGameInteractionCommandOutcome_Success, request.msIdentifier);
 	}
 
-	cGameInteractionResponse SetAvatarCollision(const cGameInteractionCommand& aCommand,
+	cGameInteractionResponse SetAvatarOption(const cGameInteractionCommand& aCommand,
 		iGameInteractionGameAdapter& aGameAdapter, const cSessionAvatars& aAvatars)
 	{
 		const cGameInteractionAvatarRequest& request = aCommand.GetAvatarRequest();
@@ -580,7 +580,9 @@ namespace
 			return AvatarResponse(aCommand.GetType(), eGameInteractionCommandOutcome_Invalid, std::string());
 		if (!aAvatars.Contains(request.msIdentifier))
 			return AvatarResponse(aCommand.GetType(), eGameInteractionCommandOutcome_AvatarNotFound, request.msIdentifier);
-		aGameAdapter.SetAvatarCollision(request.msIdentifier, request.mbCollides);
+		if (aCommand.GetType() == eGameInteractionCommand_AvatarEnemySight)
+			aGameAdapter.SetAvatarEnemySight(request.msIdentifier, request.mbEnemySight);
+		else aGameAdapter.SetAvatarCollision(request.msIdentifier, request.mbCollides);
 		return AvatarResponse(aCommand.GetType(), eGameInteractionCommandOutcome_Success, request.msIdentifier);
 	}
 
@@ -610,6 +612,7 @@ namespace
 		{
 		case eGameInteractionCommand_AvatarCreate:
 		case eGameInteractionCommand_AvatarRemove:
+		case eGameInteractionCommand_AvatarEnemySight:
 		case eGameInteractionCommand_AvatarCollision:
 		case eGameInteractionCommand_AvatarPose:
 			return eGameInteractionCapability_Avatars;
@@ -692,8 +695,9 @@ namespace
 			return RemoveAvatar(aCommand, aGameAdapter, aSession.mAvatars);
 		case eGameInteractionCommand_AvatarPose:
 			return PoseAvatar(aCommand, aGameAdapter, aSession.mAvatars);
+		case eGameInteractionCommand_AvatarEnemySight:
 		case eGameInteractionCommand_AvatarCollision:
-			return SetAvatarCollision(aCommand, aGameAdapter, aSession.mAvatars);
+			return SetAvatarOption(aCommand, aGameAdapter, aSession.mAvatars);
 		case eGameInteractionCommand_GetPosition:
 		{
 			cGameInteractionResponse response(aCommand.GetType(), eGameInteractionResponse_Position,

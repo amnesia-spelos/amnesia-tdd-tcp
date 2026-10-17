@@ -168,7 +168,7 @@ bool cLuxEnemy_Grunt::StateEventImplement(int alState, eLuxEnemyStateEvent aEven
 		ChangeState(eLuxEnemyState_Idle);	
 
 	kLuxOnMessage(eLuxEnemyMessage_HelpMe)
-		ShowPlayerPosition();
+		FollowEnemyHelp(apMessage->mlCustomValue);
 		ChangeState(eLuxEnemyState_Hunt);
 
 	////////////////////////////////
@@ -371,7 +371,7 @@ bool cLuxEnemy_Grunt::StateEventImplement(int alState, eLuxEnemyStateEvent aEven
 			SendMessage(eLuxEnemyMessage_TimeOut, 0.3f, true);
 			mpPathfinder->MoveTo(mvLastKnownPlayerPos);
 			
-			gpBase->mpPlayer->AddTerrorEnemy(this);
+			if(!IsAvatarTarget()) gpBase->mpPlayer->AddTerrorEnemy(this);
 			//gpBase->mpMusicHandler->AddEnemy(eLuxEnemyMusic_Search,this);
 
 			SetMoveSpeed(eLuxEnemyMoveSpeed_Walk);
@@ -417,7 +417,7 @@ bool cLuxEnemy_Grunt::StateEventImplement(int alState, eLuxEnemyStateEvent aEven
 						
 			
 			//Stuck at door, break it
-			if(gpBase->mpPlayer->GetTerror() >= 1 && mbStuckAtDoor)// && mpMap->DoorIsClosed(mlStuckDoorID))
+			if(GetTargetTerror() >= 1 && mbStuckAtDoor)// && mpMap->DoorIsClosed(mlStuckDoorID))
 			{
 				iLuxEntity *pDoorEnt = mpMap->GetEntityByID(mlStuckDoorID);
 				mvTempPos = pDoorEnt->GetAttachEntity()->GetWorldPosition();
@@ -426,16 +426,16 @@ bool cLuxEnemy_Grunt::StateEventImplement(int alState, eLuxEnemyStateEvent aEven
 			//Player is no longer seen, see if time to search
 			else if(PlayerIsDetected()==false)
 			{
-				if(gpBase->mpPlayer->GetTerror() < 1)
+				if(GetTargetTerror() < 1)
 					ChangeState(eLuxEnemyState_Search);
 			}
 			//Player is seen, see if close enough for hunt
 			else
 			{
-				if(	(gpBase->mpPlayer->GetTerror() >= 1 && (fDistToPlayer > mfAlertToHuntDistance || mfAlertRunTowardsCount>mfAlertRunTowardsToHuntLimit) ) || 
+				if(	(GetTargetTerror() >= 1 && (fDistToPlayer > mfAlertToHuntDistance || mfAlertRunTowardsCount>mfAlertRunTowardsToHuntLimit) ) ||
 					fDistToPlayer < mfAlertToInstantHuntDistance)
 				{
-					gpBase->mpPlayer->SetTerror(1.0f);
+					if(!IsAvatarTarget()) gpBase->mpPlayer->SetTerror(1.0f);
 					ChangeState(eLuxEnemyState_Hunt);
 				}
 			}
@@ -502,7 +502,7 @@ bool cLuxEnemy_Grunt::StateEventImplement(int alState, eLuxEnemyStateEvent aEven
 		//Wait a few secs
 		kLuxOnMessage(eLuxEnemyMessage_TimeOut_2)
 			//cAINode * pNode = GetSearchForPlayerNode();
-			cAINode * pNode = mpPathfinder->GetNodeAtPos(gpBase->mpPlayer->GetCharacterBody()->GetFeetPosition(), 4, 12,false, false, true, NULL);
+			cAINode * pNode = mpPathfinder->GetNodeAtPos(GetPlayerFeetPos(), 4, 12,false, false, true, NULL);
 			if(pNode)
 				mpPathfinder->MoveTo(pNode->GetPosition());
 			else
@@ -546,7 +546,7 @@ bool cLuxEnemy_Grunt::StateEventImplement(int alState, eLuxEnemyStateEvent aEven
 				
 				gpBase->mpMusicHandler->RemoveEnemy(eLuxEnemyMusic_Search,this);
 				gpBase->mpMusicHandler->AddEnemy(eLuxEnemyMusic_Attack,this);
-				gpBase->mpPlayer->AddTerrorEnemy(this);
+				if(!IsAvatarTarget()) gpBase->mpPlayer->AddTerrorEnemy(this);
 
 				mpPathfinder->MoveTo(mvLastKnownPlayerPos);
 
@@ -625,7 +625,7 @@ bool cLuxEnemy_Grunt::StateEventImplement(int alState, eLuxEnemyStateEvent aEven
 		kLuxOnMessage(eLuxEnemyMessage_TimeOut)
 			
 			mpMap->BroadcastEnemyMessage(eLuxEnemyMessage_HelpMe, true, mpCharBody->GetPosition(), mfActivationDistance*0.5f,
-											0,false, mpCharBody->GetFeetPosition());
+											0,false, mpCharBody->GetFeetPosition(), 0, GetID());
 		
 			mpPathfinder->MoveTo(mvLastKnownPlayerPos);
 			
@@ -709,7 +709,7 @@ bool cLuxEnemy_Grunt::StateEventImplement(int alState, eLuxEnemyStateEvent aEven
 		kLuxOnMessage(eLuxEnemyMessage_TimeOut)
 			
 			if(DistToPlayer2D() > 2.0f)
-				mpPathfinder->MoveTo(gpBase->mpPlayer->GetCharacterBody()->GetFeetPosition());
+				mpPathfinder->MoveTo(GetPlayerFeetPos());
 
 			if(CanSeePlayer())
 			{
@@ -815,7 +815,7 @@ bool cLuxEnemy_Grunt::StateEventImplement(int alState, eLuxEnemyStateEvent aEven
 		kLuxOnUpdate
 			if(mlTempVal==0)
 			{
-				mpMover->MoveToPos(gpBase->mpPlayer->GetCharacterBody()->GetFeetPosition());
+				mpMover->MoveToPos(GetPlayerFeetPos());
 			}
 			
 
@@ -912,6 +912,7 @@ void cLuxEnemy_Grunt::OnRenderSolidImplemented(cRendererCallbackFunctions* apFun
 
 bool cLuxEnemy_Grunt::PlayerIsDetected()
 {
+	if(mbAvatarPerception) return mPerception.IsVisible();
 	if(CanSeePlayer())
 	{
 		return true;

@@ -59,6 +59,7 @@ namespace
 		{ eGameInteractionCommand_AvatarCreate, "avatarcreate" },
 		{ eGameInteractionCommand_AvatarRemove, "avatarremove" },
 		{ eGameInteractionCommand_AvatarCollision, "avatarcollision" },
+		{ eGameInteractionCommand_AvatarEnemySight, "avatarenemysight" },
 		{ eGameInteractionCommand_AvatarPose, "avatarpose" },
 		{ eGameInteractionCommand_LocalPose, "localpose" },
 		{ eGameInteractionCommand_ReportedBodies, "reportedbodies" },
@@ -259,6 +260,8 @@ namespace
 			valid = reader.TryReadRest(request.msEntityFile);
 		else if (valid && aType == eGameInteractionCommand_AvatarCollision)
 			valid = TryReadFlag(reader, request.mbCollides);
+		else if (valid && aType == eGameInteractionCommand_AvatarEnemySight)
+			valid = TryReadFlag(reader, request.mbEnemySight);
 		else if (valid && aType == eGameInteractionCommand_AvatarPose)
 		{
 			cGameInteractionPose& pose = request.mPose;
@@ -776,7 +779,7 @@ cGameInteractionCommand cGameInteractionProtocolVersion2::ParseCommand(const std
 		type == eGameInteractionCommand_EntityRelease)
 		return ParseEntityCommand(type, asLine);
 	if (type == eGameInteractionCommand_AvatarCreate || type == eGameInteractionCommand_AvatarRemove ||
-		type == eGameInteractionCommand_AvatarCollision || type == eGameInteractionCommand_AvatarPose)
+		type == eGameInteractionCommand_AvatarCollision || type == eGameInteractionCommand_AvatarEnemySight || type == eGameInteractionCommand_AvatarPose)
 		return ParseAvatarCommand(type, asLine);
 	std::string fields;
 	reader.TryReadRest(fields);

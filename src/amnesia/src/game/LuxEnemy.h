@@ -24,6 +24,7 @@
 
 #include "LuxEntity.h"
 #include "EnemyCopyModel.h"
+#include "EnemyPerceptionModel.h"
 #include "LuxSavedEngineTypes.h"
 
 //----------------------------------------------
@@ -464,6 +465,16 @@ public:
 	eLuxEnemyState GetCurrentEnemyState(){ return mCurrentState;}
 	string& GetCurrentEnemyStateName();
 
+	bool AvatarSeesPosition(const cVector3f& avPosition, bool abFOV, bool abLOS);
+	bool IsAvatarTarget() const { return mbAvatarPerception && !mPerception.GetTarget().empty(); }
+	bool IsTargetDead();
+	void FollowEnemyHelp(int alEnemyId);
+	iCharacterBody* GetTargetBody();
+	float GetTargetTerror();
+	virtual bool PerceivesTarget(iCharacterBody* apBody, bool abSight);
+	int TargetDetectionChecks(iCharacterBody* apBody);
+	bool TargetInSight(iCharacterBody* apBody, bool abCrouching, bool abLantern, float afLight, float afSpeed);
+	bool UpdateAvatarPerception(float afTimeStep);
 	bool CanSeePlayer(){ return mbCanSeePlayer;}
 	bool GetPlayerDetected(){ return mbPlayerDetected;}
 	bool GetPlayerInRange(){ return mbPlayerInRange;}
@@ -612,6 +623,10 @@ protected:
 
 	//////////////
 	//Variables
+	cEnemyPerceptionModel mPerception;
+	bool mbAvatarPerception;
+	float mfAvatarTerror;
+	float mfSharedSightRange;
 	bool mbEnemyDriven;
 	bool mbCopyHadGravity;
 	bool mbCopyTestedCollision;

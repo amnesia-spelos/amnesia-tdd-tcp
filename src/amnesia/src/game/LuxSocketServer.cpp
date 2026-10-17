@@ -194,6 +194,11 @@ namespace
 			if(gpBase->mpAvatarHandler) gpBase->mpAvatarHandler->PoseAvatar(asIdentifier, aPose);
 		}
 
+		virtual void SetAvatarEnemySight(const std::string& asIdentifier, bool abEnabled)
+		{
+			if(gpBase->mpAvatarHandler) gpBase->mpAvatarHandler->SetAvatarEnemySight(asIdentifier, abEnabled);
+		}
+
 		virtual void SetAvatarCollision(const std::string& asIdentifier, bool abCollides)
 		{
 			if(gpBase->mpAvatarHandler) gpBase->mpAvatarHandler->SetAvatarCollision(asIdentifier, abCollides);

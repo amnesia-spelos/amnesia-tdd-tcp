@@ -88,6 +88,7 @@ private:
 
 	//////////////////////
 	// Callbacks
+	bool PerceivesTarget(iCharacterBody* apBody, bool abSight);
 	bool PlayerIsDetected();
 	void OnSetActiveEnemySpecific(bool abX);
 

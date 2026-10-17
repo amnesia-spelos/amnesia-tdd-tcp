@@ -45,6 +45,14 @@ You can check the negotiated [Protocol Version 2](tests/game-interaction-protoco
 .\scripts\test-protocol-version-2.ps1
 ```
 
+Enemy perception and sticky target selection have a standalone harness:
+
+```powershell
+.\scripts\test-enemy-perception-model.ps1
+```
+
+See [enemy perception Controller checks](docs/testing/enemy-avatar-perception.md) for real-game lighting, chase, and search verification.
+
 The check that an Avatar faces where its posing player looks links the engine's math, so it needs `build-windows.ps1` to have built HPL2 first:
 
 ```powershell

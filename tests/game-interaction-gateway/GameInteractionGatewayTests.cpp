@@ -100,6 +100,8 @@ namespace
 			mvPosedAvatars.push_back(asIdentifier);
 			mLastAvatarPose = aPose;
 		}
+		virtual void SetAvatarEnemySight(const std::string& identifier, bool enabled)
+		{ mvAvatarEnemySight.push_back(identifier + (enabled ? " 1" : " 0")); }
 		virtual void SetAvatarCollision(const std::string& asIdentifier, bool abCollides)
 		{
 			mvAvatarCollisions.push_back(asIdentifier + (abCollides ? " 1" : " 0"));
@@ -205,6 +207,7 @@ namespace
 		std::vector<std::string> mvRemovedAvatars;
 		std::vector<std::string> mvPosedAvatars;
 		cGameInteractionPose mLastAvatarPose;
+		std::vector<std::string> mvAvatarEnemySight;
 		std::vector<std::string> mvAvatarCollisions;
 		cGameInteractionBodySamples mReport;
 		mutable int mlReportReads;
@@ -744,6 +747,36 @@ namespace
 		Expect(adapter.mvAvatarCollisions.size() == 3, "rejected toggles do not reach the game");
 		closesocket(peer);
 		gateway.Shutdown();
+	}
+
+	void AvatarEnemySightIsOptedInPerSessionAvatar()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenAvatarSession(gateway, adapter);
+		Exchange(peer, gateway, adapter, "avatarcreate a1\navatarcreate b2\n");
+		Expect(adapter.mvAvatarEnemySight.empty(), "creating an Avatar does not opt into enemy sight");
+		Expect(Exchange(peer, gateway, adapter, "avatarenemysight a1 1\navatarenemysight a1 0\navatarenemysight b2 1\n") ==
+			"RESPONSE avatarenemysight ok a1\nRESPONSE avatarenemysight ok a1\nRESPONSE avatarenemysight ok b2\n",
+			"a Peer enables and disables enemy sight per Avatar");
+		Expect(adapter.mvAvatarEnemySight.size() == 3 && adapter.mvAvatarEnemySight[0] == "a1 1" &&
+			adapter.mvAvatarEnemySight[1] == "a1 0" && adapter.mvAvatarEnemySight[2] == "b2 1",
+			"the adapter receives each Avatar's own setting");
+		Expect(Exchange(peer, gateway, adapter, "avatarenemysight a1 2\navatarenemysight missing 1\n") ==
+			"RESPONSE avatarenemysight invalid\nRESPONSE avatarenemysight not-found missing\n",
+			"invalid and unknown Avatar toggles are rejected");
+		Expect(adapter.mvAvatarEnemySight.size() == 3, "rejected commands do not change perception");
+		closesocket(peer);
+		for(int update = 0; update < 50 && adapter.mvRemovedAvatars.size() < 2; ++update)
+		{ Sleep(10); gateway.Update(adapter); }
+		Expect(adapter.mvRemovedAvatars.size() == 2, "disconnect removes opted-in Avatars");
+		gateway.Shutdown();
+
+		cGameInteractionGateway ungranted;
+		peer = OpenSession(ungranted, adapter);
+		Expect(Exchange(peer, ungranted, adapter, "protocol 2\navatarenemysight a1 1\n") ==
+			"RESPONSE protocol ok 2\nRESPONSE avatarenemysight not-granted\n", "avatars Capability is required");
+		closesocket(peer); ungranted.Shutdown();
 	}
 
 	void AvatarsAreRemovedWhenTheSessionEnds()
@@ -1593,6 +1626,7 @@ int main()
 	AvatarsAreCreatedPosedAndRemovedThroughTheGameAdapter();
 	SessionDrivesAtMostSixteenAvatars();
 	AvatarPoseFailuresAreReportedOncePerStreak();
+	AvatarEnemySightIsOptedInPerSessionAvatar();
 	AvatarCollisionIsToggledPerAvatarThroughTheGameAdapter();
 	AvatarsAreRemovedWhenTheSessionEnds();
 	PeerDrivenEntityCommandsReachTheGameAdapter();
