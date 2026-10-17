@@ -42,6 +42,8 @@ When changing the TCP protocol, connection lifecycle, command handling, response
 
 When a change affects protocol behavior that the automated harnesses cannot fully prove against the real game, give the user a manual verification checklist that uses the Controller. Such behavior includes game adapter hooks, timing, and in-game states such as the main menu, loading, pause, or map changes. For each step, list the exact lines to type and the lines expected back. Legacy `exec:` Commands can trigger game behavior during a check, for example `exec:SetPlayerPos(0, 0, 0)`.
 
+For enemy manual verification, use the existing encounter in `../amnesia-multiplayer/resources/custom_stories/mp-test-cs/maps/multiplayer-test.map`. Before writing steps, read the entity names, IDs, positions, and activation/patrol behavior recorded in [amnesia-multiplayer#53](https://github.com/amnesia-spelos/amnesia-multiplayer/issues/53), including its comments, and check the map and Map Script in the sibling repository. Tailor Commands to that fixture; identify any additional setup a check requires explicitly.
+
 The Controller only recognizes legacy line markers (`RESPONSE:`, `EVENT:`, and so on). Protocol Version 2 lines appear as `uncategorised`. If a missing Controller feature blocks a check, propose the change in that repository instead of working around it here.
 
 ## Use the glossary's vocabulary
