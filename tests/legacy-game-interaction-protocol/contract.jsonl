@@ -16,6 +16,7 @@
 {"name":"chat Command is unknown","kind":"command","request_wire":"chat:Alice:hi\n","expected_no_display":true,"expected_wire":"WARNING:Unknown command\n"}
 {"name":"chat Command with an invalid Chat Author is unknown","kind":"command","request_wire":"chat: :hello\n","expected_no_display":true,"expected_wire":"WARNING:Unknown command\n"}
 {"name":"chatentry Command is unknown without negotiation","kind":"command","request_wire":"chatentry - - Alice:hi\n","expected_no_display":true,"expected_wire":"WARNING:Unknown command\n"}
+{"name":"playerplace Command is unknown without negotiation","kind":"command","request_wire":"playerplace 0 0 0 0 0 maps/main/level01.map\n","map_loaded":true,"expected_wire":"WARNING:Unknown command\n"}
 {"name":"fragmented Command runs once","kind":"fragmented_command","request_wire_1":"exec:Do","request_wire_2":"Thing()\n","map_loaded":true,"expected_script":"DoThing()","expected_wire":"RESPONSE:exec:script executed\n"}
 {"name":"coalesced Commands retain order","kind":"coalesced_commands","request_wire":"ping\nchat:Bob:second\nping\n","expected_no_display":true,"expected_wire":"RESPONSE:ping:pong\nWARNING:Unknown command\nRESPONSE:ping:pong\n"}
 {"name":"local submission Event","kind":"local_chat_event","author":"Daniel","message":"ahoj: všichni 👋","expected_wire":"EVENT:CHAT:Daniel:ahoj: všichni 👋\n"}

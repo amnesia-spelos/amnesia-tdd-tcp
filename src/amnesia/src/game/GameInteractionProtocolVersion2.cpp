@@ -14,6 +14,7 @@ namespace
 	const int kMaximumNumberDigits = 15;
 	const std::string::size_type kMaximumAvatarIdentifierLength = 32;
 	const std::string::size_type kMaximumItemNameLength = 64;
+	const std::string::size_type kMaximumPlacementMapPathLength = 1024;
 
 	const char* const kNegotiationKeyword = "protocol";
 	const std::string kNegotiationPrefix = std::string(kNegotiationKeyword) + " ";
@@ -39,7 +40,8 @@ namespace
 		{ eGameInteractionCapability_Avatars, "avatars" },
 		{ eGameInteractionCapability_LocalPose, "localpose" },
 		{ eGameInteractionCapability_Interactions, "interactions" },
-		{ eGameInteractionCapability_SharedCallbacks, "sharedcallbacks" }
+		{ eGameInteractionCapability_SharedCallbacks, "sharedcallbacks" },
+		{ eGameInteractionCapability_PlayerPlace, "playerplace" }
 	};
 	const int kCapabilityNameCount = sizeof(kCapabilityNames) / sizeof(kCapabilityNames[0]);
 
@@ -66,7 +68,8 @@ namespace
 		{ eGameInteractionCommand_EntityRelease, "entityrelease" },
 		{ eGameInteractionCommand_SharedCallback, "sharedcallback" },
 		{ eGameInteractionCommand_ButtonState, "buttonstate" },
-		{ eGameInteractionCommand_LampState, "lampstate" }
+		{ eGameInteractionCommand_LampState, "lampstate" },
+		{ eGameInteractionCommand_PlayerPlace, "playerplace" }
 	};
 	const int kCommandKeywordCount = sizeof(kCommandKeywords) / sizeof(kCommandKeywords[0]);
 
@@ -430,6 +433,23 @@ namespace
 		return cGameInteractionCommand(aType, request);
 	}
 
+	// playerplace <x> <y> <z> <yaw> <crouch> <map>
+	cGameInteractionCommand ParsePlayerPlace(const std::string& asLine)
+	{
+		cGameInteractionFieldReader reader(asLine);
+		std::string keyword;
+		reader.TryReadField(keyword);
+		cGameInteractionPlacementRequest request;
+		cGameInteractionPlacement& placement = request.mPlacement;
+		double yaw = 0.0;
+		request.mbValid = TryReadBoundedVector(reader, placement.mFeetPosition.mfX, placement.mFeetPosition.mfY,
+			placement.mFeetPosition.mfZ) && TryReadBoundedNumber(reader, yaw) &&
+			TryReadFlag(reader, placement.mbCrouching) && reader.TryReadRest(placement.msMapFile) &&
+			placement.msMapFile.size() <= kMaximumPlacementMapPathLength && reader.IsAtEnd();
+		placement.mfBodyYawDegrees = static_cast<float>(yaw);
+		return cGameInteractionCommand(eGameInteractionCommand_PlayerPlace, request);
+	}
+
 	bool TryReadSharedCallbackKind(cGameInteractionFieldReader& aReader, eGameInteractionSharedCallbackKind& aKind)
 	{
 		std::string field;
@@ -707,6 +727,7 @@ cGameInteractionCommand cGameInteractionProtocolVersion2::ParseCommand(const std
 	if (type == eGameInteractionCommand_Unknown) return cLegacyGameInteractionProtocol::ParseCommand(asLine);
 	if (type == eGameInteractionCommand_Chat) return ParseChatEntry(asLine);
 	if (type == eGameInteractionCommand_SharedCallback) return ParseSharedCallback(asLine);
+	if (type == eGameInteractionCommand_PlayerPlace) return ParsePlayerPlace(asLine);
 	if (type == eGameInteractionCommand_ButtonState || type == eGameInteractionCommand_LampState)
 		return ParseEntityState(asLine, type);
 	if (type == eGameInteractionCommand_LocalPose || type == eGameInteractionCommand_ReportedBodies)

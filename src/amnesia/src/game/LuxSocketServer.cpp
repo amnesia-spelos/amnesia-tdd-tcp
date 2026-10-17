@@ -204,6 +204,23 @@ namespace
 			return gpBase->mpSharedCallbackHandler && gpBase->mpSharedCallbackHandler->RunSharedCallback(aCallback);
 		}
 
+		virtual bool PlacePlayer(const cGameInteractionPlacement& aPlacement)
+		{
+			cLuxPlayer *pPlayer = gpBase->mpPlayer;
+			if(GetLocalPoseAvailability() != eGameInteractionLocalPoseAvailability_Live || !pPlayer->IsActive() ||
+				pPlayer->IsDead() || pPlayer->GetHelperFlashback()->IsActive())
+			{
+				Log("Game Interaction Protocol: cannot place the player: not in play\n");
+				return false;
+			}
+
+			// Not a script call, so Shared Callback mode's hold on player control does not apply.
+			const cGameInteractionPosition& feet = aPlacement.mFeetPosition;
+			pPlayer->PlaceAt(cVector3f(feet.mfX, feet.mfY, feet.mfZ), cMath::ToRad(aPlacement.mfBodyYawDegrees),
+				aPlacement.mbCrouching);
+			return true;
+		}
+
 		virtual void SetPeerConnected(bool abConnected)
 		{
 			// A Peer keeps the game updating while it is out of focus, so Sessions do not stall.

@@ -177,6 +177,7 @@ namespace
 		{ return eGameInteractionCommandOutcome_EntityNotFound; }
 
 		virtual bool RunSharedCallback(const cGameInteractionSharedCallback&) { return true; }
+		virtual bool PlacePlayer(const cGameInteractionPlacement&) { return true; }
 		virtual void SetPeerConnected(bool) {}
 	};
 

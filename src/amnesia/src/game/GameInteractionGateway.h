@@ -235,7 +235,8 @@ enum eGameInteractionCommandType
 	eGameInteractionCommand_EntityRelease,
 	eGameInteractionCommand_SharedCallback,
 	eGameInteractionCommand_ButtonState,
-	eGameInteractionCommand_LampState
+	eGameInteractionCommand_LampState,
+	eGameInteractionCommand_PlayerPlace
 };
 
 enum eGameInteractionCapability
@@ -244,7 +245,8 @@ enum eGameInteractionCapability
 	eGameInteractionCapability_Avatars = 1 << 0,
 	eGameInteractionCapability_LocalPose = 1 << 1,
 	eGameInteractionCapability_Interactions = 1 << 2,
-	eGameInteractionCapability_SharedCallbacks = 1 << 3
+	eGameInteractionCapability_SharedCallbacks = 1 << 3,
+	eGameInteractionCapability_PlayerPlace = 1 << 4
 };
 
 struct cGameInteractionRotation
@@ -287,6 +289,25 @@ struct cGameInteractionAvatarRequest
 	cGameInteractionPose mPose;
 	// Whether an avatarcollision Command turns the Avatar's collision with the local player on.
 	bool mbCollides;
+};
+
+// Where a playerplace Command asks to place the local player. Unlike a Pose it has no time, teleport
+// counter, pitch, or lantern: placing resets the pitch and leaves the lantern alone.
+struct cGameInteractionPlacement
+{
+	cGameInteractionPlacement() : mfBodyYawDegrees(0.0f), mbCrouching(false) {}
+	cGameInteractionPosition mFeetPosition;
+	float mfBodyYawDegrees;
+	bool mbCrouching;
+	std::string msMapFile;
+};
+
+// What a playerplace Command asks for. Invalid means the line was malformed.
+struct cGameInteractionPlacementRequest
+{
+	cGameInteractionPlacementRequest() : mbValid(false) {}
+	bool mbValid;
+	cGameInteractionPlacement mPlacement;
 };
 
 // What a localpose or reportedbodies Command asks for. Invalid means the line was malformed.
@@ -358,7 +379,9 @@ public:
 	cGameInteractionCommand(eGameInteractionCommandType aType,
 		const cGameInteractionSharedCallbackRequest& aSharedCallbackRequest);
 	cGameInteractionCommand(eGameInteractionCommandType aType, const cGameInteractionEntityStateRequest& aRequest);
+	cGameInteractionCommand(eGameInteractionCommandType aType, const cGameInteractionPlacementRequest& aRequest);
 	const cGameInteractionEntityStateRequest& GetEntityStateRequest() const { return mEntityStateRequest; }
+	const cGameInteractionPlacementRequest& GetPlacementRequest() const { return mPlacementRequest; }
 	eGameInteractionCommandType GetType() const { return mType; }
 	eGameInteractionCommandClassification GetClassification() const;
 	const std::string& GetData() const { return msData; }
@@ -385,6 +408,7 @@ private:
 	cGameInteractionEntityRequest mEntityRequest;
 	cGameInteractionSharedCallbackRequest mSharedCallbackRequest;
 	cGameInteractionEntityStateRequest mEntityStateRequest;
+	cGameInteractionPlacementRequest mPlacementRequest;
 };
 
 enum eGameInteractionResponseType
@@ -404,6 +428,7 @@ enum eGameInteractionResponseType
 	eGameInteractionResponse_Entity,
 	eGameInteractionResponse_SharedCallback,
 	eGameInteractionResponse_EntityState,
+	eGameInteractionResponse_PlayerPlace,
 	eGameInteractionResponse_Rejected,
 	// The Command is not answered, such as a successful avatarpose.
 	eGameInteractionResponse_None
@@ -524,6 +549,10 @@ public:
 	virtual bool RunSharedCallback(const cGameInteractionSharedCallback& aCallback) = 0;
 	// Sets state with effects in Shared Callback mode; never interacts or spends inventory.
 	virtual eGameInteractionCommandOutcome ApplyEntityState(const cGameInteractionEntityState& aState) = 0;
+	// Places the local player at the feet position with the body yaw and crouch, as a script teleport
+	// does, and counts a teleport. False when the player is not in play, so nothing changed. Called only
+	// for the current map.
+	virtual bool PlacePlayer(const cGameInteractionPlacement& aPlacement) = 0;
 	// Whether a Peer is connected, negotiated or not. While one is, the game keeps updating when out of
 	// focus. Told on every update, so it follows every way a Peer can leave.
 	virtual void SetPeerConnected(bool abConnected) = 0;

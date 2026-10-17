@@ -236,6 +236,7 @@ namespace
 		{
 			return aCallback.mlEntityId != 404;
 		}
+		virtual bool PlacePlayer(const cGameInteractionPlacement&) { return true; }
 		virtual void SetPeerConnected(bool) {}
 
 	private:

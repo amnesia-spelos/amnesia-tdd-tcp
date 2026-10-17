@@ -46,6 +46,12 @@ cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aTy
 	  mSubscriptionRequest(eGameInteractionSubscriptionRequest_Invalid), mlSubscriptionRate(0),
 	  mEntityStateRequest(aRequest) {}
 
+cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
+	const cGameInteractionPlacementRequest& aRequest)
+	: mType(aType), mlProtocolVersion(0), mlCapabilities(0),
+	  mSubscriptionRequest(eGameInteractionSubscriptionRequest_Invalid), mlSubscriptionRate(0),
+	  mPlacementRequest(aRequest) {}
+
 bool cGameInteractionEvent::IsInteractionsEvent() const
 {
 	return mType == eGameInteractionEvent_InteractionStarted || mType == eGameInteractionEvent_InteractionEnded ||
@@ -121,7 +127,7 @@ eGameInteractionCommandClassification cGameInteractionCommand::GetClassification
 		mType == eGameInteractionCommand_EntityBodies || mType == eGameInteractionCommand_EntityInteracting ||
 		mType == eGameInteractionCommand_EntityBreak || mType == eGameInteractionCommand_EntityRelease ||
 		mType == eGameInteractionCommand_ButtonState || mType == eGameInteractionCommand_LampState ||
-		mType == eGameInteractionCommand_SharedCallback ?
+		mType == eGameInteractionCommand_SharedCallback || mType == eGameInteractionCommand_PlayerPlace ?
 		eGameInteractionCommandClassification_StateChanging :
 		eGameInteractionCommandClassification_Observational;
 }
@@ -145,7 +151,8 @@ namespace
 
 	const unsigned int kSupportedCapabilities =
 		eGameInteractionCapability_Avatars | eGameInteractionCapability_LocalPose |
-		eGameInteractionCapability_Interactions | eGameInteractionCapability_SharedCallbacks;
+		eGameInteractionCapability_Interactions | eGameInteractionCapability_SharedCallbacks |
+		eGameInteractionCapability_PlayerPlace;
 
 	const unsigned int kMinimumSubscriptionRate = 1;
 	const unsigned int kMaximumSubscriptionRate = 60;
@@ -446,6 +453,19 @@ namespace
 		return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_EntityState, outcome);
 	}
 
+	// A placement names its map, so a late Command never places the player in another map.
+	cGameInteractionResponse PlacePlayer(const cGameInteractionCommand& aCommand,
+		iGameInteractionGameAdapter& aGameAdapter)
+	{
+		const cGameInteractionPlacementRequest& request = aCommand.GetPlacementRequest();
+		eGameInteractionCommandOutcome outcome = eGameInteractionCommandOutcome_Success;
+		if (!request.mbValid) outcome = eGameInteractionCommandOutcome_Invalid;
+		else if (!IsCurrentMap(aGameAdapter, request.mPlacement.msMapFile))
+			outcome = eGameInteractionCommandOutcome_WrongMap;
+		else if (!aGameAdapter.PlacePlayer(request.mPlacement)) outcome = eGameInteractionCommandOutcome_Unavailable;
+		return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_PlayerPlace, outcome);
+	}
+
 	// A Shared Callback names its map, so a late Command never runs a registration of another map.
 	cGameInteractionResponse RunSharedCallback(const cGameInteractionCommand& aCommand,
 		iGameInteractionGameAdapter& aGameAdapter)
@@ -551,6 +571,8 @@ namespace
 		case eGameInteractionCommand_LampState:
 		case eGameInteractionCommand_SharedCallback:
 			return eGameInteractionCapability_SharedCallbacks;
+		case eGameInteractionCommand_PlayerPlace:
+			return eGameInteractionCapability_PlayerPlace;
 		default:
 			return eGameInteractionCapability_None;
 		}
@@ -594,6 +616,8 @@ namespace
 		case eGameInteractionCommand_ButtonState:
 		case eGameInteractionCommand_LampState:
 			return ApplyEntityState(aCommand, aGameAdapter);
+		case eGameInteractionCommand_PlayerPlace:
+			return PlacePlayer(aCommand, aGameAdapter);
 		case eGameInteractionCommand_SharedCallback:
 			return RunSharedCallback(aCommand, aGameAdapter);
 		case eGameInteractionCommand_AvatarCreate:

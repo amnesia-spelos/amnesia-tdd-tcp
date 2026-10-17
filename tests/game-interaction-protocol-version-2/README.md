@@ -29,8 +29,8 @@ Run the game-side harness without starting the game:
 protocol <version> [<capability>...]
 ```
 
-- The only supported Protocol Version is `2`. The supported Capabilities are `avatars`, `localpose`, `interactions`, and `sharedcallbacks`.
-- Success: `RESPONSE protocol ok 2 [<capability>...]`. The granted Capabilities are the requested ones that the game supports. Each is listed once, in the order `avatars`, `localpose`, `interactions`, `sharedcallbacks`. Unknown names are ignored, so a Session can request none and still negotiate.
+- The only supported Protocol Version is `2`. The supported Capabilities are `avatars`, `localpose`, `interactions`, `sharedcallbacks`, and `playerplace`.
+- Success: `RESPONSE protocol ok 2 [<capability>...]`. The granted Capabilities are the requested ones that the game supports. Each is listed once, in the order `avatars`, `localpose`, `interactions`, `sharedcallbacks`, `playerplace`. Unknown names are ignored, so a Session can request none and still negotiate.
 - `RESPONSE protocol unsupported-version`: the version is a positive decimal integer other than `2`. Leading zeros are allowed, so `02` means `2`.
 - `RESPONSE protocol invalid`: the version is missing, `0`, or not a decimal integer that fits in 32 bits, or the line has an empty field.
 - `RESPONSE protocol already-negotiated`: the Session already negotiated.
@@ -88,9 +88,11 @@ The gateway checks Capabilities before it parses a message. A Protocol Version 2
 | `entitybreak <entityId> <state> <map>` | `interactions` | `ok <entityId>`, `wrong-map <entityId>`, `not-found <entityId>`, `invalid` |
 | `entityrelease <entityId> <map>` | `interactions` | `ok <entityId>`, `wrong-map <entityId>`, `not-found <entityId>`, `invalid` |
 | `sharedcallback <kind> <field>... <map>` | `sharedcallbacks` | `ok`, `not-found`, `wrong-map`, `invalid` |
+| `playerplace <x> <y> <z> <yaw> <crouch> <map>` | `playerplace` | `ok`, `wrong-map`, `unavailable`, `invalid` |
 
 - `chatentry`: see [Chat](#chat).
 - `sharedcallback`: see [Shared Callbacks](#shared-callbacks).
+- `playerplace`: see [Placing the local player](#placing-the-local-player).
 - `avatarcreate`: `<entityFile>` is a path field and defaults to `entities/multiplayer/skeleton_spelos/TheSkeletonSpelos.ent`. The checks run in this order: `invalid` means the line is malformed or the Avatar Identifier is invalid, and the Response does not echo the identifier. `exists` means the Session already drives an Avatar with that identifier. `limit` means the Session already drives 16 Avatars. `model-not-found` means the game cannot find the model file or the mesh it names.
 - `avatarremove`: `invalid` means the line is malformed or the Avatar Identifier is invalid, and the Response does not echo the identifier.
 - `avatarcollision`: `1` turns on collision between the local player and the Avatar, and `0` turns it off. Collision is on for a new Avatar. The setting stays in place across map changes, save loads, and dormancy until the next `avatarcollision` for that Avatar. `invalid` means the line is malformed, the Avatar Identifier is invalid, or the flag is not `0` or `1`, and the Response does not echo the identifier.
@@ -103,7 +105,7 @@ The `localpose` State Update is sent to a subscribed Session:
 STATE localpose <timeMs> <teleportCounter> <x> <y> <z> <yaw> <pitch> <crouch> <lantern> <map>
 ```
 
-- It reports the local player's feet position, body yaw, camera pitch, crouch flag, and lantern flag in the current map. `<lantern>` is `1` exactly while the lantern is raised. It turns `0` as soon as the lantern is lowered, runs out of oil, or is disabled. `<timeMs>` is the game clock, which only moves forward while the game runs. `<teleportCounter>` changes whenever the player is placed rather than moved: `TeleportPlayer`, `SetPlayerPos`, start position placement on map entry or at a checkpoint, and save load.
+- It reports the local player's feet position, body yaw, camera pitch, crouch flag, and lantern flag in the current map. `<lantern>` is `1` exactly while the lantern is raised. It turns `0` as soon as the lantern is lowered, runs out of oil, or is disabled. `<timeMs>` is the game clock, which only moves forward while the game runs. `<teleportCounter>` changes whenever the player is placed rather than moved: `TeleportPlayer`, `SetPlayerPos`, `playerplace`, start position placement on map entry or at a checkpoint, and save load.
 - The first State Update is the current Pose and follows the subscribing Response. After that, at most one State Update is sent per `1000 / <hz>` milliseconds of game time. The schedule holds that average rate even when game updates do not land on it exactly.
 - State Updates are sent only while a map is loaded. None are sent in the main menu or while a map loads. While the game is paused or the player is in the inventory, journal, or another menu, a State Update is sent only when the Pose changed. Time does not count as a change.
 - A newer Pose replaces any undelivered older one instead of queueing behind it. A Peer that reads slowly receives the newest Pose once it catches up, and is never disconnected because of State Updates.
@@ -223,6 +225,20 @@ These are never reported: look-at, timer, prop animation, effect voice, checkpoi
 - A `flashback` run sets off this game's own Flashback area exactly as the local player walking in would: the area deactivates and the full flashback plays, with its flash, voices, subtitles, sepia, and slowdown, and its callback runs when it ends as an ordinary local callback. The flashback's own effects on the player are not script control calls, so Shared Callback mode does not suppress them. A flashback that starts while another plays waits for it to end. If the area is inactive, because this game already had its flashback, or it never existed or is not a Flashback area, the run answers `not-found` and nothing starts. Walking into the area afterwards does nothing.
 
 The legacy `SCRIPT_CALL:` Event and `exec:` Command are unchanged. A collide callback run by `sharedcallback` sends no `SCRIPT_CALL:`.
+
+## Placing the local player
+
+```text
+playerplace <x> <y> <z> <yaw> <crouch> <map>
+```
+
+The `playerplace` Capability lets a Peer place the local player at the feet position, body yaw, and crouch of a Pose it knows, such as another player's latest `localpose`, so a player a locked door left behind can follow. A game without the Capability does not grant it, so the granted list tells a Peer whether it can place the player.
+
+- `<x> <y> <z>` is the feet position, `<yaw>` the body yaw, and `<crouch>` is `1` to place the player crouching. `<map>` is the Map Path the Peer means. Each number's magnitude is at most `1000000000`, and the Map Path is at most 1024 bytes.
+- The checks run in this order: `invalid` (the line is malformed), `wrong-map` (the map is not the local current map, or no map is loaded), `unavailable` (the local player is not in play: the game is paused or in a menu, the inventory, or the journal, a map is loading, a script made the player inactive with `SetPlayerActive(false)`, the player is dead, or a flashback plays). A refused Command changes nothing.
+- `ok` means the player was placed as a script's `TeleportPlayer` places them. Holding a prop or another interaction ends, and the player leaves a ladder, is out of water, and is in normal movement. The feet move to the position, the body and camera turn to `<yaw>`, and the camera pitch resets to `0`. With `<crouch>` `1`, the player crouches before arriving, so a player placed in a crawlspace is not stuck in its ceiling. With `0`, the player stands up after arriving if they fit there, and otherwise stays crouched.
+- The teleport counter changes, so the next `localpose` State Update tells every other game to snap the local player's Avatar rather than interpolate it.
+- It is not a script call, so Shared Callback mode does not suppress it. It is State-Changing, so it needs the Authority Grant.
 
 ## Chat
 

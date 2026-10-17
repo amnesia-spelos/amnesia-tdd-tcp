@@ -821,15 +821,33 @@ void cLuxPlayer::MoveHeadPosAdd(eLuxHeadPosAdd aType, const cVector3f& avGoal, f
 
 void cLuxPlayer::PlaceAtStartNode(cLuxNode_PlayerStart *apNode)
 {
+	PlaceAt(apNode->GetPosition(), apNode->GetAngle());
+}
+
+void cLuxPlayer::PlaceAt(const cVector3f& avFeetPosition, float afYaw, bool abCrouching)
+{
+	ChangeState(eLuxPlayerState_Normal);
+	ChangeMoveState(eLuxMoveState_Normal);
+	cLuxMoveState_Normal *pMoveNormal = static_cast<cLuxMoveState_Normal*>(mvMoveStates[eLuxMoveState_Normal]);
+
+	//Crouch before arriving, so a crawlspace's ceiling does not trap a standing body. Stand only after
+	//arriving, where SetCrouch checks that the player fits, and stays crouched if not.
+	if(abCrouching) pMoveNormal->SetCrouch(true);
+	PlaceAt(avFeetPosition, afYaw);
+	if(!abCrouching) pMoveNormal->SetCrouch(false);
+}
+
+void cLuxPlayer::PlaceAt(const cVector3f& avFeetPosition, float afYaw)
+{
 	ChangeState(eLuxPlayerState_Normal);
 
 	SetIsInWater(false);//Needs to rest this or else player will spalsh when walking on the ground.
 	if(mpSpawnPS->IsActive())
 		mpSpawnPS->RespawnAll(); //Needs to respawn all!
 
-	mpCharBody->SetFeetPosition(apNode->GetPosition());
-	mpCharBody->SetYaw(apNode->GetAngle());
-	mpCamera->SetYaw(apNode->GetAngle());
+	mpCharBody->SetFeetPosition(avFeetPosition);
+	mpCharBody->SetYaw(afYaw);
+	mpCamera->SetYaw(afYaw);
 	mpCamera->SetPitch(0);
 	mpCharBody->Update(0.001f);
 	CountTeleport();

@@ -33,7 +33,7 @@ namespace
 			mbChatAvailable(true), mlDisplayedChatEntries(0), mbInMainMenu(true),
 			mPeer(INVALID_SOCKET), mbResponseDeliveredBeforeStart(false),
 			mLocalPoseAvailability(eGameInteractionLocalPoseAvailability_Live), mlReportReads(0),
-			mbPeerConnected(false)
+			mbPlayerInPlay(true), mbPeerConnected(false)
 		{
 			mLocalPose.mlTimeMs = 1000;
 			mLocalPose.mFeetPosition = cGameInteractionPosition(1.25f, -2.5f, 3.75f);
@@ -159,6 +159,12 @@ namespace
 			mvSharedCallbacks.push_back(aCallback);
 			return aCallback.mlEntityId != 404 && aCallback.msOtherItem != "not_held";
 		}
+		virtual bool PlacePlayer(const cGameInteractionPlacement& aPlacement)
+		{
+			if (!mbPlayerInPlay) return false;
+			mvPlacements.push_back(aPlacement);
+			return true;
+		}
 		virtual void SetPeerConnected(bool abConnected) { mbPeerConnected = abConnected; }
 
 		static std::string Text(int alValue)
@@ -197,6 +203,8 @@ namespace
 		cGameInteractionBodySamples mLastDrivenBodies;
 		cGameInteractionBodyState mLastBreakState;
 		std::vector<cGameInteractionSharedCallback> mvSharedCallbacks;
+		bool mbPlayerInPlay;
+		std::vector<cGameInteractionPlacement> mvPlacements;
 		bool mbPeerConnected;
 	};
 
@@ -1095,6 +1103,99 @@ namespace
 		return ReceiveAvailable(aPeer, 50);
 	}
 
+	SOCKET OpenPlayerPlaceSession(cGameInteractionGateway& aGateway, cFakeGameAdapter& aAdapter)
+	{
+		SOCKET peer = OpenSession(aGateway, aAdapter);
+		Expect(Exchange(peer, aGateway, aAdapter, "protocol 2 playerplace\n") == "RESPONSE protocol ok 2 playerplace\n",
+			"Session negotiates the playerplace Capability");
+		return peer;
+	}
+
+	void PlayerPlaceReachesTheGameWithFeetYawAndCrouch()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenPlayerPlaceSession(gateway, adapter);
+		Expect(Exchange(peer, gateway, adapter, "playerplace 1.5 -2.25 3 -90 1 " + kCurrentMap + "\n") ==
+			"RESPONSE playerplace ok\n", "placing the player on the current map succeeds");
+		Expect(adapter.mvPlacements.size() == 1 && adapter.mvPlacements[0].mFeetPosition.mfX == 1.5f &&
+			adapter.mvPlacements[0].mFeetPosition.mfY == -2.25f && adapter.mvPlacements[0].mFeetPosition.mfZ == 3.0f &&
+			adapter.mvPlacements[0].mfBodyYawDegrees == -90.0f && adapter.mvPlacements[0].mbCrouching &&
+			adapter.mvPlacements[0].msMapFile == kCurrentMap,
+			"the game receives the feet position, body yaw, crouch flag, and Map Path");
+		Expect(Exchange(peer, gateway, adapter, "playerplace 0 0 0 0 0 " + kCurrentMap + "\n") ==
+			"RESPONSE playerplace ok\n" && adapter.mvPlacements.size() == 2 && !adapter.mvPlacements[1].mbCrouching,
+			"a player can be placed standing");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void PlayerPlaceIsRefusedWithItsReasonAndChangesNothing()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenSession(gateway, adapter);
+		Expect(Exchange(peer, gateway, adapter, "protocol 2 localpose avatars\nplayerplace 0 0 0 0 0 " + kCurrentMap +
+			"\n") == "RESPONSE protocol ok 2 avatars localpose\nRESPONSE playerplace not-granted\n",
+			"placing the player requires the playerplace Capability");
+		closesocket(peer);
+		gateway.Shutdown();
+		peer = OpenPlayerPlaceSession(gateway, adapter);
+		Expect(Exchange(peer, gateway, adapter, "playerplace 0 0 0 0 0 maps/main/level02.map\n") ==
+			"RESPONSE playerplace wrong-map\n", "a placement on another map is wrong-map");
+		adapter.mbMapLoaded = false;
+		Expect(Exchange(peer, gateway, adapter, "playerplace 0 0 0 0 0 " + kCurrentMap + "\n") ==
+			"RESPONSE playerplace wrong-map\n", "a placement without a loaded map is wrong-map");
+		adapter.mbMapLoaded = true;
+		adapter.mbPlayerInPlay = false;
+		Expect(Exchange(peer, gateway, adapter, "playerplace 0 0 0 0 0 " + kCurrentMap + "\n") ==
+			"RESPONSE playerplace unavailable\n", "a placement while the player is not in play is unavailable");
+		Expect(adapter.mvPlacements.empty(), "a refused placement never places the player");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void MalformedPlayerPlaceIsRejected()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenPlayerPlaceSession(gateway, adapter);
+		const char* const malformed[] =
+		{
+			"playerplace",
+			"playerplace 0 0 0 0 0",
+			"playerplace 0 0 0 0 maps/main/level01.map",
+			"playerplace 0 0 nan 0 0 maps/main/level01.map",
+			"playerplace 0 inf 0 0 0 maps/main/level01.map",
+			"playerplace 1e3 0 0 0 0 maps/main/level01.map",
+			"playerplace 0 0 0 1000000001 0 maps/main/level01.map",
+			"playerplace 0 -1000000001 0 0 0 maps/main/level01.map",
+			"playerplace 0 0 0 0 2 maps/main/level01.map",
+			"playerplace 0 0 0 0 0 ",
+			"playerplace 0  0 0 0 0 maps/main/level01.map"
+		};
+		std::string commands;
+		std::string expected;
+		for (size_t index = 0; index < sizeof(malformed) / sizeof(malformed[0]); ++index)
+		{
+			commands += std::string(malformed[index]) + "\n";
+			expected += "RESPONSE playerplace invalid\n";
+		}
+		Expect(Exchange(peer, gateway, adapter, commands) == expected, "malformed placements are invalid");
+		Expect(Exchange(peer, gateway, adapter, "playerplace 0 0 nan 0 0 maps/main/level02.map\n") ==
+			"RESPONSE playerplace invalid\n", "a malformed placement is invalid before its map is checked");
+		Expect(Exchange(peer, gateway, adapter, "playerplace 0 0 0 0 0 " + std::string(1025, 'm') + "\n") ==
+			"RESPONSE playerplace invalid\n", "a Map Path longer than 1024 bytes is invalid");
+		Expect(adapter.mvPlacements.empty(), "a malformed placement never places the player");
+		Expect(Exchange(peer, gateway, adapter, "playerplace -1000000000 1000000000 0 -1000000000 0 " + kCurrentMap +
+			"\n") == "RESPONSE playerplace ok\n", "numbers up to 1000000000 in magnitude are accepted");
+		Expect(cGameInteractionCommand(eGameInteractionCommand_PlayerPlace, cGameInteractionPlacementRequest())
+			.GetClassification() == eGameInteractionCommandClassification_StateChanging,
+			"placing the player is state-changing");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
 	void ReportedBodiesFollowTheSubscribedRateWhileTheReportHoldsBodies()
 	{
 		cFakeGameAdapter adapter;
@@ -1412,6 +1513,9 @@ int main()
 	ButtonAndLampReportsRequireSharedCallbacks();
 	SharedCallbackCommandsReachTheGameWithEveryIdentifier();
 	SharedCallbackEventsReachOnlySessionsGrantedSharedCallbacks();
+	PlayerPlaceReachesTheGameWithFeetYawAndCrouch();
+	PlayerPlaceIsRefusedWithItsReasonAndChangesNothing();
+	MalformedPlayerPlaceIsRejected();
 	ReportedBodiesFollowTheSubscribedRateWhileTheReportHoldsBodies();
 	ReportedBodiesAndLocalPoseAreDeliveredTogether();
 	ReportedBodiesAreWrittenWithinTheirBounds();

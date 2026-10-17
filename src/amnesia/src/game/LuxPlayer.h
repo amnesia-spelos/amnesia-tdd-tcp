@@ -124,6 +124,10 @@ public:
 	void MoveHeadPosAdd(eLuxHeadPosAdd aType, const cVector3f& avGoal, float afSpeed, float afSlowdownDist);
 
 	void PlaceAtStartNode(cLuxNode_PlayerStart *apNode);
+	// Places the feet as a start node does, with the body and camera facing afYaw (radians).
+	void PlaceAt(const cVector3f& avFeetPosition, float afYaw);
+	// PlaceAt that also crouches or stands, as a Peer's playerplace Command asks.
+	void PlaceAt(const cVector3f& avFeetPosition, float afYaw, bool abCrouching);
 
 	// Counts placements rather than movement (start nodes, SetPlayerPos, save loads), so a Peer can
 	// snap instead of interpolating. It survives Reset so it never repeats within a game run.
