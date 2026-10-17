@@ -330,7 +330,7 @@ Drive and release answer `RESPONSE <keyword> <outcome> <entityId>`. Outcomes are
 
 Copies buffer sender-timestamped motion using the Avatar's 100 ms interpolation delay, shortest-path yaw, clock alignment, and discontinuity rules. Animation time interpolates within a monotonically advancing clip; clip changes, restarts, and wraps switch at their sample time. A stalled stream holds its last pose and animation. Local AI, senses, pathfinding, attacks, damage reactions, and enemy-triggered Map Script callbacks are suppressed, including collide callbacks in which the copy is the child. Local ambient sound and darkness glow remain. A copy attacks only when an `enemyattack` Command delivers an attack.
 
-Release, Session end, and leaving the Map Visit discard buffered samples and restore vanilla simulation from the current position, restoring gravity, collision testing, and the prior active flag. A save does not store driven mode. A checkpoint death within the same Map Visit does not reset a driven copy. The Peer must drive it again after loading a save or entering another Map Visit. The multiplayer consumer must add negotiation, relay, and map/Session handoff in its own repository; this change does not enable enemy sharing there by itself.
+Release, Session end, and leaving the Map Visit discard buffered samples and restore vanilla simulation from the current position, restoring gravity, collision testing, and the prior active flag. A save does not store driven mode. A checkpoint death within the same Map Visit does not reset a driven copy, except a coordinated Shared Death, which deactivates it (see [Shared Deaths](#shared-deaths)). The Peer must drive it again after loading a save or entering another Map Visit. The multiplayer consumer must add negotiation, relay, and map/Session handoff in its own repository; this change does not enable enemy sharing there by itself.
 
 See [the Controller checklist](../../docs/testing/enemy-copies.md) for game adapter verification.
 
@@ -346,3 +346,37 @@ The game that simulates an enemy reports each Grunt attack at the clip's special
 The `enemyattack` Command takes the same fields, so a Peer can deliver a reported attack to a driven copy unchanged apart from its prefix. The game tests the box from the copy's position and yaw as this game shows it, against the local player only, and applies a hit the vanilla way: damage within the attack's range, blood splash, red flash, head spin, knockback, and the enemy's hit sound. A miss does nothing. Attacks never hit an Avatar, in the simulating game or on a copy; the simulating game's own player is hit as before.
 
 Responses are `RESPONSE enemyattack <outcome> <entityId>`, with outcome `ok` whether the attack hits or misses, `wrong-map`, `not-found` (including an enemy that is not driven), or `wrong-type`. A malformed line, an unknown attack, a size that is not positive, or a box size that none of the copy's own attacks uses answers `invalid` without an identifier. Without `enemies`, the Command answers `not-granted` and no attacks are reported.
+
+### Shared Deaths
+
+```
+EVENT checkpoint <count> <callback> <checkPoint> <map>
+EVENT playerdeath <death> <count> <callback> <checkPoint> <map>
+shareddeath <episode> <death> <count> <checkPoint> <map>
+```
+
+A Session granted `enemies` coordinates deaths (amnesia-multiplayer's ADR 0009). The `checkpoint` Event reports the current map's checkpoint registration: `<count>` is the count its callback receives on the next death, `<callback>` is `1` when a death runs a Map Script callback and `0` otherwise, and `<checkPoint>` is the checkpoint's name, or `-` when the name is not a single printable field of at most 64 characters. Every entered map has the automatic `_auto` checkpoint without a callback until its Map Script registers another, so only `<callback>` tells whether a death may change maps or puzzles. The Event is sent once a Session is granted `enemies`, whenever any field changes (a registration, a death's count increment, a map change), and again when a Map Visit starts. The callback's function name is never sent.
+
+The `playerdeath` Event is sent when the local player starts dying on its own, numbered `<death>` from `1` within the Session, with the checkpoint as it stood. A death a `shareddeath` Command caused is not reported.
+
+How a death treats enemies depends on whether the other player is on this map, shown by an awake Avatar:
+
+- Alone on the map, or without an `enemies` Session, a death is vanilla.
+- With the other player on the map and no callback, Shared Enemies (Grunts) survive the death: the checkpoint does not deactivate or reset them, and a Grunt does not leave range while the local player is dead. It still drops a dead local target as vanilla does, and keeps hunting a perceived Avatar. Other enemies, and the respawn itself, are vanilla.
+- With the other player on the map and a callback, the death is coordinated: the death screen stays up to 3 more seconds until an episode answers the death, so its callback can receive the agreed count.
+
+The `shareddeath` Command applies one episode of a Shared Death, numbered by the Session Host's Game Peer in the order it decided them. `<death>` is `0` to kill this game's player, or the number of this game's own reported death the episode answers, which never kills. `<count>` is the agreed pre-increment count, the Session Host's own. Every game in an episode follows its own checkpoint: it places its player, deactivates and resets the enemies it simulates and deactivates its driven copies so they stay inactive on release, then runs its own callback once. When `<checkPoint>` is this game's current checkpoint and it has a callback, the callback receives `<count>` and the stored count becomes `<count>` plus one, or one after a callback that registered a new checkpoint, as vanilla. Otherwise, or when no episode answers a death in time, the game keeps its own count and logs one line.
+
+Responses are `RESPONSE shareddeath <outcome>`:
+
+- `ok`: the episode killed the living player, or joined the death in progress.
+- `duplicate`: this episode, or a newer one, was already applied. Nothing changes.
+- `stale`: the episode answers a death that already reached its checkpoint or never happened, or a death already joined another episode. Nothing changes.
+- `wrong-map`: `<map>` is not the current map, so a late episode never kills in a later Map Visit.
+- `unavailable`: the player is not in play, such as while loading, in a flashback, or inactive, so it was not killed. The episode is spent.
+- `invalid`: the line is malformed: an episode of `0`, a negative or non-integer number, a number above 2147483647, or a checkpoint field that is not a valid name.
+- `not-granted`: the Session is not granted `enemies`.
+
+A new Map Visit ends any death in progress and any pending kill; applied episodes stay applied for the Session. A Session that ends during a death takes it along: that death reaches its checkpoint as vanilla. Hard Mode, which loads the latest save after the checkpoint, and permanent death, which never reaches a checkpoint, are outside this guarantee: their deaths are reported, but the save load starts a new Map Visit and a permanent death has no checkpoint to coordinate.
+
+See [the Controller checklist](../../docs/testing/shared-deaths.md) for game adapter verification.

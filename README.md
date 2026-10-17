@@ -55,6 +55,14 @@ See [enemy perception Controller checks](docs/testing/enemy-avatar-perception.md
 
 See [enemy attack Controller checks](docs/testing/enemy-attacks.md) for reporting attacks and resolving them on a driven copy.
 
+Shared Death episodes, their death-screen wait, and the agreed checkpoint count have a standalone harness:
+
+```powershell
+.\scripts\test-shared-death-model.ps1
+```
+
+See [Shared Death Controller checks](docs/testing/shared-deaths.md) for checkpoint reports, coordinated and preserving deaths, and driven-copy resets in the real game.
+
 The check that an Avatar faces where its posing player looks links the engine's math, so it needs `build-windows.ps1` to have built HPL2 first:
 
 ```powershell

@@ -37,6 +37,12 @@ namespace
 			mbPlayerInPlay(true), mbPeerConnected(false)
 		{
 			mEnemyAttackOutcome = eGameInteractionCommandOutcome_Success;
+			mbPlayerKillable = true;
+			mlKilledPlayers = 0;
+			mCheckPoint.mlCount = 0;
+			mCheckPoint.mbCallback = false;
+			mCheckPoint.msName = "_auto";
+			mCheckPoint.msMapFile = "maps/main/level01.map";
 			mLocalPose.mlTimeMs = 1000;
 			mLocalPose.mFeetPosition = cGameInteractionPosition(1.25f, -2.5f, 3.75f);
 			mLocalPose.mfBodyYawDegrees = 90.0f;
@@ -62,6 +68,22 @@ namespace
 				attack.mBoxOffset.mfX << " " << attack.mBoxOffset.mfY << " " << attack.mBoxOffset.mfZ;
 			mvEntityOperations.push_back(text.str());
 			return mEnemyAttackOutcome;
+		}
+
+		cGameInteractionCheckPoint mCheckPoint;
+		virtual bool GetCheckPoint(cGameInteractionCheckPoint& aCheckPoint) const
+		{
+			if (!mbMapLoaded) return false;
+			aCheckPoint = mCheckPoint;
+			return true;
+		}
+		bool mbPlayerKillable;
+		int mlKilledPlayers;
+		virtual bool KillPlayer()
+		{
+			if (!mbPlayerKillable) return false;
+			++mlKilledPlayers;
+			return true;
 		}
 
 		virtual bool IsMapLoaded() const { return mbMapLoaded; }
@@ -305,7 +327,8 @@ namespace
 		SOCKET peer = Connect(gateway, adapter);
 		Receive(peer);
 		SendCommands(peer, gateway, adapter, "protocol 2 enemies\nenemyposes subscribe 20\n");
-		Expect(ReceiveLines(peer, 4) == "RESPONSE protocol ok 2 enemies\nRESPONSE enemyposes ok subscribe 20\n"
+		Expect(ReceiveLines(peer, 5) == "RESPONSE protocol ok 2 enemies\nRESPONSE enemyposes ok subscribe 20\n"
+			"EVENT checkpoint 0 0 _auto maps/main/level01.map\n"
 			"STATE enemypose 7 1000 0 1.2500 -2.5000 3.7500 90.0000 Walk 0.2500 1 maps/main/level01.map\n"
 			"STATE enemypose 8 1000 0 1.2500 -2.5000 3.7500 90.0000 Walk 0.2500 1 maps/main/level01.map\n",
 			"every enemy is reported at the subscribed Pose rate");
@@ -337,7 +360,8 @@ namespace
 		SOCKET peer = Connect(gateway, adapter); Receive(peer);
 		SendCommands(peer, gateway, adapter, "protocol 2 enemies\nenemydrive 7 maps/main/level01.map\n"
 			"enemypose 7 1000 0 1 2 3 90 Walk 0.25 1 maps/main/level01.map\n");
-		Expect(ReceiveLines(peer, 2) == "RESPONSE protocol ok 2 enemies\nRESPONSE enemydrive ok 7\n",
+		Expect(ReceiveLines(peer, 3) == "RESPONSE protocol ok 2 enemies\nRESPONSE enemydrive ok 7\n"
+			"EVENT checkpoint 0 0 _auto maps/main/level01.map\n",
 			"drive is answered; streamed samples succeed silently");
 		Expect(adapter.mvEntityOperations.size() == 2 && adapter.mvEntityOperations[1] == "enemy pose 7",
 			"enemy sample reaches game");
@@ -359,7 +383,8 @@ namespace
 		SOCKET peer = Connect(gateway, adapter);
 		Receive(peer);
 		SendCommands(peer, gateway, adapter, "protocol 2 enemies\n");
-		Expect(Receive(peer) == "RESPONSE protocol ok 2 enemies\n", "enemies Capability is granted");
+		Expect(ReceiveLines(peer, 2) == "RESPONSE protocol ok 2 enemies\n"
+			"EVENT checkpoint 0 0 _auto maps/main/level01.map\n", "enemies Capability is granted");
 		closesocket(peer);
 	}
 
@@ -390,7 +415,7 @@ namespace
 		Expect(gateway.Listen("127.0.0.1", 0), "listen again");
 		peer = Connect(gateway, adapter); Receive(peer);
 		SendCommands(peer, gateway, adapter, "protocol 2 enemies\n");
-		Receive(peer);
+		ReceiveLines(peer, 2);
 		cGameInteractionEnemyAttack attack = GruntAttack();
 		gateway.Report(cGameInteractionEvent(eGameInteractionEvent_EnemyAttack, attack));
 		attack.mKind = eGameInteractionEnemyAttackKind_BreakDoor;
@@ -419,7 +444,8 @@ namespace
 		peer = Connect(gateway, adapter); Receive(peer);
 		SendCommands(peer, gateway, adapter, "protocol 2 enemies\n"
 			"enemyattack 7 breakdoor 1 1.5 1.25 0.5 0 1 maps/main/level01.map\n");
-		Expect(ReceiveLines(peer, 2) == "RESPONSE protocol ok 2 enemies\nRESPONSE enemyattack ok 7\n",
+		Expect(ReceiveLines(peer, 3) == "RESPONSE protocol ok 2 enemies\nRESPONSE enemyattack ok 7\n"
+			"EVENT checkpoint 0 0 _auto maps/main/level01.map\n",
 			"a granted attack is resolved");
 		Expect(adapter.mvEntityOperations.size() == 1 &&
 			adapter.mvEntityOperations[0] == "enemy attack 7 breakdoor 1 1.5 1.25 0.5 0 1",
@@ -434,6 +460,172 @@ namespace
 			"RESPONSE enemyattack invalid\nRESPONSE enemyattack invalid\nRESPONSE enemyattack invalid\n",
 			"failures name the enemy; malformed attacks are invalid");
 		Expect(adapter.mvEntityOperations.size() == 2, "only attacks on the current map reach the game");
+		closesocket(peer);
+	}
+
+	void CheckPointStateIsReportedToEnemiesSessionsWhenItChanges()
+	{
+		cGameInteractionGateway gateway;
+		cFakeGameAdapter adapter;
+		SOCKET peer = OpenSession(gateway, adapter);
+		SendCommands(peer, gateway, adapter, "protocol 2\n");
+		Expect(Receive(peer) == "RESPONSE protocol ok 2\n", "negotiated without enemies");
+		gateway.Update(adapter);
+		Expect(ReceiveAvailable(peer, 100).empty(), "Sessions without enemies receive no checkpoint state");
+		closesocket(peer);
+		gateway.Shutdown();
+
+		peer = OpenSession(gateway, adapter);
+		SendCommands(peer, gateway, adapter, "protocol 2 enemies\n");
+		Expect(ReceiveLines(peer, 2) == "RESPONSE protocol ok 2 enemies\n"
+			"EVENT checkpoint 0 0 _auto maps/main/level01.map\n", "a new Session learns the current checkpoint");
+		gateway.Update(adapter);
+		Expect(ReceiveAvailable(peer, 100).empty(), "an unchanged checkpoint is not reported again");
+		adapter.mCheckPoint.msName = "cellar_death";
+		adapter.mCheckPoint.mbCallback = true;
+		gateway.Update(adapter);
+		adapter.mCheckPoint.mlCount = 1;
+		gateway.Update(adapter);
+		adapter.mCheckPoint.msName = "a name with spaces";
+		gateway.Update(adapter);
+		Expect(ReceiveLines(peer, 3) == "EVENT checkpoint 0 1 cellar_death maps/main/level01.map\n"
+			"EVENT checkpoint 1 1 cellar_death maps/main/level01.map\n"
+			"EVENT checkpoint 1 1 - maps/main/level01.map\n",
+			"a registration or count change is reported; a name that is not one field is -");
+		adapter.mbMapLoaded = false;
+		gateway.Update(adapter);
+		adapter.mbMapLoaded = true;
+		gateway.Report(cGameInteractionEvent(eGameInteractionEvent_MapEntered, "maps/main/level01.map"));
+		gateway.Update(adapter);
+		Expect(ReceiveAvailable(peer, 200).find("EVENT checkpoint 1 1 - maps/main/level01.map\n") != std::string::npos,
+			"a new Map Visit reports its checkpoint even when unchanged");
+		closesocket(peer);
+	}
+
+	cGameInteractionCheckPoint CellarCheckPoint(int alCount)
+	{
+		cGameInteractionCheckPoint checkPoint;
+		checkPoint.mlCount = alCount;
+		checkPoint.mbCallback = true;
+		checkPoint.msName = "cellar_death";
+		checkPoint.msMapFile = "maps/main/level01.map";
+		return checkPoint;
+	}
+
+	SOCKET OpenEnemiesSession(cGameInteractionGateway& aGateway, cFakeGameAdapter& aAdapter)
+	{
+		SOCKET peer = OpenSession(aGateway, aAdapter);
+		SendCommands(peer, aGateway, aAdapter, "protocol 2 enemies\n");
+		ReceiveLines(peer, 2);
+		return peer;
+	}
+
+	void LocalDeathsAreReportedWithTheirCheckPoint()
+	{
+		cGameInteractionGateway gateway;
+		cFakeGameAdapter adapter;
+		Expect(gateway.BeginPlayerDeath(CellarCheckPoint(0), true) == eSharedDeathPolicy_Vanilla,
+			"without a Session a death is vanilla");
+		gateway.CompleteCheckPoint(CellarCheckPoint(0));
+		adapter.mCheckPoint = CellarCheckPoint(2);
+		SOCKET peer = OpenEnemiesSession(gateway, adapter);
+		Expect(gateway.BeginPlayerDeath(CellarCheckPoint(2), true) == eSharedDeathPolicy_Coordinated,
+			"a callback with the other player on the map coordinates the death");
+		gateway.Update(adapter);
+		Expect(ReceiveLines(peer, 1) == "EVENT playerdeath 1 2 1 cellar_death maps/main/level01.map\n",
+			"the death is reported with its number and checkpoint");
+		gateway.CompleteCheckPoint(CellarCheckPoint(2));
+		cGameInteractionCheckPoint automatic = CellarCheckPoint(0);
+		automatic.mbCallback = false;
+		automatic.msName = "_auto";
+		Expect(gateway.BeginPlayerDeath(automatic, true) == eSharedDeathPolicy_PreserveEnemies,
+			"no callback preserves Shared Enemies");
+		gateway.CompleteCheckPoint(automatic);
+		Expect(gateway.BeginPlayerDeath(automatic, false) == eSharedDeathPolicy_Vanilla,
+			"alone on the map a death is vanilla");
+		gateway.Update(adapter);
+		Expect(ReceiveLines(peer, 2) == "EVENT playerdeath 2 0 0 _auto maps/main/level01.map\n"
+			"EVENT playerdeath 3 0 0 _auto maps/main/level01.map\n", "every local death is reported");
+		closesocket(peer);
+		gateway.Shutdown();
+
+		peer = OpenSession(gateway, adapter);
+		SendCommands(peer, gateway, adapter, "protocol 2\n");
+		Receive(peer);
+		Expect(gateway.BeginPlayerDeath(CellarCheckPoint(2), true) == eSharedDeathPolicy_Vanilla,
+			"a Session without enemies does not share deaths");
+		gateway.Update(adapter);
+		Expect(ReceiveAvailable(peer, 100).empty(), "a Session without enemies receives no deaths");
+		closesocket(peer);
+	}
+
+	void SharedDeathKillsOrJoinsOncePerEpisode()
+	{
+		cGameInteractionGateway gateway;
+		cFakeGameAdapter adapter;
+		SOCKET peer = OpenSession(gateway, adapter);
+		SendCommands(peer, gateway, adapter, "protocol 2\nshareddeath 1 0 3 cellar_death maps/main/level01.map\n");
+		Expect(ReceiveLines(peer, 2) == "RESPONSE protocol ok 2\nRESPONSE shareddeath not-granted\n",
+			"Shared Deaths require enemies");
+		Expect(adapter.mlKilledPlayers == 0, "an ungranted Shared Death kills nobody");
+		closesocket(peer);
+		gateway.Shutdown();
+
+		adapter.mCheckPoint = CellarCheckPoint(1);
+		peer = OpenEnemiesSession(gateway, adapter);
+		SendCommands(peer, gateway, adapter, "shareddeath 1 0 3 cellar_death maps/main/level01.map\n");
+		Expect(ReceiveLines(peer, 1) == "RESPONSE shareddeath ok\n" && adapter.mlKilledPlayers == 1,
+			"a Shared Death kills the living player");
+		// The game's own death hook runs as the player dies.
+		Expect(gateway.BeginPlayerDeath(CellarCheckPoint(1), true) == eSharedDeathPolicy_Coordinated,
+			"the killed player follows its checkpoint");
+		Expect(!gateway.HoldsCheckPoint(0), "a death with its episode does not wait");
+		cSharedDeathCheckPoint checkPoint = gateway.CompleteCheckPoint(CellarCheckPoint(1));
+		Expect(checkPoint.mlCount == 3 && checkPoint.mbAgreed, "the callback receives the agreed count");
+		SendCommands(peer, gateway, adapter, "shareddeath 1 0 3 cellar_death maps/main/level01.map\n");
+		Expect(ReceiveLines(peer, 1) == "RESPONSE shareddeath duplicate\n" && adapter.mlKilledPlayers == 1,
+			"a repeated episode, not its own death, is not reported back nor kills again");
+
+		gateway.BeginPlayerDeath(CellarCheckPoint(4), true);
+		Expect(gateway.HoldsCheckPoint(100), "a local coordinated death waits for its episode");
+		SendCommands(peer, gateway, adapter, "shareddeath 2 1 5 cellar_death maps/main/level01.map\n");
+		Expect(ReceiveLines(peer, 2) == "EVENT playerdeath 1 4 1 cellar_death maps/main/level01.map\n"
+			"RESPONSE shareddeath ok\n" && adapter.mlKilledPlayers == 1, "an episode answering the death joins it");
+		Expect(!gateway.HoldsCheckPoint(200), "the answered death stops waiting");
+		Expect(gateway.CompleteCheckPoint(CellarCheckPoint(4)).mlCount == 5, "the answering episode's count applies");
+		SendCommands(peer, gateway, adapter, "shareddeath 3 1 5 cellar_death maps/main/level01.map\n"
+			"shareddeath 4 0 5 cellar_death maps/main/level02.map\n");
+		Expect(ReceiveLines(peer, 2) == "RESPONSE shareddeath stale\nRESPONSE shareddeath wrong-map\n" &&
+			adapter.mlKilledPlayers == 1, "late and other-map episodes kill nobody");
+		adapter.mbPlayerKillable = false;
+		SendCommands(peer, gateway, adapter, "shareddeath 5 0 5 cellar_death maps/main/level01.map\n");
+		Expect(ReceiveLines(peer, 1) == "RESPONSE shareddeath unavailable\n", "a player not in play cannot die");
+		adapter.mbPlayerKillable = true;
+		Expect(gateway.BeginPlayerDeath(CellarCheckPoint(5), true) == eSharedDeathPolicy_Coordinated,
+			"an unavailable kill leaves no pending death behind");
+		gateway.Update(adapter);
+		Expect(ReceiveLines(peer, 1) == "EVENT playerdeath 2 5 1 cellar_death maps/main/level01.map\n",
+			"the next local death is reported");
+		gateway.CompleteCheckPoint(CellarCheckPoint(5));
+		SendCommands(peer, gateway, adapter, "shareddeath 0 0 5 cellar_death maps/main/level01.map\n"
+			"shareddeath 6 -1 5 cellar_death maps/main/level01.map\n"
+			"shareddeath 6 0 -5 cellar_death maps/main/level01.map\n"
+			"shareddeath 6 0 5 cellar_death\n"
+			"shareddeath 6 0 5 " + std::string(65, 'n') + " maps/main/level01.map\n");
+		Expect(ReceiveLines(peer, 5) == "RESPONSE shareddeath invalid\nRESPONSE shareddeath invalid\n"
+			"RESPONSE shareddeath invalid\nRESPONSE shareddeath invalid\nRESPONSE shareddeath invalid\n" &&
+			adapter.mlKilledPlayers == 1, "malformed episodes kill nobody");
+		SendCommands(peer, gateway, adapter, "shareddeath 6 0 5 - maps/main/level01.map\n");
+		Expect(ReceiveLines(peer, 1) == "RESPONSE shareddeath ok\n" && adapter.mlKilledPlayers == 2,
+			"a later episode still applies");
+		cGameInteractionCheckPoint unnamed = CellarCheckPoint(1);
+		unnamed.msName = "a name with spaces";
+		gateway.BeginPlayerDeath(unnamed, true);
+		Expect(!gateway.CompleteCheckPoint(unnamed).mbAgreed,
+			"a name that is not one field never matches, since every such name is written -");
+		gateway.Report(cGameInteractionEvent(eGameInteractionEvent_MapEntered, "maps/main/level01.map"));
+		Expect(gateway.BeginPlayerDeath(CellarCheckPoint(5), true) == eSharedDeathPolicy_Coordinated &&
+			gateway.HoldsCheckPoint(0), "a kill pending from the previous Map Visit does not claim a new death");
 		closesocket(peer);
 	}
 
@@ -1701,6 +1893,9 @@ int main()
 	EnemiesRequireTheirCapability();
 	EnemyAttacksAreReportedOnlyToEnemiesSessions();
 	EnemyAttackCommandsReachTheDrivenCopy();
+	CheckPointStateIsReportedToEnemiesSessionsWhenItChanges();
+	LocalDeathsAreReportedWithTheirCheckPoint();
+	SharedDeathKillsOrJoinsOncePerEpisode();
 	ProtocolVersion2NegotiationGrantsSupportedRequestedCapabilities();
 	ChatEntryCarriesItsChatColorsToTheGameAdapter();
 	ResponseIsDeliveredWithinTheUpdateThatProcessedItsCommand();

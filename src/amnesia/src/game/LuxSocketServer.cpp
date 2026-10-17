@@ -18,6 +18,17 @@
 
 namespace
 {
+	cGameInteractionCheckPoint CurrentCheckPoint()
+	{
+		cLuxMap *pMap = gpBase->mpMapHandler->GetCurrentMap();
+		cGameInteractionCheckPoint checkPoint;
+		checkPoint.mlCount = pMap->GetCheckPointCount();
+		checkPoint.mbCallback = pMap->HasCheckPointCallback();
+		checkPoint.msName = pMap->GetCheckPointName();
+		checkPoint.msMapFile = pMap->GetMapPath();
+		return checkPoint;
+	}
+
 	class cLuxGameInteractionGameAdapter : public iGameInteractionGameAdapter
 	{
 	public:
@@ -170,6 +181,26 @@ namespace
 			if(!enemy->IsEnemyDriven()) return eGameInteractionCommandOutcome_EntityNotFound;
 			enemy->SetEnemyDriven(false);
 			return eGameInteractionCommandOutcome_Success;
+		}
+
+		virtual bool GetCheckPoint(cGameInteractionCheckPoint& aCheckPoint) const
+		{
+			if(!IsMapLoaded()) return false;
+			aCheckPoint = CurrentCheckPoint();
+			return true;
+		}
+
+		virtual bool KillPlayer()
+		{
+			cLuxPlayer *pPlayer = gpBase->mpPlayer;
+			if(GetLocalPoseAvailability() == eGameInteractionLocalPoseAvailability_Unavailable || !pPlayer->IsActive() ||
+				pPlayer->IsDead() || pPlayer->GetHelperFlashback()->IsActive())
+			{
+				Log("Game Interaction Protocol: cannot kill the player for a Shared Death: not in play\n");
+				return false;
+			}
+			pPlayer->SetHealth(0);
+			return true;
 		}
 
 		virtual eGameInteractionCommandOutcome ResolveEnemyAttack(const cGameInteractionEnemyAttack& aAttack)
@@ -369,6 +400,31 @@ void cLuxSocketServer::PublishEvent(const cGameInteractionEvent& aEvent)
 {
 	mGateway.Report(aEvent);
 	LogNewGatewayDiagnostic();
+}
+
+void cLuxSocketServer::BeginPlayerDeath()
+{
+	if(gpBase->mpMapHandler->GetCurrentMap() == NULL) return;
+	const eSharedDeathPolicy policy = mGateway.BeginPlayerDeath(CurrentCheckPoint(),
+		gpBase->mpAvatarHandler && gpBase->mpAvatarHandler->HasAwakeAvatar());
+	if(policy == eSharedDeathPolicy_PreserveEnemies)
+		Log("Shared Death: no death callback, so Shared Enemies survive this death\n");
+	LogNewGatewayDiagnostic();
+}
+
+bool cLuxSocketServer::HoldsCheckPoint()
+{
+	return mGateway.HoldsCheckPoint(gpBase->mpEngine->GetGameTime() * 1000.0);
+}
+
+cSharedDeathCheckPoint cLuxSocketServer::CompleteCheckPoint()
+{
+	const cGameInteractionCheckPoint checkPoint = CurrentCheckPoint();
+	const cSharedDeathCheckPoint death = mGateway.CompleteCheckPoint(checkPoint);
+	if(death.mReset == eSharedDeathPolicy_Coordinated && !death.mbAgreed)
+		Log("Shared Death: checkpoint '%s' keeps its own count %d: no matching agreed count arrived\n",
+			checkPoint.msName.c_str(), death.mlCount);
+	return death;
 }
 
 void cLuxSocketServer::ReportLocalChatEntry(const cChatEntry& aEntry)

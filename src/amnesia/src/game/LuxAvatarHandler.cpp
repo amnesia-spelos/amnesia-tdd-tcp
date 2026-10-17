@@ -102,6 +102,15 @@ bool cLuxAvatarHandler::GetEnemyTarget(const tString& asIdentifier, cEnemyTarget
 	return true;
 }
 
+bool cLuxAvatarHandler::HasAwakeAvatar() const
+{
+	for(tAvatarMap::const_iterator it = m_mapAvatars.begin(); it != m_mapAvatars.end(); ++it)
+	{
+		if(it->second.mpBody && it->second.mpBody->IsActive()) return true;
+	}
+	return false;
+}
+
 std::vector<cLuxAvatarHandler::cEnemyTarget> cLuxAvatarHandler::GetEnemyTargets()
 {
 	std::vector<cEnemyTarget> targets;

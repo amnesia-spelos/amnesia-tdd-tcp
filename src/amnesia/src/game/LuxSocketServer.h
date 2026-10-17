@@ -14,6 +14,11 @@ public:
     void Update(float afTimeStep);
 	void DestroyWorldEntities(cLuxMap* apMap);
 	void PublishEvent(const cGameInteractionEvent& aEvent);
+	// Shared Deaths, for the local player's death and the current map's checkpoint.
+	void BeginPlayerDeath();
+	bool HoldsCheckPoint();
+	cSharedDeathCheckPoint CompleteCheckPoint();
+	bool PreservesSharedEnemies() const { return mGateway.PreservesSharedEnemies(); }
 	virtual void ReportLocalChatEntry(const cChatEntry& aEntry);
 	void SetConnectionSettings(const tString& host, int port);
 	const tString& GetHost() const { return mHost; }

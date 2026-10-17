@@ -20,6 +20,12 @@ cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aTy
 	  mSubscriptionRequest(eGameInteractionSubscriptionRequest_Invalid), mlSubscriptionRate(0),
 	  mEnemyAttackRequest(aRequest) {}
 
+cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
+	const cGameInteractionSharedDeathRequest& aRequest)
+	: mType(aType), mlProtocolVersion(0), mlCapabilities(0),
+	  mSubscriptionRequest(eGameInteractionSubscriptionRequest_Invalid), mlSubscriptionRate(0),
+	  mSharedDeathRequest(aRequest) {}
+
 cGameInteractionEvent::cGameInteractionEvent(eGameInteractionEventType aType,
 	const std::string& asData)
 	: mType(aType), msData(asData)
@@ -145,6 +151,7 @@ eGameInteractionCommandClassification cGameInteractionCommand::GetClassification
 		mType == eGameInteractionCommand_ButtonState || mType == eGameInteractionCommand_LampState ||
 		mType == eGameInteractionCommand_EnemyDrive || mType == eGameInteractionCommand_EnemyPose ||
 		mType == eGameInteractionCommand_EnemyRelease || mType == eGameInteractionCommand_EnemyAttack ||
+		mType == eGameInteractionCommand_SharedDeath ||
 		mType == eGameInteractionCommand_SharedCallback || mType == eGameInteractionCommand_PlayerPlace ?
 		eGameInteractionCommandClassification_StateChanging :
 		eGameInteractionCommandClassification_Observational;
@@ -253,6 +260,9 @@ namespace
 		cStateUpdateSubscription mReportedBodiesSubscription;
 		cSessionAvatars mAvatars;
 		cSessionEntities mEntities;
+		// The last checkpoint Event sent, or empty when the next sample must be reported.
+		std::string msLastCheckPoint;
+		cSharedDeathModel mSharedDeaths;
 	};
 
 	eGameInteractionCommandOutcome NegotiationOutcomeFor(const cGameInteractionCommand& aCommand,
@@ -367,6 +377,19 @@ namespace
 			aSession.mEnemyUpdates[enemies[index].mlEntityId] =
 				cGameInteractionProtocolVersion2::SerializeEnemyPose(enemies[index]);
 		KeepSample(subscription, eGameInteractionLocalPoseAvailability_Live, now, "", "");
+	}
+
+	// Reports the current checkpoint registration whenever it differs from the last one reported.
+	void SampleCheckPoint(iGameInteractionGameAdapter& aGameAdapter, cSessionProtocol& aSession,
+		cGameInteractionTransport& aTransport)
+	{
+		cGameInteractionCheckPoint checkPoint;
+		if (!(aSession.mlGrantedCapabilities & eGameInteractionCapability_Enemies) ||
+			!aGameAdapter.GetCheckPoint(checkPoint)) return;
+		const std::string event = cGameInteractionProtocolVersion2::SerializeCheckPoint(checkPoint);
+		if (event == aSession.msLastCheckPoint) return;
+		aSession.msLastCheckPoint = event;
+		aTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(event));
 	}
 
 	// Follows the local Pose's availability, because the report exists only while the local player is
@@ -529,6 +552,29 @@ namespace
 		return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_EntityState, outcome);
 	}
 
+	// An episode names its map, so a late one never kills the player in another map.
+	cGameInteractionResponse ApplySharedDeath(const cGameInteractionCommand& aCommand,
+		iGameInteractionGameAdapter& aGameAdapter, cSharedDeathModel& aSharedDeaths)
+	{
+		const cGameInteractionSharedDeathRequest& request = aCommand.GetSharedDeathRequest();
+		eGameInteractionCommandOutcome outcome = eGameInteractionCommandOutcome_Success;
+		if (!request.mbValid) outcome = eGameInteractionCommandOutcome_Invalid;
+		else if (!IsCurrentMap(aGameAdapter, request.mEpisode.msMapFile)) outcome = eGameInteractionCommandOutcome_WrongMap;
+		else
+		{
+			const eSharedDeathOutcome applied = aSharedDeaths.ApplyEpisode(request.mEpisode);
+			if (applied == eSharedDeathOutcome_Duplicate) outcome = eGameInteractionCommandOutcome_Duplicate;
+			else if (applied == eSharedDeathOutcome_Stale) outcome = eGameInteractionCommandOutcome_Stale;
+			// The death the kill starts comes back through BeginPlayerDeath, where the episode claims it.
+			else if (applied == eSharedDeathOutcome_Kill && !aGameAdapter.KillPlayer())
+			{
+				aSharedDeaths.AbandonKill();
+				outcome = eGameInteractionCommandOutcome_Unavailable;
+			}
+		}
+		return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_SharedDeath, outcome);
+	}
+
 	// A placement names its map, so a late Command never places the player in another map.
 	cGameInteractionResponse PlacePlayer(const cGameInteractionCommand& aCommand,
 		iGameInteractionGameAdapter& aGameAdapter)
@@ -642,6 +688,7 @@ namespace
 		case eGameInteractionCommand_EnemyPose:
 		case eGameInteractionCommand_EnemyRelease:
 		case eGameInteractionCommand_EnemyAttack:
+		case eGameInteractionCommand_SharedDeath:
 			return eGameInteractionCapability_Enemies;
 		case eGameInteractionCommand_LocalPose:
 			return eGameInteractionCapability_LocalPose;
@@ -693,6 +740,8 @@ namespace
 			return ExecuteEnemyCommand(aCommand, aGameAdapter, aSession);
 		case eGameInteractionCommand_EnemyAttack:
 			return ExecuteEnemyAttack(aCommand, aGameAdapter);
+		case eGameInteractionCommand_SharedDeath:
+			return ApplySharedDeath(aCommand, aGameAdapter, aSession.mSharedDeaths);
 		case eGameInteractionCommand_EnemyPoses:
 			return ChangeSubscription(aCommand, aSession.mEnemySubscription);
 		case eGameInteractionCommand_LocalPose:
@@ -959,6 +1008,8 @@ void cGameInteractionGateway::Update(iGameInteractionGameAdapter& aGameAdapter)
 		mpImplementation->mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(
 			mpImplementation->SerializeResponse(response)));
 	}
+	if (mpImplementation->mTransport.HasPeer())
+		SampleCheckPoint(aGameAdapter, mpImplementation->mSession, mpImplementation->mTransport);
 	// Delivering Responses now rather than on the next update removes a tick of latency.
 	mpImplementation->mTransport.Flush();
 	SampleEnemies(aGameAdapter, mpImplementation->mSession);
@@ -983,6 +1034,11 @@ void cGameInteractionGateway::Report(const cGameInteractionEvent& aEvent)
 		mpImplementation->mSession.mEnemyUpdates.clear();
 		mpImplementation->mSession.mEnemySubscription.mbScheduled = false;
 		mpImplementation->mSession.mbEnemyPoseFailing = false;
+	}
+	if (aEvent.GetType() == eGameInteractionEvent_MapEntered)
+	{
+		mpImplementation->mSession.msLastCheckPoint.clear();
+		mpImplementation->mSession.mSharedDeaths.EndMapVisit();
 	}
 	if (!mpImplementation->mTransport.HasPeer()) return;
 	if (aEvent.GetType() == eGameInteractionEvent_EnemyAttack)
@@ -1009,6 +1065,40 @@ void cGameInteractionGateway::Report(const cGameInteractionEvent& aEvent)
 	if (mpImplementation->mSession.mlGrantedCapabilities & eGameInteractionCapability_Interactions)
 		mpImplementation->mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(
 			cGameInteractionProtocolVersion2::SerializeEvent(aEvent)));
+}
+
+eSharedDeathPolicy cGameInteractionGateway::BeginPlayerDeath(const cGameInteractionCheckPoint& aCheckPoint,
+	bool abOtherPlayerOnMap)
+{
+	cSessionProtocol& session = mpImplementation->mSession;
+	const bool shares = mpImplementation->mTransport.HasPeer() &&
+		(session.mlGrantedCapabilities & eGameInteractionCapability_Enemies) != 0;
+	const eSharedDeathPolicy policy = cSharedDeathModel::SelectPolicy(shares && abOtherPlayerOnMap,
+		aCheckPoint.mbCallback);
+	const int death = session.mSharedDeaths.BeginDeath(policy);
+	if (shares && death != 0)
+		mpImplementation->mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(
+			cGameInteractionProtocolVersion2::SerializePlayerDeath(death, aCheckPoint)));
+	return policy;
+}
+
+bool cGameInteractionGateway::HoldsCheckPoint(double afTimeMs)
+{
+	return mpImplementation->mSession.mSharedDeaths.HoldsCheckPoint(afTimeMs);
+}
+
+cSharedDeathCheckPoint cGameInteractionGateway::CompleteCheckPoint(const cGameInteractionCheckPoint& aCheckPoint)
+{
+	// A name no episode can carry never matches one, even the - every such name is reported as.
+	const std::string name = cGameInteractionProtocolVersion2::IsValidItemName(aCheckPoint.msName) ?
+		aCheckPoint.msName : std::string();
+	return mpImplementation->mSession.mSharedDeaths.CompleteCheckPoint(name, aCheckPoint.mbCallback,
+		aCheckPoint.mlCount);
+}
+
+bool cGameInteractionGateway::PreservesSharedEnemies() const
+{
+	return mpImplementation->mSession.mSharedDeaths.PreservesEnemies();
 }
 
 int cGameInteractionGateway::GetPort() const

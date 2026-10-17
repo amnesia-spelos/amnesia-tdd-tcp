@@ -29,6 +29,7 @@
 #include "LuxInventory.h"
 #include "LuxEffectHandler.h"
 #include "LuxEnemy.h"
+#include "LuxSocketServer.h"
 #include "LuxProp.h"
 #include "LuxProp_CritterBase.h"
 #include "LuxHintHandler.h"
@@ -1950,6 +1951,7 @@ void cLuxPlayerDeath::Start()
 	if(mbActive) return;
 
 	mbActive = true;
+	if(gpBase->mpSocketServer) gpBase->mpSocketServer->BeginPlayerDeath();
 
 	//////////////////////////////////
 	//Progress log
@@ -2091,7 +2093,9 @@ void cLuxPlayerDeath::Update(float afTimeStep)
 		if(mfTextAlpha1 > 0.9f && mfFadeAlpha==1)
 		{
 			mfTextOnScreenCount += afTimeStep;
-			if(mfTextOnScreenCount > 5.5f || mbShowHint==false)
+			// A coordinated Shared Death keeps the screen up briefly for its agreed callback count.
+			if((mfTextOnScreenCount > 5.5f || mbShowHint==false) &&
+				!(gpBase->mpSocketServer && gpBase->mpSocketServer->HoldsCheckPoint()))
 			{
 				mlState = 2;
 

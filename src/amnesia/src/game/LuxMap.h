@@ -159,6 +159,9 @@ public:
 
 	void SetCheckPoint(const tString& asName, const tString& asStartPos, const tString& asCallback);
 	void LoadCheckPoint();
+	const tString& GetCheckPointName(){ return msCheckPointName;}
+	bool HasCheckPointCallback(){ return msCheckPointCallback != "";}
+	int GetCheckPointCount(){ return mlCheckPointCount;}
     
 	void AddUseItemCallback(	const tString& asName, const tString& asItem, const tString& asEntity,
 								const tString& asFunction, bool abAutoCallback);

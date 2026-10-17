@@ -285,6 +285,7 @@
     <ClInclude Include="AvatarPoseModel.h" />
     <ClInclude Include="EnemyCopyModel.h" />
     <ClInclude Include="EnemyPerceptionModel.h" />
+    <ClInclude Include="SharedDeathModel.h" />
     <ClInclude Include="LocalInteractionReportModel.h" />
     <ClInclude Include="PeerDrivenEntityModel.h" />
     <ClInclude Include="SharedCallbackModel.h" />

@@ -2,6 +2,7 @@
 #define GAME_INTERACTION_GATEWAY_H
 
 #include "ChatModel.h"
+#include "SharedDeathModel.h"
 
 #include <string>
 #include <vector>
@@ -197,6 +198,19 @@ struct cGameInteractionEnemyAttack
 	std::string msMapFile;
 };
 
+// The current map's checkpoint registration. Every entered map has one, the automatic _auto checkpoint
+// without a callback until its Map Script registers another.
+struct cGameInteractionCheckPoint
+{
+	cGameInteractionCheckPoint() : mlCount(0), mbCallback(false) {}
+	// The count the callback receives on the next death.
+	int mlCount;
+	// Whether a death runs a callback, so it may change maps or puzzles.
+	bool mbCallback;
+	std::string msName;
+	std::string msMapFile;
+};
+
 class cGameInteractionEvent
 {
 public:
@@ -265,7 +279,8 @@ enum eGameInteractionCommandType
 	eGameInteractionCommand_EnemyDrive,
 	eGameInteractionCommand_EnemyPose,
 	eGameInteractionCommand_EnemyRelease,
-	eGameInteractionCommand_EnemyAttack
+	eGameInteractionCommand_EnemyAttack,
+	eGameInteractionCommand_SharedDeath
 };
 
 enum eGameInteractionCapability
@@ -324,6 +339,13 @@ struct cGameInteractionEnemyAttackRequest
 	cGameInteractionEnemyAttackRequest() : mbValid(false) {}
 	bool mbValid;
 	cGameInteractionEnemyAttack mAttack;
+};
+
+struct cGameInteractionSharedDeathRequest
+{
+	cGameInteractionSharedDeathRequest() : mbValid(false) {}
+	bool mbValid;
+	cSharedDeathEpisode mEpisode;
 };
 
 struct cGameInteractionEnemyRequest
@@ -441,6 +463,8 @@ public:
 	const cGameInteractionEnemyRequest& GetEnemyRequest() const { return mEnemyRequest; }
 	cGameInteractionCommand(eGameInteractionCommandType aType, const cGameInteractionEnemyAttackRequest& aRequest);
 	const cGameInteractionEnemyAttackRequest& GetEnemyAttackRequest() const { return mEnemyAttackRequest; }
+	cGameInteractionCommand(eGameInteractionCommandType aType, const cGameInteractionSharedDeathRequest& aRequest);
+	const cGameInteractionSharedDeathRequest& GetSharedDeathRequest() const { return mSharedDeathRequest; }
 	const cGameInteractionEntityStateRequest& GetEntityStateRequest() const { return mEntityStateRequest; }
 	const cGameInteractionPlacementRequest& GetPlacementRequest() const { return mPlacementRequest; }
 	eGameInteractionCommandType GetType() const { return mType; }
@@ -468,6 +492,7 @@ private:
 	cGameInteractionAvatarRequest mAvatarRequest;
 	cGameInteractionEnemyRequest mEnemyRequest;
 	cGameInteractionEnemyAttackRequest mEnemyAttackRequest;
+	cGameInteractionSharedDeathRequest mSharedDeathRequest;
 	cGameInteractionEntityRequest mEntityRequest;
 	cGameInteractionSharedCallbackRequest mSharedCallbackRequest;
 	cGameInteractionEntityStateRequest mEntityStateRequest;
@@ -492,6 +517,7 @@ enum eGameInteractionResponseType
 	eGameInteractionResponse_SharedCallback,
 	eGameInteractionResponse_EntityState,
 	eGameInteractionResponse_PlayerPlace,
+	eGameInteractionResponse_SharedDeath,
 	eGameInteractionResponse_Rejected,
 	// The Command is not answered, such as a successful avatarpose.
 	eGameInteractionResponse_None
@@ -522,7 +548,11 @@ enum eGameInteractionCommandOutcome
 	eGameInteractionCommandOutcome_EntityNotHoldable,
 	// The current Map Script has no registration matching a sharedcallback Command, so nothing ran.
 	eGameInteractionCommandOutcome_CallbackNotFound,
-	eGameInteractionCommandOutcome_EntityWrongType
+	eGameInteractionCommandOutcome_EntityWrongType,
+	// A shareddeath Command whose episode, or a newer one, was already applied.
+	eGameInteractionCommandOutcome_Duplicate,
+	// A shareddeath Command answering a death that already reached its checkpoint, or never happened.
+	eGameInteractionCommandOutcome_Stale
 };
 
 // What the game did with a Peer-Driven Entity operation on the current map.
@@ -592,6 +622,10 @@ public:
 	// Tests a reported attack against the local player from the driven copy as this game shows it,
 	// and applies any hit. An attack never hits an Avatar.
 	virtual eGameInteractionCommandOutcome ResolveEnemyAttack(const cGameInteractionEnemyAttack& aAttack) = 0;
+	// False when no map is loaded.
+	virtual bool GetCheckPoint(cGameInteractionCheckPoint& aCheckPoint) const = 0;
+	// Kills the local player the ordinary way, as a Shared Death. False when the player is not in play.
+	virtual bool KillPlayer() = 0;
 	// Avatars belong to the Session, so the gateway creates, poses, and removes each one it accepted,
 	// whether or not a map is loaded. Creation fails only when the model cannot be found.
 	virtual bool CreateAvatar(const std::string& asIdentifier, const std::string& asEntityFile) = 0;
@@ -699,6 +733,18 @@ public:
 	void Shutdown();
 	void Update(iGameInteractionGameAdapter& aGameAdapter);
 	void Report(const cGameInteractionEvent& aEvent);
+
+	// Shared Deaths. A death is shared only with a Session granted enemies while the other player is on
+	// this map. The local player started dying with this checkpoint: a death of its own is reported to a
+	// Session granted enemies, and the result says how the death treats the map's enemies.
+	eSharedDeathPolicy BeginPlayerDeath(const cGameInteractionCheckPoint& aCheckPoint, bool abOtherPlayerOnMap);
+	// Whether the death screen stays up while a coordinated death waits for its agreed count.
+	bool HoldsCheckPoint(double afTimeMs);
+	// The death reached its checkpoint, the current registration: the count its callback receives and how
+	// the map's enemies are reset.
+	cSharedDeathCheckPoint CompleteCheckPoint(const cGameInteractionCheckPoint& aCheckPoint);
+	// Whether the death in progress leaves Shared Enemies alone.
+	bool PreservesSharedEnemies() const;
 
 	int GetPort() const;
 	bool IsListening() const;

@@ -36,6 +36,10 @@ public:
 	// The fields a sharedcallback Event and Command share: <kind> <fields>... <map>.
 	static std::string FormatSharedCallback(const cGameInteractionSharedCallback& aCallback);
 	static bool IsValidItemName(const std::string& asItem);
+	// A checkpoint name as one field: the name itself when it is a valid item name, otherwise -.
+	static std::string FormatCheckPointName(const std::string& asName);
+	static std::string SerializeCheckPoint(const cGameInteractionCheckPoint& aCheckPoint);
+	static std::string SerializePlayerDeath(int alDeath, const cGameInteractionCheckPoint& aCheckPoint);
 
 	static std::string FormatNumber(double afValue);
 	static bool TryParseNumber(const std::string& asText, double& afValue);

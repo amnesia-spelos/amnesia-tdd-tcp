@@ -44,6 +44,8 @@ public:
 	bool GetEnemyTarget(const tString& asIdentifier, cEnemyTarget& aTarget);
 	void SetAvatarEnemySight(const tString& asIdentifier, bool abEnabled);
 	void SetAvatarCollision(const tString& asIdentifier, bool abCollides);
+	// Whether another player is on the current map, shown by an awake Avatar.
+	bool HasAwakeAvatar() const;
 
 	void Update(float afTimeStep);
 	void Reset();

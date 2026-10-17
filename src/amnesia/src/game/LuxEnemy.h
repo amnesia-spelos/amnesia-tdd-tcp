@@ -450,6 +450,8 @@ public:
 	//Properties
 	virtual bool IsEnemyDriven() const { return mbEnemyDriven; }
 	void SetEnemyDriven(bool abDriven);
+	// A coordinated Shared Death reset the simulated enemy, so its copy goes inactive and stays so on release.
+	void ResetEnemyCopy();
 	cGameInteractionEnemyPose GetEnemyPose();
 	bool AddEnemyPose(const cGameInteractionEnemyPose& aPose);
 	bool ResolveEnemyAttack(const cGameInteractionEnemyAttack& aAttack);

@@ -1661,6 +1661,9 @@ void iLuxEnemy::UpdatePlayerInRange(float afTimeStep)
 {
 	if(!mbAvatarPerception && IsTargetDead()) return;
 
+	// A death that preserves Shared Enemies must not send one out of range while the local player is gone.
+	const bool bKeepInRange = gpBase->mpPlayer->IsDead() && mEnemyType == eLuxEnemyType_Grunt &&
+		gpBase->mpSocketServer && gpBase->mpSocketServer->PreservesSharedEnemies();
 	float fDistance = gpBase->mpPlayer->IsDead() ? 100000.0f : DistToChar(gpBase->mpPlayer->GetCharacterBody());
 	if(mbAvatarPerception)
 	{
@@ -1673,7 +1676,7 @@ void iLuxEnemy::UpdatePlayerInRange(float afTimeStep)
 		mbPlayerInRange = true;
 		SendMessage(eLuxEnemyMessage_PlayerInRange);
 	}
-	else if(fDistance > mfActivationDistance*1.25f+2.0f && mbPlayerInRange)
+	else if(fDistance > mfActivationDistance*1.25f+2.0f && mbPlayerInRange && !bKeepInRange)
 	{
 		mbPlayerInRange = false;
 		SendMessage(eLuxEnemyMessage_PlayerOutOfRange);
@@ -3022,6 +3025,12 @@ void iLuxEnemy::SetEnemyDriven(bool abDriven)
 		mpMover->UseMoveStateAnimations();
 		SetActive(mbCopyWasActive);
 	}
+}
+
+void iLuxEnemy::ResetEnemyCopy()
+{
+	mbCopyWasActive = false;
+	SetActive(false);
 }
 
 cGameInteractionEnemyPose iLuxEnemy::GetEnemyPose()

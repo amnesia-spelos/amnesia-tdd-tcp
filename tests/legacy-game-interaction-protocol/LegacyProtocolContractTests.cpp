@@ -130,6 +130,14 @@ namespace
 		virtual eGameInteractionCommandOutcome ReleaseEnemy(int) { return eGameInteractionCommandOutcome_EntityNotFound; }
 		virtual void ReleaseDrivenEnemies() {}
 		virtual eGameInteractionCommandOutcome ResolveEnemyAttack(const cGameInteractionEnemyAttack&) { return eGameInteractionCommandOutcome_EntityNotFound; }
+		virtual bool GetCheckPoint(cGameInteractionCheckPoint& aCheckPoint) const
+		{
+			aCheckPoint = cGameInteractionCheckPoint();
+			aCheckPoint.msName = "_auto";
+			aCheckPoint.msMapFile = GetMapFile();
+			return true;
+		}
+		virtual bool KillPlayer() { return true; }
 		virtual bool IsMapLoaded() const { return mbMapLoaded; }
 		virtual cGameInteractionPosition GetPosition() const { return mPosition; }
 		virtual cGameInteractionRotation GetRotation() const { return mRotation; }

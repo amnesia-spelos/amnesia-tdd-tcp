@@ -25,6 +25,8 @@ namespace
 	const unsigned long long kLargestEntityIdentifier = 2147483647ull;
 	const unsigned long long kLargestNegatedEntityIdentifier = 2147483648ull;
 	const unsigned long long kMaximumBodyCount = 32;
+	// Episodes, deaths, and checkpoint counts fit in a signed 32-bit integer.
+	const unsigned long long kMaximumSharedDeathNumber = 0x7FFFFFFF;
 	const double kMaximumBodyStateMagnitude = 1.0e9;
 	const double kOrientationLengthTolerance = 0.01;
 
@@ -76,7 +78,8 @@ namespace
 		{ eGameInteractionCommand_EnemyDrive, "enemydrive" },
 		{ eGameInteractionCommand_EnemyPose, "enemypose" },
 		{ eGameInteractionCommand_EnemyRelease, "enemyrelease" },
-		{ eGameInteractionCommand_EnemyAttack, "enemyattack" }
+		{ eGameInteractionCommand_EnemyAttack, "enemyattack" },
+		{ eGameInteractionCommand_SharedDeath, "shareddeath" }
 	};
 	const int kCommandKeywordCount = sizeof(kCommandKeywords) / sizeof(kCommandKeywords[0]);
 
@@ -139,6 +142,8 @@ namespace
 		case eGameInteractionCommandOutcome_InvalidAuthor: return "invalid-author";
 		case eGameInteractionCommandOutcome_InvalidMessage: return "invalid-message";
 		case eGameInteractionCommandOutcome_Unavailable: return "unavailable";
+		case eGameInteractionCommandOutcome_Duplicate: return "duplicate";
+		case eGameInteractionCommandOutcome_Stale: return "stale";
 		default: return "invalid";
 		}
 	}
@@ -520,6 +525,28 @@ namespace
 		return cGameInteractionCommand(eGameInteractionCommand_PlayerPlace, request);
 	}
 
+	// shareddeath <episode> <death> <count> <checkPoint> <map>
+	cGameInteractionCommand ParseSharedDeath(const std::string& asLine)
+	{
+		cGameInteractionFieldReader reader(asLine);
+		std::string keyword;
+		reader.TryReadField(keyword);
+		cGameInteractionSharedDeathRequest request;
+		cSharedDeathEpisode& episode = request.mEpisode;
+		unsigned long long episodeNumber = 0, death = 0, count = 0;
+		request.mbValid = TryReadUnsignedInteger(reader, kMaximumSharedDeathNumber, episodeNumber) && episodeNumber > 0 &&
+			TryReadUnsignedInteger(reader, kMaximumSharedDeathNumber, death) &&
+			TryReadUnsignedInteger(reader, kMaximumSharedDeathNumber, count) &&
+			reader.TryReadField(episode.msCheckPoint) &&
+			cGameInteractionProtocolVersion2::IsValidItemName(episode.msCheckPoint) &&
+			reader.TryReadRest(episode.msMapFile) && episode.msMapFile.size() <= kMaximumPlacementMapPathLength &&
+			reader.IsAtEnd();
+		episode.mlEpisode = static_cast<unsigned int>(episodeNumber);
+		episode.mlDeath = static_cast<int>(death);
+		episode.mlCount = static_cast<int>(count);
+		return cGameInteractionCommand(eGameInteractionCommand_SharedDeath, request);
+	}
+
 	bool TryReadSharedCallbackKind(cGameInteractionFieldReader& aReader, eGameInteractionSharedCallbackKind& aKind)
 	{
 		std::string field;
@@ -730,6 +757,31 @@ bool cGameInteractionProtocolVersion2::IsValidItemName(const std::string& asItem
 	return true;
 }
 
+std::string cGameInteractionProtocolVersion2::FormatCheckPointName(const std::string& asName)
+{
+	return IsValidItemName(asName) ? asName : "-";
+}
+
+namespace
+{
+	std::string FormatCheckPoint(const cGameInteractionCheckPoint& aCheckPoint)
+	{
+		return cGameInteractionProtocolVersion2::FormatEntityIdentifier(aCheckPoint.mlCount) + (aCheckPoint.mbCallback ? " 1 " : " 0 ") +
+			cGameInteractionProtocolVersion2::FormatCheckPointName(aCheckPoint.msName) + " " + aCheckPoint.msMapFile;
+	}
+}
+
+std::string cGameInteractionProtocolVersion2::SerializeCheckPoint(const cGameInteractionCheckPoint& aCheckPoint)
+{
+	return "EVENT checkpoint " + FormatCheckPoint(aCheckPoint);
+}
+
+std::string cGameInteractionProtocolVersion2::SerializePlayerDeath(int alDeath,
+	const cGameInteractionCheckPoint& aCheckPoint)
+{
+	return "EVENT playerdeath " + FormatEntityIdentifier(alDeath) + " " + FormatCheckPoint(aCheckPoint);
+}
+
 std::string cGameInteractionProtocolVersion2::FormatSharedCallback(const cGameInteractionSharedCallback& aCallback)
 {
 	const char* kind = "interact";
@@ -812,6 +864,7 @@ cGameInteractionCommand cGameInteractionProtocolVersion2::ParseCommand(const std
 	if (type == eGameInteractionCommand_EnemyDrive || type == eGameInteractionCommand_EnemyPose ||
 		type == eGameInteractionCommand_EnemyRelease) return ParseEnemyCommand(type, asLine);
 	if (type == eGameInteractionCommand_EnemyAttack) return ParseEnemyAttack(asLine);
+	if (type == eGameInteractionCommand_SharedDeath) return ParseSharedDeath(asLine);
 	if (type == eGameInteractionCommand_Chat) return ParseChatEntry(asLine);
 	if (type == eGameInteractionCommand_SharedCallback) return ParseSharedCallback(asLine);
 	if (type == eGameInteractionCommand_PlayerPlace) return ParsePlayerPlace(asLine);

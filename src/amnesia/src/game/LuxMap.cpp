@@ -36,6 +36,7 @@
 
 #include "LuxEnemy.h"
 #include "LuxEnemyPathfinder.h"
+#include "LuxSocketServer.h"
 
 #include "LuxProp_SwingDoor.h"
 #include "LuxProp_Item.h"
@@ -514,6 +515,12 @@ void cLuxMap::LoadCheckPoint()
 	gpBase->mpProgressLogHandler->AddLog(eLuxProgressLogLevel_High, "Loading checkpoint "+msCheckPointName+" count: "+cString::ToString(mlCheckPointCount));
 
 	//////////////////////////////
+	// Shared Death
+	cSharedDeathCheckPoint death;
+	death.mlCount = mlCheckPointCount;
+	if(gpBase->mpSocketServer) death = gpBase->mpSocketServer->CompleteCheckPoint();
+
+	//////////////////////////////
 	// Place player
 	PlacePlayerAtStartPos(msCheckPointStartPos);
 
@@ -523,7 +530,14 @@ void cLuxMap::LoadCheckPoint()
 	for(; it != mlstEnemies.end(); ++it)
 	{
 		iLuxEnemy *pEnemy = *it;
-		if(pEnemy->IsEnemyDriven()) continue;
+		// Only Grunts are Shared Enemies; any other enemy is each game's own.
+		if(death.mReset == eSharedDeathPolicy_PreserveEnemies && pEnemy->GetEnemyType() == eLuxEnemyType_Grunt) continue;
+		if(pEnemy->IsEnemyDriven())
+		{
+			// Every game resets in a coordinated death, so a copy follows the enemy it copies.
+			if(death.mReset == eSharedDeathPolicy_Coordinated) pEnemy->ResetEnemyCopy();
+			continue;
+		}
 		pEnemy->SetActive(false);
 		pEnemy->ResetProperties();
 	}
@@ -545,6 +559,9 @@ void cLuxMap::LoadCheckPoint()
 
 	//////////////////////////////
 	// Run script (last thing done!)
+	// A Shared Death's agreed count replaces this game's own, so every game stores the same next count,
+	// even when the callback registers a new checkpoint.
+	mlCheckPointCount = death.mlCount;
 	RunScript(msCheckPointCallback + "(\""+ msCheckPointName + "\", "+cString::ToString(mlCheckPointCount)+")"  );
 	
 	mlCheckPointCount++;
