@@ -30,6 +30,7 @@
 
 #include "LuxPlayer.h"
 #include "LuxPlayerHelpers.h"
+#include "LuxSharedCallbackHandler.h"
 
 //////////////////////////////////////////////////////////////////////////
 // LOADER
@@ -982,10 +983,12 @@ void cLuxEnemy_Grunt::PatrolEndOfPath()
 {
 	if(IsAtLastPatrolNode())
 	{
-		if(mbIsSeenByPlayer==false && DistToPlayer() > 10 && mbAutoRemoveAtPathEnd)
+		// Seen by any player counts, and so does the nearest player, not only the local one.
+		if(mbIsSeenByPlayer==false && DistToNearestPlayer() > 10 && mbAutoRemoveAtPathEnd)
 		{
             SetActive(false);	
 
+			if(gpBase->mpSharedCallbackHandler) gpBase->mpSharedCallbackHandler->OnEnemyAutoDisabled(this);
 			RunCallbackFunc("OnAutoDisabled");
 
 			return;

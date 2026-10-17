@@ -13,7 +13,8 @@ bool cSharedCallbackModel::CheckLocalCollide(const cSharedCollide& aCollide, int
 bool cSharedCallbackModel::ReportsCollide(const cSharedCollide& aCollide) const
 {
 	if (!ReportsCallback()) return false;
-	return aCollide.mbParentIsPlayer || aCollide.mbParentHeld || aCollide.mbChildHeld;
+	return aCollide.mbParentIsPlayer || aCollide.mbParentHeld || aCollide.mbChildHeld ||
+		aCollide.mbParentSharedEnemy || aCollide.mbChildSharedEnemy;
 }
 
 bool cSharedCallbackModel::RunCollide(const cSharedCollide& aCollide, int alStatesFilter, int alState,

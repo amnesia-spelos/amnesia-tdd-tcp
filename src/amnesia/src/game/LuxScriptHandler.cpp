@@ -3115,7 +3115,7 @@ void __stdcall cLuxScriptHandler::ShowEnemyPlayerPosition(string& asName)
 	BEGIN_SET_PROPERTY(eLuxEntityType_Enemy,-1)
 
 		iLuxEnemy *pEnemy = ToEnemy(pEntity);
-		pEnemy->ShowPlayerPosition();
+		pEnemy->ShowTriggeringPlayerPosition();
 		
 		eLuxEnemyState state = pEnemy->GetCurrentEnemyState();
 		if(	state != eLuxEnemyState_Hunt ||
@@ -3134,7 +3134,7 @@ void __stdcall cLuxScriptHandler::AlertEnemyOfPlayerPresence(string& asName)
 	BEGIN_SET_PROPERTY(eLuxEntityType_Enemy,-1)
 
 		iLuxEnemy *pEnemy = ToEnemy(pEntity);
-		pEnemy->ShowPlayerPosition();
+		pEnemy->ShowTriggeringPlayerPosition();
 		
 		eLuxEnemyState state = pEnemy->GetCurrentEnemyState();
 		if(	state != eLuxEnemyState_Hunt &&

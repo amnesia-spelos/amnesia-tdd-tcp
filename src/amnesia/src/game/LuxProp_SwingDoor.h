@@ -113,6 +113,9 @@ public:
 	cMeshEntity* GetEffectMeshEntity();
 
 	bool IsBroken(){ return mbBroken;}
+	bool IsBreakable(){ return mbBreakable && !mbDisableBreakable;}
+	// Breaks the door as running out of health does. A broken door stays broken.
+	void Break(){ if(!mbBroken) SetHealth(0);}
 
 	//////////////////////
 	//Connection callbacks

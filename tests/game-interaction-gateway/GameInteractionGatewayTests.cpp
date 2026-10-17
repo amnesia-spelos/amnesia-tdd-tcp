@@ -37,6 +37,7 @@ namespace
 			mbPlayerInPlay(true), mbPeerConnected(false)
 		{
 			mEnemyAttackOutcome = eGameInteractionCommandOutcome_Success;
+			mEnemyDoorBreakOutcome = eGameInteractionCommandOutcome_Success;
 			mbPlayerKillable = true;
 			mlKilledPlayers = 0;
 			mCheckPoint.mlCount = 0;
@@ -69,6 +70,9 @@ namespace
 			mvEntityOperations.push_back(text.str());
 			return mEnemyAttackOutcome;
 		}
+		eGameInteractionCommandOutcome mEnemyDoorBreakOutcome;
+		virtual eGameInteractionCommandOutcome BreakEnemyDoor(int id)
+		{ mvEntityOperations.push_back("door break " + Text(id)); return mEnemyDoorBreakOutcome; }
 
 		cGameInteractionCheckPoint mCheckPoint;
 		virtual bool GetCheckPoint(cGameInteractionCheckPoint& aCheckPoint) const
@@ -460,6 +464,90 @@ namespace
 			"RESPONSE enemyattack invalid\nRESPONSE enemyattack invalid\nRESPONSE enemyattack invalid\n",
 			"failures name the enemy; malformed attacks are invalid");
 		Expect(adapter.mvEntityOperations.size() == 2, "only attacks on the current map reach the game");
+		closesocket(peer);
+	}
+
+	void EnemiesAreSharedOnlyWhileAnEnemiesSessionLasts()
+	{
+		cGameInteractionGateway gateway;
+		cFakeGameAdapter adapter;
+		Expect(!gateway.SharesEnemies(), "without a Peer, enemies are each game's own");
+		SOCKET peer = OpenSession(gateway, adapter);
+		SendCommands(peer, gateway, adapter, "protocol 2 interactions sharedcallbacks\n");
+		Receive(peer);
+		Expect(!gateway.SharesEnemies(), "a Session without enemies does not share them");
+		closesocket(peer);
+		gateway.Shutdown();
+		peer = OpenSession(gateway, adapter);
+		SendCommands(peer, gateway, adapter, "protocol 2 enemies\n");
+		ReceiveLines(peer, 2);
+		Expect(gateway.SharesEnemies(), "a Session granted enemies shares them");
+		closesocket(peer);
+		for(int update = 0; update < 50 && gateway.SharesEnemies(); ++update) { Sleep(10); gateway.Update(adapter); }
+		Expect(!gateway.SharesEnemies(), "enemies stop being shared when the Session ends");
+		gateway.Shutdown();
+	}
+
+	cGameInteractionEvent EnemyDoorBreak(int alDoorId)
+	{
+		cGameInteractionEntityEvent doorBreak;
+		doorBreak.mlEntityId = alDoorId;
+		doorBreak.msMapFile = "maps/main/level01.map";
+		return cGameInteractionEvent(eGameInteractionEvent_EnemyDoorBreak, doorBreak);
+	}
+
+	void EnemyDoorBreaksAreReportedOnlyToEnemiesSessions()
+	{
+		cGameInteractionGateway gateway;
+		cFakeGameAdapter adapter;
+		Expect(gateway.Listen("127.0.0.1", 0), "listen");
+		SOCKET peer = Connect(gateway, adapter); Receive(peer);
+		SendCommands(peer, gateway, adapter, "protocol 2 interactions sharedcallbacks\n");
+		Expect(Receive(peer) == "RESPONSE protocol ok 2 interactions sharedcallbacks\n", "negotiated without enemies");
+		gateway.Report(EnemyDoorBreak(31));
+		gateway.Update(adapter);
+		Expect(ReceiveAvailable(peer, 100).empty(), "Sessions without enemies receive no door breaks");
+		closesocket(peer);
+		gateway.Shutdown();
+		Expect(gateway.Listen("127.0.0.1", 0), "listen again");
+		peer = Connect(gateway, adapter); Receive(peer);
+		SendCommands(peer, gateway, adapter, "protocol 2 enemies\n");
+		ReceiveLines(peer, 2);
+		gateway.Report(EnemyDoorBreak(31));
+		gateway.Report(EnemyDoorBreak(-4));
+		gateway.Update(adapter);
+		Expect(ReceiveLines(peer, 2) ==
+			"EVENT enemydoorbreak 31 maps/main/level01.map\nEVENT enemydoorbreak -4 maps/main/level01.map\n",
+			"each door an enemy breaks is reported with its map");
+		closesocket(peer);
+	}
+
+	void EnemyDoorBreakCommandsBreakThisGamesDoor()
+	{
+		cGameInteractionGateway gateway;
+		cFakeGameAdapter adapter;
+		Expect(gateway.Listen("127.0.0.1", 0), "listen");
+		SOCKET peer = Connect(gateway, adapter); Receive(peer);
+		SendCommands(peer, gateway, adapter, "protocol 2 interactions\nenemydoorbreak 31 maps/main/level01.map\n");
+		Expect(ReceiveLines(peer, 2) == "RESPONSE protocol ok 2 interactions\nRESPONSE enemydoorbreak not-granted\n",
+			"door breaks require enemies");
+		Expect(adapter.mvEntityOperations.empty(), "an ungranted door break never reaches the game");
+		closesocket(peer);
+		gateway.Shutdown();
+		Expect(gateway.Listen("127.0.0.1", 0), "listen again");
+		peer = Connect(gateway, adapter); Receive(peer);
+		SendCommands(peer, gateway, adapter, "protocol 2 enemies\nenemydoorbreak 31 maps/main/level01.map\n");
+		Expect(ReceiveLines(peer, 3) == "RESPONSE protocol ok 2 enemies\nRESPONSE enemydoorbreak ok 31\n"
+			"EVENT checkpoint 0 0 _auto maps/main/level01.map\n", "a granted door break succeeds");
+		Expect(adapter.mvEntityOperations.size() == 1 && adapter.mvEntityOperations[0] == "door break 31",
+			"the door reaches the game");
+		adapter.mEnemyDoorBreakOutcome = eGameInteractionCommandOutcome_EntityWrongType;
+		SendCommands(peer, gateway, adapter, "enemydoorbreak 12 maps/main/level01.map\n"
+			"enemydoorbreak 31 other.map\nenemydoorbreak door maps/main/level01.map\nenemydoorbreak 31\n");
+		Expect(ReceiveLines(peer, 4) == "RESPONSE enemydoorbreak wrong-type 12\nRESPONSE enemydoorbreak wrong-map 31\n"
+			"RESPONSE enemydoorbreak invalid\nRESPONSE enemydoorbreak invalid\n",
+			"failures name the door; malformed lines are invalid");
+		Expect(adapter.mvEntityOperations.size() == 2, "only door breaks on the current map reach the game");
 		closesocket(peer);
 	}
 
@@ -1893,6 +1981,9 @@ int main()
 	EnemiesRequireTheirCapability();
 	EnemyAttacksAreReportedOnlyToEnemiesSessions();
 	EnemyAttackCommandsReachTheDrivenCopy();
+	EnemyDoorBreaksAreReportedOnlyToEnemiesSessions();
+	EnemyDoorBreakCommandsBreakThisGamesDoor();
+	EnemiesAreSharedOnlyWhileAnEnemiesSessionLasts();
 	CheckPointStateIsReportedToEnemiesSessionsWhenItChanges();
 	LocalDeathsAreReportedWithTheirCheckPoint();
 	SharedDeathKillsOrJoinsOncePerEpisode();

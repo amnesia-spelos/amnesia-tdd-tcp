@@ -394,7 +394,14 @@ public:
 	//Actions
 	void GiveDamage(float afAmount, int alStrength);
 	void ShowPlayerPosition();
+	// A Map Script shows the enemy the player who triggered the callback, which is an Avatar when the
+	// callback runs as another player's Shared Callback. A driven copy has no AI to show.
+	void ShowTriggeringPlayerPosition();
 	void AlertOfPlayerPresence();
+	// The enemy whose attack is testing for hits right now, or NULL. Lets a door tell an enemy broke it.
+	static iLuxEnemy* GetAttackingEnemy() { return mpAttackingEnemy; }
+	// A Grunt this game simulates while the other player is on the map, so the other games drive a copy.
+	bool IsSharedEnemy();
 
 	void ChangeState(eLuxEnemyState aState);
 
@@ -603,6 +610,8 @@ protected:
 	cVector3f GetDirection2D(const cVector3f &avPos);
     
 	float DistToPlayer();
+	// To the nearest player, the local one or an Avatar the enemy can target, whichever it pursues.
+	float DistToNearestPlayer();
 	float DistToPlayer2D();
 	float DistToPlayer2D(const cVector3f& avPos);
 	float AbsHeightDistToPlayer();
@@ -624,6 +633,8 @@ protected:
 	virtual void OnAfterWorldLoad()=0;
 	virtual void UpdateEnemySpecific(float afTimeStep)=0;
 	virtual void OnRenderSolidImplemented(cRendererCallbackFunctions* apFunctions)=0;
+
+	static iLuxEnemy* mpAttackingEnemy;
 
 	//////////////
 	//Variables

@@ -35,6 +35,7 @@
 #include "LuxDebugHandler.h"
 #include "LuxProgressLogHandler.h"
 #include "LuxSocketServer.h"
+#include "LuxSharedCallbackHandler.h"
 #include "LuxHelpFuncs.h"
 
 #include "LuxProp.h"
@@ -433,6 +434,8 @@ void iLuxEnemyLoader::LoadAttackSizeData(const tString &asPrefix, cEnemyAttackSi
 //////////////////////////////////////////////////////////////////////////
 
 //-----------------------------------------------------------------------
+
+iLuxEnemy* iLuxEnemy::mpAttackingEnemy = NULL;
 
 iLuxEnemy::iLuxEnemy(const tString &asName, int alID, cLuxMap *apMap, eLuxEnemyType aEnemyType) : iLuxEntity(asName,alID,apMap, eLuxEntityType_Enemy)
 {
@@ -838,6 +841,29 @@ void iLuxEnemy::GiveDamage(float afAmount, int alStrength)
 void iLuxEnemy::ShowPlayerPosition()
 {
 	mvLastKnownPlayerPos = gpBase->mpPlayer->GetCharacterBody()->GetFeetPosition();
+}
+
+void iLuxEnemy::ShowTriggeringPlayerPosition()
+{
+	if(mbEnemyDriven) return;
+	const bool bOtherPlayersTrigger = gpBase->mpSharedCallbackHandler &&
+		!gpBase->mpSharedCallbackHandler->AllowsPlayerControl();
+	const std::vector<cLuxAvatarHandler::cEnemyTarget> targets = gpBase->mpAvatarHandler->GetEnemyTargets();
+	std::vector<cEnemyPerceptionCandidate> avatars;
+	for(size_t i = 0; i < targets.size(); ++i)
+		avatars.push_back(cEnemyPerceptionCandidate(targets[i].msIdentifier, false, DistToChar(targets[i].mpBody)));
+	const tString shown = cEnemyPerceptionModel::ShownPlayer(bOtherPlayersTrigger, avatars);
+	cLuxAvatarHandler::cEnemyTarget target;
+	if(shown.empty() || !gpBase->mpAvatarHandler->GetEnemyTarget(shown, target))
+	{
+		// The local player is shown, so an enemy pursuing an Avatar turns to the local player.
+		if(mbAvatarPerception) mPerception.RememberTarget("");
+		ShowPlayerPosition();
+		return;
+	}
+	mbAvatarPerception = true;
+	mPerception.RememberTarget(shown);
+	mvLastKnownPlayerPos = target.mpBody->GetFeetPosition();
 }
 
 void iLuxEnemy::AlertOfPlayerPresence()
@@ -1954,6 +1980,7 @@ bool iLuxEnemy::Attack(const cEnemyAttackSizeData &aSizeData, const cEnemyAttack
 		gpBase->mpSocketServer->PublishEvent(cGameInteractionEvent(eGameInteractionEvent_EnemyAttack,
 			GetEnemyAttack(aSizeData, aDamageData)));
 	bool bHitPlayer = false;
+	mpAttackingEnemy = this;
 	bool bHit = gpBase->mpMapHelper->ShapeDamage(GetAttackShape(aSizeData.mlShapeIdx), GetDamageShapeMatrix(aSizeData.mvOffset), mpCharBody->GetPosition(),
 												aDamageData.mfMinDamage*afDamageMul, aDamageData.mfMaxDamage*afDamageMul, 
 												aDamageData.mfForce, aDamageData.mfMaxImpulse, 
@@ -1961,6 +1988,7 @@ bool iLuxEnemy::Attack(const cEnemyAttackSizeData &aSizeData, const cEnemyAttack
 												aDamageData.mDamageType, aDamageData.mWeaponHitType,
 												false, aDamageData.mbCheckPlayer, aDamageData.mbCheckProps, true,
 												&bHitPlayer);	
+	mpAttackingEnemy = NULL;
 	if(bHit)
 	{
 		mlAttackHitCounter++;
@@ -2286,6 +2314,14 @@ float iLuxEnemy::DistToPlayer()
 	if(IsTargetDead()) return 100000.0f;
 
 	return DistToChar(GetTargetBody());
+}
+
+float iLuxEnemy::DistToNearestPlayer()
+{
+	float fDistance = gpBase->mpPlayer->IsDead() ? 100000.0f : DistToChar(gpBase->mpPlayer->GetCharacterBody());
+	const std::vector<cLuxAvatarHandler::cEnemyTarget> targets = gpBase->mpAvatarHandler->GetEnemyTargets();
+	for(size_t i = 0; i < targets.size(); ++i) fDistance = cMath::Min(fDistance, DistToChar(targets[i].mpBody));
+	return fDistance;
 }
 
 float iLuxEnemy::DistToPlayer2D()
@@ -3045,6 +3081,12 @@ void iLuxEnemy::SetEnemyDriven(bool abDriven)
 		mpMover->UseMoveStateAnimations();
 		SetActive(mbCopyWasActive);
 	}
+}
+
+bool iLuxEnemy::IsSharedEnemy()
+{
+	return mEnemyType == eLuxEnemyType_Grunt && !mbEnemyDriven && gpBase->mpSocketServer &&
+		gpBase->mpSocketServer->SharesEnemies() && gpBase->mpAvatarHandler && gpBase->mpAvatarHandler->HasAwakeAvatar();
 }
 
 void iLuxEnemy::ResetEnemyCopy()

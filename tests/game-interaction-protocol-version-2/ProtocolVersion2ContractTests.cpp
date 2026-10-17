@@ -139,6 +139,7 @@ namespace
 		virtual eGameInteractionCommandOutcome ReleaseEnemy(int) { return eGameInteractionCommandOutcome_EntityNotFound; }
 		virtual void ReleaseDrivenEnemies() {}
 		virtual eGameInteractionCommandOutcome ResolveEnemyAttack(const cGameInteractionEnemyAttack&) { return eGameInteractionCommandOutcome_EntityNotFound; }
+		virtual eGameInteractionCommandOutcome BreakEnemyDoor(int) { return eGameInteractionCommandOutcome_EntityNotFound; }
 		virtual bool GetCheckPoint(cGameInteractionCheckPoint& aCheckPoint) const
 		{
 			aCheckPoint = cGameInteractionCheckPoint();
@@ -337,6 +338,7 @@ namespace
 		if (name == "flashback") return eGameInteractionSharedCallbackKind_Flashback;
 		if (name == "combine") return eGameInteractionSharedCallbackKind_Combine;
 		if (name == "stickyattach") return eGameInteractionSharedCallbackKind_StickyAttach;
+		if (name == "autodisabled") return eGameInteractionSharedCallbackKind_AutoDisabled;
 		return eGameInteractionSharedCallbackKind_Interact;
 	}
 

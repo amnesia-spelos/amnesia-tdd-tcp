@@ -79,6 +79,7 @@ namespace
 		{ eGameInteractionCommand_EnemyPose, "enemypose" },
 		{ eGameInteractionCommand_EnemyRelease, "enemyrelease" },
 		{ eGameInteractionCommand_EnemyAttack, "enemyattack" },
+		{ eGameInteractionCommand_EnemyDoorBreak, "enemydoorbreak" },
 		{ eGameInteractionCommand_SharedDeath, "shareddeath" }
 	};
 	const int kCommandKeywordCount = sizeof(kCommandKeywords) / sizeof(kCommandKeywords[0]);
@@ -98,7 +99,8 @@ namespace
 		{ eGameInteractionSharedCallbackKind_Pickup, "pickup" },
 		{ eGameInteractionSharedCallbackKind_Flashback, "flashback" },
 		{ eGameInteractionSharedCallbackKind_Combine, "combine" },
-		{ eGameInteractionSharedCallbackKind_StickyAttach, "stickyattach" }
+		{ eGameInteractionSharedCallbackKind_StickyAttach, "stickyattach" },
+		{ eGameInteractionSharedCallbackKind_AutoDisabled, "autodisabled" }
 	};
 	const int kSharedCallbackKindNameCount = sizeof(kSharedCallbackKindNames) / sizeof(kSharedCallbackKindNames[0]);
 
@@ -285,6 +287,7 @@ namespace
 		return cGameInteractionCommand(aType, request);
 	}
 
+	// enemydrive, enemypose, enemyrelease, and enemydoorbreak, whose entity is the door rather than an enemy.
 	cGameInteractionCommand ParseEnemyCommand(eGameInteractionCommandType aType, const std::string& asLine)
 	{
 		cGameInteractionFieldReader reader(asLine);
@@ -575,7 +578,8 @@ namespace
 
 	// sharedcallback playercollide <entityId> <state> <map>, entitycollide <parentId> <entityId> <state> <map>,
 	// interact <entityId> <map>, useitem <entityId> <item> <map>, pickup <entityId> <map>,
-	// flashback <entityId> <map>, combine <item> <otherItem> <map>, and stickyattach <areaId> <entityId> <bodyId> <map>.
+	// flashback <entityId> <map>, combine <item> <otherItem> <map>, stickyattach <areaId> <entityId> <bodyId> <map>,
+	// and autodisabled <entityId> <map>.
 	cGameInteractionCommand ParseSharedCallback(const std::string& asLine)
 	{
 		cGameInteractionFieldReader reader(asLine);
@@ -862,7 +866,8 @@ cGameInteractionCommand cGameInteractionProtocolVersion2::ParseCommand(const std
 		eGameInteractionCommand_Unknown;
 	if (type == eGameInteractionCommand_Unknown) return cLegacyGameInteractionProtocol::ParseCommand(asLine);
 	if (type == eGameInteractionCommand_EnemyDrive || type == eGameInteractionCommand_EnemyPose ||
-		type == eGameInteractionCommand_EnemyRelease) return ParseEnemyCommand(type, asLine);
+		type == eGameInteractionCommand_EnemyRelease || type == eGameInteractionCommand_EnemyDoorBreak)
+		return ParseEnemyCommand(type, asLine);
 	if (type == eGameInteractionCommand_EnemyAttack) return ParseEnemyAttack(asLine);
 	if (type == eGameInteractionCommand_SharedDeath) return ParseSharedDeath(asLine);
 	if (type == eGameInteractionCommand_Chat) return ParseChatEntry(asLine);
@@ -962,6 +967,8 @@ std::string cGameInteractionProtocolVersion2::SerializeEvent(const cGameInteract
 		return "EVENT sharedcallback " + FormatSharedCallback(aEvent.GetSharedCallback());
 	case eGameInteractionEvent_EnemyAttack:
 		return "EVENT enemyattack " + FormatEnemyAttack(aEvent.GetEnemyAttack());
+	case eGameInteractionEvent_EnemyDoorBreak:
+		return FormatEntityEvent("enemydoorbreak", entityEvent, std::string());
 	default:
 		return std::string();
 	}

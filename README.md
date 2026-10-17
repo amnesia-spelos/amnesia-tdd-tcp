@@ -55,6 +55,8 @@ See [enemy perception Controller checks](docs/testing/enemy-avatar-perception.md
 
 See [enemy attack Controller checks](docs/testing/enemy-attacks.md) for reporting attacks and resolving them on a driven copy.
 
+See [enemy door break and callback Controller checks](docs/testing/enemy-doors-and-callbacks.md) for doors a Grunt breaks and collides it triggers.
+
 Shared Death episodes, their death-screen wait, and the agreed checkpoint count have a standalone harness:
 
 ```powershell

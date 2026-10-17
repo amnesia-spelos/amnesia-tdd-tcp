@@ -166,18 +166,18 @@ void iLuxCollideCallbackContainer::CheckCollisionCallback(const tString& asName,
 		bool bCollide=false;
 
 		if(pEntity==NULL) continue;
-		if(pEntity->IsEnemyDriven() || (GetCollideCallbackParentEntity() &&
-			GetCollideCallbackParentEntity()->IsEnemyDriven())) continue;
 		if(pEntity->IsActive()==false) continue;
 
 		bCollide = CheckEntityCollision(pEntity, apMap);
 
 		/////////////////////
 		//Handle collision
+		// A driven enemy copy, like a Peer-Driven Entity, triggers nothing here: the game simulating the
+		// enemy runs the callback and shares it.
 		cSharedCollide collide;
 		iLuxEntity *pParent = GetCollideCallbackParentEntity();
-		collide.mbParentPeerDriven = pParent && pParent->IsPeerDriven();
-		collide.mbChildPeerDriven = pEntity->IsPeerDriven();
+		collide.mbParentPeerDriven = pParent && (pParent->IsPeerDriven() || pParent->IsEnemyDriven());
+		collide.mbChildPeerDriven = pEntity->IsPeerDriven() || pEntity->IsEnemyDriven();
 		if(cSharedCallbackModel::CheckLocalCollide(collide, pCallback->mlStates, bCollide,
 			pCallback->mbColliding, pCallback->mbCallbackColliding))
 		{
@@ -214,14 +214,13 @@ bool iLuxCollideCallbackContainer::RunSharedCollideCallback(iLuxEntity *apChild,
 		break;
 	}
 	// As in the collide check, an inactive child never collides.
-	if(pCallback==NULL || apChild->IsActive()==false || apChild->IsEnemyDriven() ||
-		(GetCollideCallbackParentEntity() && GetCollideCallbackParentEntity()->IsEnemyDriven())) return false;
+	if(pCallback==NULL || apChild->IsActive()==false) return false;
 
 	cSharedCollide collide;
 	iLuxEntity *pParent = GetCollideCallbackParentEntity();
 	collide.mbParentIsPlayer = pParent==NULL;
-	collide.mbParentPeerDriven = pParent && pParent->IsPeerDriven();
-	collide.mbChildPeerDriven = apChild->IsPeerDriven();
+	collide.mbParentPeerDriven = pParent && (pParent->IsPeerDriven() || pParent->IsEnemyDriven());
+	collide.mbChildPeerDriven = apChild->IsPeerDriven() || apChild->IsEnemyDriven();
 	const bool bRun = cSharedCallbackModel::RunCollide(collide, pCallback->mlStates, alState,
 		pCallback->mbCallbackColliding, &pCallback->mbColliding);
 	if(!bRun) return false;

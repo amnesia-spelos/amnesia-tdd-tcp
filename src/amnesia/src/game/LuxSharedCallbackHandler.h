@@ -9,12 +9,15 @@ class cLuxArea_Flashback;
 class cLuxArea_Sticky;
 class cLuxInventory_Item;
 class cLuxProp_Item;
+class cLuxProp_SwingDoor;
+class iLuxEnemy;
 
 //----------------------------------------------
 
 // Shares Map Script callbacks between games (amnesia-multiplayer's ADR 0006, not this repository's). It reports the collide,
 // interact, use-item, and combine callbacks, the item pickups, the Flashback areas the local player triggers, and
-// the sticky areas that attach an entity the local player Holds,
+// the sticky areas that attach an entity the local player Holds, and the collides and patrol-end disabling of
+// a Shared Enemy this game simulates, whose copies in the other games trigger nothing themselves,
 // naming each registration by identifiers only, and runs the registration a Peer's Command names as the
 // local trigger would. While it runs one, nothing that runs is reported back and scripts cannot take the
 // player's control or camera. Only map-placed entities are named, because an entity created at runtime
@@ -37,6 +40,9 @@ public:
 	void OnCombineCallbackRunning(cLuxInventory_Item *apItem, cLuxInventory_Item *apOtherItem);
 	// The sticky area's own check attached the body. Only an entity the local player Holds is reported.
 	void OnStickyAreaAttached(cLuxArea_Sticky *apArea, iPhysicsBody *apBody);
+	// The enemy disabled itself at the end of its patrol, and its OnAutoDisabled callback is about to run.
+	// Only a Shared Enemy is reported.
+	void OnEnemyAutoDisabled(iLuxEnemy *apEnemy);
 	// A Peer is about to drive the prop, so a body a sticky area here holds is detached first, as grabbing
 	// it detached it in the Peer's game. The DetachFunction runs in Shared Callback mode.
 	void DetachForDrive(iLuxProp *apProp);
@@ -44,6 +50,9 @@ public:
 	void OnLocalEntityStateChanged(iLuxEntity *apEntity, eGameInteractionEntityStateKind aKind,
 		bool abBefore, bool abAfter);
 	eGameInteractionCommandOutcome ApplyEntityState(const cGameInteractionEntityState& aState);
+	// Breaks this game's copy of a door an enemy broke in the game simulating it, in Shared Callback mode,
+	// as a Peer's Command applies a button's state.
+	eGameInteractionCommandOutcome BreakEnemyDoor(int alEntityId);
 
 	// Runs the current map's registration for the callback. False when none matches, so nothing ran.
 	bool RunSharedCallback(const cGameInteractionSharedCallback& aCallback);
@@ -59,6 +68,7 @@ private:
 	bool StartFlashback(iLuxEntity *apEntity);
 	bool Combine(const cGameInteractionSharedCallback& aCallback);
 	bool AttachToStickyArea(iLuxEntity *apArea, iLuxEntity *apEntity, int alBodyId);
+	bool AutoDisable(iLuxEntity *apEntity);
 	void Publish(cGameInteractionSharedCallback& aCallback);
 
 	cSharedCallbackModel mModel;

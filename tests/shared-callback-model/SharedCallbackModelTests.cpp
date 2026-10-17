@@ -100,6 +100,23 @@ namespace
 			"a local trigger after the run is reported, even if the run set it up");
 	}
 
+	void ASharedEnemysTriggersAreReportedByTheGameSimulatingIt()
+	{
+		cSharedCallbackModel model;
+		cSharedCollide collide;
+		collide.mbParentSharedEnemy = true;
+		Expect(model.ReportsCollide(collide), "a collide whose parent is a Shared Enemy simulated here is reported");
+		collide.mbParentSharedEnemy = false;
+		collide.mbChildSharedEnemy = true;
+		Expect(model.ReportsCollide(collide), "a collide whose child is a Shared Enemy simulated here is reported");
+		Expect(model.ReportsAutoDisabled(true), "a Shared Enemy simulated here disabling itself is reported");
+		Expect(!model.ReportsAutoDisabled(false), "an enemy that is not shared disabling itself is not reported");
+		model.BeginRun();
+		Expect(!model.ReportsCollide(collide) && !model.ReportsAutoDisabled(true),
+			"an enemy trigger nested in a Peer's Command is not reported");
+		model.EndRun();
+	}
+
 	void ACollideRunHonoursTheStatesFilter()
 	{
 		bool colliding = false;
@@ -219,6 +236,7 @@ int main()
 	OnlyALocalCombineOfNotTwoConsumablesIsReported();
 	OnlyTheHoldersGameDecidesAndReportsAStickyAttach();
 	ARunAndEverythingNestedInItIsNeverReported();
+	ASharedEnemysTriggersAreReportedByTheGameSimulatingIt();
 	ACollideRunHonoursTheStatesFilter();
 	AnEntityCollideRunKeepsTheEdgeSoTheLocalCheckDoesNotFireAgain();
 	AnEntityCollideTheLocalCheckAlreadyFiredDoesNotRunAgain();

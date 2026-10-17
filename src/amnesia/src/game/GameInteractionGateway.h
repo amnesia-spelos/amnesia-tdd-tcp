@@ -88,7 +88,10 @@ enum eGameInteractionEventType
 	eGameInteractionEvent_ButtonState,
 	eGameInteractionEvent_LampState,
 	// A simulated enemy attacked, which only a Session granted enemies receives.
-	eGameInteractionEvent_EnemyAttack
+	eGameInteractionEvent_EnemyAttack,
+	// A simulated enemy broke a map-placed door. Carries the door's identifier and Map Path, and only a
+	// Session granted enemies receives it.
+	eGameInteractionEvent_EnemyDoorBreak
 };
 
 // The kinds of Map Script callback that are Shared Callbacks.
@@ -109,7 +112,9 @@ enum eGameInteractionSharedCallbackKind
 	// The local player combined two inventory items with a combine callback, not both consumables.
 	eGameInteractionSharedCallbackKind_Combine,
 	// A sticky area attached a body of an entity the local player Holds.
-	eGameInteractionSharedCallbackKind_StickyAttach
+	eGameInteractionSharedCallbackKind_StickyAttach,
+	// A Shared Enemy this game simulates reached the end of its patrol unseen and disabled itself.
+	eGameInteractionSharedCallbackKind_AutoDisabled
 };
 
 // A Map Script callback registration, named by identifiers only, never by function or script text.
@@ -123,7 +128,7 @@ struct cGameInteractionSharedCallback
 	eGameInteractionSharedCallbackKind mKind;
 	int mlParentEntityId;
 	// The collide's child entity, the entity interacted with or used an item on, the item picked up, the
-	// Flashback area, or the entity attached to a sticky area.
+	// Flashback area, the entity attached to a sticky area, or the enemy that disabled itself.
 	int mlEntityId;
 	// 1 when the bodies started colliding and -1 when they stopped.
 	int mlState;
@@ -280,7 +285,8 @@ enum eGameInteractionCommandType
 	eGameInteractionCommand_EnemyPose,
 	eGameInteractionCommand_EnemyRelease,
 	eGameInteractionCommand_EnemyAttack,
-	eGameInteractionCommand_SharedDeath
+	eGameInteractionCommand_SharedDeath,
+	eGameInteractionCommand_EnemyDoorBreak
 };
 
 enum eGameInteractionCapability
@@ -622,6 +628,9 @@ public:
 	// Tests a reported attack against the local player from the driven copy as this game shows it,
 	// and applies any hit. An attack never hits an Avatar.
 	virtual eGameInteractionCommandOutcome ResolveEnemyAttack(const cGameInteractionEnemyAttack& aAttack) = 0;
+	// Breaks this game's own copy of a door that an enemy broke in the game simulating it. A door that
+	// is already broken stays so. Wrong type when the entity is not a door that can break.
+	virtual eGameInteractionCommandOutcome BreakEnemyDoor(int alEntityId) = 0;
 	// False when no map is loaded.
 	virtual bool GetCheckPoint(cGameInteractionCheckPoint& aCheckPoint) const = 0;
 	// Kills the local player the ordinary way, as a Shared Death. False when the player is not in play.
@@ -745,6 +754,8 @@ public:
 	cSharedDeathCheckPoint CompleteCheckPoint(const cGameInteractionCheckPoint& aCheckPoint);
 	// Whether the death in progress leaves Shared Enemies alone.
 	bool PreservesSharedEnemies() const;
+	// Whether a Session granted enemies lasts, so the game simulating an enemy shares it with the other games.
+	bool SharesEnemies() const;
 
 	int GetPort() const;
 	bool IsListening() const;

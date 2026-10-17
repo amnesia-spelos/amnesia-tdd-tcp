@@ -5,14 +5,19 @@
 struct cSharedCollide
 {
 	cSharedCollide() : mbParentIsPlayer(false), mbParentHeld(false), mbChildHeld(false),
-		mbParentPeerDriven(false), mbChildPeerDriven(false) {}
+		mbParentPeerDriven(false), mbChildPeerDriven(false), mbParentSharedEnemy(false), mbChildSharedEnemy(false) {}
 	// The parent is the local player rather than an entity.
 	bool mbParentIsPlayer;
 	// Whether the local player Holds the parent or the child, so that the other games follow it.
 	bool mbParentHeld;
 	bool mbChildHeld;
+	// Whether a Peer drives the side here: a Peer-Driven Entity, or a driven copy of an enemy.
 	bool mbParentPeerDriven;
 	bool mbChildPeerDriven;
+	// Whether the side is a Shared Enemy this game simulates while the other player is on the map, so that the
+	// other games drive a copy of it rather than collide it.
+	bool mbParentSharedEnemy;
+	bool mbChildSharedEnemy;
 };
 
 // Decides which Map Script callbacks are Shared Callbacks, and keeps Shared Callback mode: while a
@@ -44,8 +49,12 @@ public:
 	// decides for a Peer-Driven Entity.
 	static bool ChecksStickyAttach(bool abPeerDriven) { return !abPeerDriven; }
 	// A collide callback is shared when the local player's body is its parent, or when the local player
-	// Holds either side, because the other games then follow that entity rather than collide it.
+	// Holds either side or either side is a Shared Enemy simulated here, because the other games then
+	// follow that entity rather than collide it.
 	bool ReportsCollide(const cSharedCollide& aCollide) const;
+	// A Shared Enemy simulated here that disabled itself at the end of its patrol; the other games' copies
+	// never patrol, so they disable themselves only when told.
+	bool ReportsAutoDisabled(bool abSharedEnemy) const { return abSharedEnemy && ReportsCallback(); }
 	// Whether a script may take the player's control or camera.
 	bool AllowsPlayerControl() const { return mlRunDepth == 0; }
 

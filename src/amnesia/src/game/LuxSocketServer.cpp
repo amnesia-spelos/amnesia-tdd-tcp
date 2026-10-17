@@ -294,6 +294,12 @@ namespace
 				eGameInteractionCommandOutcome_Unavailable;
 		}
 
+		virtual eGameInteractionCommandOutcome BreakEnemyDoor(int alEntityId)
+		{
+			return gpBase->mpSharedCallbackHandler ? gpBase->mpSharedCallbackHandler->BreakEnemyDoor(alEntityId) :
+				eGameInteractionCommandOutcome_Unavailable;
+		}
+
 		virtual bool RunSharedCallback(const cGameInteractionSharedCallback& aCallback)
 		{
 			return gpBase->mpSharedCallbackHandler && gpBase->mpSharedCallbackHandler->RunSharedCallback(aCallback);

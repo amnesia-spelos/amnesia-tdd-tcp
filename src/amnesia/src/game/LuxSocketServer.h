@@ -19,6 +19,7 @@ public:
 	bool HoldsCheckPoint();
 	cSharedDeathCheckPoint CompleteCheckPoint();
 	bool PreservesSharedEnemies() const { return mGateway.PreservesSharedEnemies(); }
+	bool SharesEnemies() const { return mGateway.SharesEnemies(); }
 	virtual void ReportLocalChatEntry(const cChatEntry& aEntry);
 	void SetConnectionSettings(const tString& host, int port);
 	const tString& GetHost() const { return mHost; }

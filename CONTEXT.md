@@ -140,10 +140,14 @@ _Avoid_: Map load, level session
 The script file with the same name as a map, stored beside it, that the game runs for that map.
 _Avoid_: Level script, map code, hps
 
+**Shared Enemy**:
+An enemy that is one threat to every player on a map: one game simulates it, and every other game drives a copy that has no AI and triggers nothing itself. Only Grunts are Shared Enemies, and only while another player is on the map.
+_Avoid_: Synced enemy, networked enemy, remote enemy
+
 **Shared Death**:
 One episode, decided by the Peer of the game that simulates the shared enemies, in which every player on a map whose current checkpoint has a death callback dies and each game runs its own checkpoint and callback once, with that game's checkpoint count. A death on a map without a callback is not a Shared Death: the dead player respawns and the shared enemies are left as they are.
 _Avoid_: Shared kill, death sync, team wipe
 
 **Shared Callback**:
-A Map Script callback the local player triggered, an item pickup or Flashback area the local player set off, two inventory items the local player combined, or a sticky area attaching an entity the local player Holds, reported to Peers by the identifiers of its registration, item, area, items, or attached body, or the run of this game's own registration, pickup, Flashback area, combine, or sticky attach for those identifiers that a Peer's Command asks for. A Shared Callback never names a function or carries script text.
+A Map Script callback the local player or a Shared Enemy this game simulates triggered, an item pickup or Flashback area the local player set off, two inventory items the local player combined, or a sticky area attaching an entity the local player Holds, reported to Peers by the identifiers of its registration, item, area, items, or attached body, or the run of this game's own registration, pickup, Flashback area, combine, or sticky attach for those identifiers that a Peer's Command asks for. A Shared Callback never names a function or carries script text.
 _Avoid_: Callback sync, remote script, trigger relay

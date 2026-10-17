@@ -39,5 +39,14 @@ int main()
 	cEnemyPerceptionModel helped;
 	helped.RememberTarget("reported-avatar");
 	Expect(!helped.IsVisible() && helped.GetTarget() == "reported-avatar", "help remembers an Avatar without inventing sight");
+	std::vector<cEnemyPerceptionCandidate> others;
+	Expect(cEnemyPerceptionModel::ShownPlayer(false, others).empty(), "a local trigger shows the enemy the local player");
+	Expect(cEnemyPerceptionModel::ShownPlayer(true, others).empty(),
+		"another player's trigger with no Avatar on the map still shows the local player");
+	others.push_back(cEnemyPerceptionCandidate("far", false, 30));
+	others.push_back(cEnemyPerceptionCandidate("near", false, 4));
+	Expect(cEnemyPerceptionModel::ShownPlayer(true, others) == "near",
+		"another player's trigger shows the enemy the nearest Avatar, seen or not");
+	Expect(cEnemyPerceptionModel::ShownPlayer(false, others).empty(), "Avatars never take a local trigger");
 	std::cout << "Enemy perception cases passed\n";
 }

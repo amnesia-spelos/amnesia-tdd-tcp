@@ -3,6 +3,7 @@
 #include "GameInteractionProtocolVersion2.h"
 #include "LuxArea_Flashback.h"
 #include "LuxArea_Sticky.h"
+#include "LuxEnemy.h"
 #include "LuxEntity.h"
 #include "LuxInteractionReportHandler.h"
 #include "LuxInventory.h"
@@ -13,6 +14,7 @@
 #include "LuxProp_Button.h"
 #include "LuxProp_Item.h"
 #include "LuxProp_Lamp.h"
+#include "LuxProp_SwingDoor.h"
 #include "LuxSocketServer.h"
 
 namespace
@@ -42,6 +44,11 @@ namespace
 		return apEntity->GetEntityType() == eLuxEntityType_Area && static_cast<iLuxArea*>(apEntity)->GetAreaType() == aType;
 	}
 
+	bool IsSharedEnemyEntity(iLuxEntity *apEntity)
+	{
+		return apEntity && apEntity->GetEntityType() == eLuxEntityType_Enemy && static_cast<iLuxEnemy*>(apEntity)->IsSharedEnemy();
+	}
+
 	// Tinderboxes, oil, sanity potions, and laudanum stay local.
 	bool IsConsumable(eLuxItemType aType)
 	{
@@ -60,6 +67,8 @@ void cLuxSharedCallbackHandler::OnCollideCallbackRunning(iLuxEntity *apParentEnt
 	collide.mbParentIsPlayer = apParentEntity==NULL;
 	collide.mbParentHeld = IsHeld(apParentEntity);
 	collide.mbChildHeld = IsHeld(apChild);
+	collide.mbParentSharedEnemy = IsSharedEnemyEntity(apParentEntity);
+	collide.mbChildSharedEnemy = IsSharedEnemyEntity(apChild);
 	if(!mModel.ReportsCollide(collide)) return;
 	if(!IsMapPlaced(apChild) || (apParentEntity && !IsMapPlaced(apParentEntity))) return;
 
@@ -150,6 +159,16 @@ void cLuxSharedCallbackHandler::OnStickyAreaAttached(cLuxArea_Sticky *apArea, iP
 	Publish(callback);
 }
 
+void cLuxSharedCallbackHandler::OnEnemyAutoDisabled(iLuxEnemy *apEnemy)
+{
+	if(!IsMapPlaced(apEnemy) || !mModel.ReportsAutoDisabled(apEnemy->IsSharedEnemy())) return;
+
+	cGameInteractionSharedCallback callback;
+	callback.mKind = eGameInteractionSharedCallbackKind_AutoDisabled;
+	callback.mlEntityId = apEnemy->GetID();
+	Publish(callback);
+}
+
 void cLuxSharedCallbackHandler::DetachForDrive(iLuxProp *apProp)
 {
 	cLuxMap *pMap = gpBase->mpMapHandler->GetCurrentMap();
@@ -189,6 +208,21 @@ eGameInteractionCommandOutcome cLuxSharedCallbackHandler::ApplyEntityState(const
 		static_cast<cLuxProp_Button*>(pEntity)->SetSwitchedOn(aState.mbState, true);
 	else
 		static_cast<cLuxProp_Lamp*>(pEntity)->SetLit(aState.mbState, true);
+	mModel.EndRun();
+	return eGameInteractionCommandOutcome_Success;
+}
+
+// The gateway calls this only for the current map. A door already broken stays broken.
+eGameInteractionCommandOutcome cLuxSharedCallbackHandler::BreakEnemyDoor(int alEntityId)
+{
+	cLuxMap *pMap = gpBase->mpMapHandler->GetCurrentMap();
+	iLuxEntity *pEntity = pMap ? pMap->GetEntityByID(alEntityId) : NULL;
+	if(!IsMapPlaced(pEntity)) return eGameInteractionCommandOutcome_EntityNotFound;
+	if(!IsPropOfType(pEntity, eLuxPropType_SwingDoor) || !static_cast<cLuxProp_SwingDoor*>(pEntity)->IsBreakable())
+		return eGameInteractionCommandOutcome_EntityWrongType;
+
+	mModel.BeginRun();
+	static_cast<cLuxProp_SwingDoor*>(pEntity)->Break();
 	mModel.EndRun();
 	return eGameInteractionCommandOutcome_Success;
 }
@@ -235,6 +269,8 @@ bool cLuxSharedCallbackHandler::RunRegistration(cLuxMap *apMap, const cGameInter
 		return StartFlashback(pEntity);
 	case eGameInteractionSharedCallbackKind_StickyAttach:
 		return AttachToStickyArea(apMap->GetEntityByID(aCallback.mlParentEntityId), pEntity, aCallback.mlBodyId);
+	case eGameInteractionSharedCallbackKind_AutoDisabled:
+		return AutoDisable(pEntity);
 	default:
 		return false;
 	}
@@ -287,6 +323,18 @@ bool cLuxSharedCallbackHandler::AttachToStickyArea(iLuxEntity *apArea, iLuxEntit
 	if(apEntity->IsPeerDriven() && gpBase->mpPeerDrivenEntityHandler)
 		gpBase->mpPeerDrivenEntityHandler->ReleaseEntity(apEntity->GetID());
 	pArea->AttachBodyFromSharedCallback(pBody);
+	return true;
+}
+
+// Only an active enemy disables itself, so a game whose enemy is already gone runs nothing. A driven copy
+// stays inactive when it is released, as the enemy it copies is.
+bool cLuxSharedCallbackHandler::AutoDisable(iLuxEntity *apEntity)
+{
+	if(!apEntity->IsActive() || apEntity->GetEntityType() != eLuxEntityType_Enemy) return false;
+	iLuxEnemy *pEnemy = static_cast<iLuxEnemy*>(apEntity);
+	if(pEnemy->IsEnemyDriven()) pEnemy->ResetEnemyCopy();
+	else pEnemy->SetActive(false);
+	pEnemy->RunCallbackFunc("OnAutoDisabled");
 	return true;
 }
 

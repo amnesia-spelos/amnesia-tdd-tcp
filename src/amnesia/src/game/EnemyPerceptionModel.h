@@ -30,6 +30,17 @@ public:
 		}
 		return range;
 	}
+	// The player a Map Script shows the enemy (ShowEnemyPlayerPosition, AlertEnemyOfPlayerPresence): the one
+	// who triggered the callback. Another player's trigger reaches this game as a Shared Callback; it names no
+	// player, so the nearest Avatar stands for it.
+	static std::string ShownPlayer(bool otherPlayersTrigger, const std::vector<cEnemyPerceptionCandidate>& avatars)
+	{
+		if (!otherPlayersTrigger) return std::string();
+		const cEnemyPerceptionCandidate* nearest = NULL;
+		for (size_t i = 0; i < avatars.size(); ++i)
+			if (!nearest || avatars[i].mfDistance < nearest->mfDistance) nearest = &avatars[i];
+		return nearest ? nearest->msIdentifier : std::string();
+	}
 	cEnemyPerceptionModel(bool localVisible = false) : mbVisible(localVisible)
 	{ if (localVisible) mCounts[""] = 3; }
 	void Update(const std::vector<cEnemyPerceptionCandidate>& players)

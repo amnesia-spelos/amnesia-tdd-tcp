@@ -24,6 +24,10 @@
 #include "LuxHintHandler.h"
 
 #include "LuxMap.h"
+#include "LuxEnemy.h"
+#include "LuxInteractionReportHandler.h"
+#include "LuxPeerDrivenEntityHandler.h"
+#include "LuxSocketServer.h"
 
 //////////////////////////////////////////////////////////////////////////
 // LOADER
@@ -433,6 +437,24 @@ void cLuxProp_SwingDoor::OnHealthChange()
 	if(mfHealth <= 0 && mbBroken == false)
 	{
 		mbBroken = true;	
+
+		////////////////////////////
+		// A break ends a Hold: a Peer stops driving the door, and the local player lets go of it.
+		if(IsPeerDriven() && gpBase->mpPeerDrivenEntityHandler)
+			gpBase->mpPeerDrivenEntityHandler->ReleaseEntityByScript(GetID());
+		if(pMainBody && gpBase->mpInteractionReportHandler)
+			gpBase->mpInteractionReportHandler->OnPropBroke(this, pMainBody);
+		gpBase->mpPlayer->GetCurrentStateData()->OnDestroyEntity(this);
+
+		// The game simulating an enemy tells the other games, which drive a copy that never attacks the door.
+		iLuxEnemy *pAttacker = iLuxEnemy::GetAttackingEnemy();
+		if(pAttacker && pAttacker->GetEnemyType() == eLuxEnemyType_Grunt && !IsCreatedAtRuntime() && gpBase->mpSocketServer)
+		{
+			cGameInteractionEntityEvent doorBreak;
+			doorBreak.mlEntityId = GetID();
+			doorBreak.msMapFile = mpMap->GetMapPath();
+			gpBase->mpSocketServer->PublishEvent(cGameInteractionEvent(eGameInteractionEvent_EnemyDoorBreak, doorBreak));
+		}
 
 		SetCurrentDamageLevel(0);
 
