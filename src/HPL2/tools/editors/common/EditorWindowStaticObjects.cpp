@@ -77,7 +77,7 @@ iEditorObjectIndexDir* cEditorObjectIndexStaticObjects::CreateDir(iEditorObjectI
 //-------------------------------------------------------------------
 
 cEditorWindowStaticObjects::cEditorWindowStaticObjects(cEditorEditModeStaticObjects* apEditMode,
-													   const tWStringVec& avBaseDirs) : cEditorWindowObjectBrowser(apEditMode,avBaseDirs, true)
+													   const tWStringVec& avBaseDirs) : cEditorWindowObjectBrowser(apEditMode,avBaseDirs, true, _W("*.dae"))
 {
 	mbScaleUpdated = true;
 	mbRotateUpdated = true;
@@ -119,7 +119,7 @@ void cEditorWindowStaticObjects::OnInitLayout()
 
 	///////////////////////////////////////////////
 	// Scale and Rotation inputs
-	vPos = cVector3f(5,520,0.1f);
+	vPos = cVector3f(5,mpInfoGroup->GetLocalPosition().y+mpInfoGroup->GetSize().y+20,0.1f);
 
 	AddScaleControls();
 	mpGScale->SetPosition(vPos);

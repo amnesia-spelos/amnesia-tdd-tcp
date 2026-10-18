@@ -77,8 +77,6 @@ protected:
 	void OnUpdate(float afTimeStep){}
 	void OnSetActive(bool abX);
 	
-	bool Input_OnTextBoxEnter(iWidget* apWidget, const cGuiMessageData& aData);
-	kGuiCallbackDeclarationEnd(Input_OnTextBoxEnter);
 
 	void ResetInputs();
 

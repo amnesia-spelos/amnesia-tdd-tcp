@@ -125,6 +125,7 @@
     <ClCompile Include="..\common\EditorWindowFogAreas.cpp" />
     <ClCompile Include="..\common\EditorWindowLights.cpp" />
     <ClCompile Include="..\common\EditorWindowObjectBrowser.cpp" />
+    <ClCompile Include="..\common\ObjectSearch.cpp" />
     <ClCompile Include="..\common\EditorWindowParticleSystems.cpp" />
     <ClCompile Include="..\common\EditorWindowPrimitives.cpp" />
     <ClCompile Include="..\common\EditorWindowSelect.cpp" />
@@ -239,6 +240,7 @@
     <ClInclude Include="..\common\EditorWindowFogAreas.h" />
     <ClInclude Include="..\common\EditorWindowLights.h" />
     <ClInclude Include="..\common\EditorWindowObjectBrowser.h" />
+    <ClInclude Include="..\common\ObjectSearch.h" />
     <ClInclude Include="..\common\EditorWindowParticleSystems.h" />
     <ClInclude Include="..\common\EditorWindowPrimitives.h" />
     <ClInclude Include="..\common\EditorWindowSelect.h" />

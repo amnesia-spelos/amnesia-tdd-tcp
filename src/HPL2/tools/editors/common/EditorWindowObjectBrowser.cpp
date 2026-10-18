@@ -23,6 +23,8 @@
 
 #include "EditorWorld.h"
 
+#include "ObjectSearch.h"
+
 #include <algorithm>
 
 //-------------------------------------------------------------------
@@ -153,12 +155,15 @@ cMeshEntity* iEditorObjectIndexEntryMeshObject::CreateTempEntity(cWorld* apWorld
 
 cEditorWindowObjectBrowser::cEditorWindowObjectBrowser(iEditorEditMode* apEditMode,
 													   const tWStringVec& avBaseDirs,
-													   bool abAddCategoryHeaders) : iEditModeObjectCreatorWindow(apEditMode)
-																						 
+													   bool abAddCategoryHeaders,
+													   const tWString& asAssetFileMask) : iEditModeObjectCreatorWindow(apEditMode)
+
 {
 	mvBaseDirs = avBaseDirs;
 	mbAddCategoryHeaders = abAddCategoryHeaders;
-	
+	msAssetFileMask = asAssetFileMask;
+	mbAssetPathListBuilt = false;
+
 	mpPreviewEntity = NULL;
 	mpCurrentIndex = NULL;
 }
@@ -167,6 +172,7 @@ cEditorWindowObjectBrowser::~cEditorWindowObjectBrowser()
 {
 	mpObjectList->ClearItems();
 	mvCurrentListedEntries.clear();
+	mvCurrentListedAssetPaths.clear();
 
 	if(mpPreviewEntity)
 		mpEditor->GetEditorWorld()->GetWorld()->DestroyMeshEntity(mpPreviewEntity);
@@ -186,7 +192,7 @@ iEditorObjectIndexEntryMeshObject* cEditorWindowObjectBrowser::GetSelectedObject
 {
 	int lIndex = mpObjectList->GetSelectedItem();
 
-	if(lIndex==-1 || lIndex >(int)mvCurrentListedEntries.size())
+	if(lIndex==-1 || lIndex >=(int)mvCurrentListedEntries.size())
 		return NULL;
 
 	return mvCurrentListedEntries[lIndex];
@@ -223,6 +229,15 @@ kGuiCallbackDeclaredFuncEnd(cEditorWindowObjectBrowser,ObjectSets_OnChange);
 
 bool cEditorWindowObjectBrowser::ObjectList_OnChangeSelection(iWidget* apWidget, const cGuiMessageData& aData)
 {
+	////////////////////////////////////////////////////////////
+	// A search result's entry is looked up the first time it is selected
+	int lIndex = mpObjectList->GetSelectedItem();
+	if(lIndex>=0 && lIndex<(int)mvCurrentListedEntries.size() &&
+		mvCurrentListedEntries[lIndex]==NULL && mvCurrentListedAssetPaths[lIndex]!=_W(""))
+	{
+		mvCurrentListedEntries[lIndex] = FindEntryByAssetPath(mvCurrentListedAssetPaths[lIndex]);
+	}
+
 	UpdateObjectInfo();
 	return true;
 }
@@ -230,18 +245,23 @@ kGuiCallbackDeclaredFuncEnd(cEditorWindowObjectBrowser, ObjectList_OnChangeSelec
 
 //-------------------------------------------------------------------
 
-bool cEditorWindowObjectBrowser::Input_OnTextBoxEnter(iWidget* apWidget, const cGuiMessageData& aData)
+bool cEditorWindowObjectBrowser::Search_OnTextChange(iWidget* apWidget, const cGuiMessageData& aData)
 {
+	UpdateObjectList();
 	return true;
 }
-kGuiCallbackDeclaredFuncEnd(cEditorWindowObjectBrowser, Input_OnTextBoxEnter);
+kGuiCallbackDeclaredFuncEnd(cEditorWindowObjectBrowser, Search_OnTextChange);
 
 //-------------------------------------------------------------------
 
 bool cEditorWindowObjectBrowser::Refresh_OnPressed(iWidget* apWidget, const cGuiMessageData& aData)
 {
-	if(mpCurrentIndex && mpCurrentIndex->Refresh())
-		UpdateObjectList();
+	BuildAssetPathList();
+
+	if(mpCurrentIndex)
+		mpCurrentIndex->Refresh();
+
+	UpdateObjectList();
 
 	return true;
 }
@@ -249,34 +269,47 @@ kGuiCallbackDeclaredFuncEnd(cEditorWindowObjectBrowser, Refresh_OnPressed);
 
 //-------------------------------------------------------------------
 
+void cEditorWindowObjectBrowser::OnSetActive(bool abX)
+{
+	iEditModeObjectCreatorWindow::OnSetActive(abX);
+
+	if(abX)
+		BuildAssetPathListOnFirstOpen();
+}
+
+//-------------------------------------------------------------------
+
 void cEditorWindowObjectBrowser::OnInitLayout()
 {
 	//////////////////////
 	// Set up layout
-    mpBGFrame->SetSize(cVector2f(200,700));
+    mpBGFrame->SetSize(cVector2f(200,870));
 
 	cVector3f vPos;
 	cVector2f vSize;
 
 	///////////////////////////////////////////////////
-	// Object Selection (sets, list..)
-	mpSelectionGroup = mpSet->CreateWidgetGroup(cVector3f(5,8,0.1f), cVector2f(190,205) , _W(""), mpBGFrame);
+	// Object Selection (search scope, search box, list..)
+	mpSelectionGroup = mpSet->CreateWidgetGroup(cVector3f(5,8,0.1f), cVector2f(190,355) , _W(""), mpBGFrame);
 
 	mpObjectSets = mpSet->CreateWidgetComboBox(cVector3f(10,10,0.1f), cVector2f(170,25),_W(""), mpSelectionGroup);
 	mpObjectSets->AddCallback(eGuiMessage_SelectionChange,this, kGuiCallback(ObjectSets_OnChange));
 	mpObjectSets->SetCanEdit(false);
 
-	mpObjectList = mpSet->CreateWidgetListBox(cVector3f(10,45,0.1f), cVector2f(170,120),mpSelectionGroup);
+	mpSearchBox = mpSet->CreateWidgetTextBox(cVector3f(10,42,0.1f), cVector2f(170,0), _W(""), mpSelectionGroup, eWidgetTextBoxInputType_Normal);
+	mpSearchBox->AddCallback(eGuiMessage_TextChange, this, kGuiCallback(Search_OnTextChange));
+
+	mpObjectList = mpSet->CreateWidgetListBox(cVector3f(10,75,0.1f), cVector2f(170,240),mpSelectionGroup);
 	mpObjectList->SetDefaultFontSize(11);
 	mpObjectList->SetBackgroundZ(0.001f);
 	mpObjectList->AddCallback(eGuiMessage_SelectionChange, this, kGuiCallback(ObjectList_OnChangeSelection));
 
-	mpButtonRefresh = mpSet->CreateWidgetButton(cVector3f(10, 170, 0.1f), cVector2f(170, 25), _W("Refresh"), mpSelectionGroup);
+	mpButtonRefresh = mpSet->CreateWidgetButton(cVector3f(10, 320, 0.1f), cVector2f(170, 25), _W("Refresh"), mpSelectionGroup);
 	mpButtonRefresh->AddCallback(eGuiMessage_ButtonPressed, this, kGuiCallback(Refresh_OnPressed));
 
     ///////////////////////////////////////////////
-	// Object info: BV Size, poly count, thumbnail
-	mpInfoGroup = mpSet->CreateWidgetGroup(cVector3f(5,220,0.1f), cVector2f(190,280),_W("Object info"), mpBGFrame);
+	// Object info: BV Size, poly count, Asset Path, thumbnail
+	mpInfoGroup = mpSet->CreateWidgetGroup(cVector3f(5,370,0.1f), cVector2f(190,300),_W("Object info"), mpBGFrame);
 
 	vPos = cVector3f(5,170,0.1f);
 	vSize = cVector2f(50,25);
@@ -289,13 +322,19 @@ void cEditorWindowObjectBrowser::OnInitLayout()
 		mvLabelPolyCount[i] = mpSet->CreateWidgetLabel(vPos + cVector3f(0,40,0),vSize,_W(""), mpInfoGroup);		
 		mvLabelPolyCount[i]->SetDefaultFontSize(12.5f);
 
+		mvLabelAssetPath[i] = mpSet->CreateWidgetLabel(vPos + cVector3f(0,80,0),vSize,_W(""), mpInfoGroup);
+		mvLabelAssetPath[i]->SetDefaultFontSize(12.5f);
+
 		vPos.y += 20;
-		
-		
+
+
 	}
 
 	mvLabelBVSize[0]->SetText(_W("BB Size:"));
 	mvLabelPolyCount[0]->SetText(_W("Polygon Count:"));
+	mvLabelAssetPath[0]->SetText(_W("Asset Path:"));
+	mvLabelAssetPath[1]->SetSize(cVector2f(180,25));
+	mvLabelAssetPath[1]->SetDefaultFontSize(11);
 
 	mpLabelThumbnail = mpSet->CreateWidgetLabel(cVector3f(30,15,0.1f), cVector2f(50,25), _W("Thumbnail"), mpInfoGroup);
 	mpLabelThumbnail->SetDefaultFontSize(12.5f);
@@ -317,8 +356,72 @@ void cEditorWindowObjectBrowser::BuildObjectSetList()
 	mvDirectories.clear();
 	mpObjectSets->ClearItems();
 
+	////////////////////////////////////////////////////////////
+	// The first item, and the default search scope, is All Categories
+	mvDirectories.push_back(_W(""));
+	mpObjectSets->AddItem(_W("All"));
+
 	for(int i=0;i<(int)mvBaseDirs.size();++i)
-        BuildObjectSetListHelper(mvBaseDirs[i],0);	
+        BuildObjectSetListHelper(mvBaseDirs[i],0);
+
+	mpObjectSets->SetSelectedItem(0, false, false);
+	mpCurrentIndex = NULL;
+	UpdateObjectList();
+}
+
+//-------------------------------------------------------------------
+
+void cEditorWindowObjectBrowser::BuildAssetPathListOnFirstOpen()
+{
+	if(mbAssetPathListBuilt)
+		return;
+
+	BuildAssetPathList();
+	UpdateObjectList();
+}
+
+//-------------------------------------------------------------------
+
+void cEditorWindowObjectBrowser::BuildAssetPathList()
+{
+	std::set<tWString> setAssetPaths;
+
+	for(int i=0;i<(int)mvBaseDirs.size();++i)
+	{
+		tWStringList lstCategories;
+		cPlatform::FindFoldersInDir(lstCategories, mvBaseDirs[i], false);
+
+		tWStringListIt it = lstCategories.begin();
+		for(;it!=lstCategories.end();++it)
+			BuildAssetPathListHelper(cString::AddSlashAtEndW(mvBaseDirs[i]) + *it, *it, setAssetPaths);
+	}
+
+	mvAssetPaths.assign(setAssetPaths.begin(), setAssetPaths.end());
+	mbAssetPathListBuilt = true;
+}
+
+//-------------------------------------------------------------------
+
+void cEditorWindowObjectBrowser::BuildAssetPathListHelper(const tWString& asDiskFolder, const tWString& asAssetPathPrefix, std::set<tWString>& asetAssetPaths)
+{
+	////////////////////////////////////////////////////////////
+	// Skip the folders the indices skip
+	if(cString::GetFirstStringPosW(cString::GetFileNameW(asAssetPathPrefix), _W("."))==0)
+		return;
+
+	tWStringList lstFiles;
+	cPlatform::FindFilesInDir(lstFiles, asDiskFolder, msAssetFileMask);
+
+	tWStringListIt itFiles = lstFiles.begin();
+	for(;itFiles!=lstFiles.end();++itFiles)
+		asetAssetPaths.insert(asAssetPathPrefix + _W("/") + cString::SetFileExtW(*itFiles, _W("")));
+
+	tWStringList lstDirs;
+	cPlatform::FindFoldersInDir(lstDirs, asDiskFolder, false, false);
+
+	tWStringListIt itDirs = lstDirs.begin();
+	for(;itDirs!=lstDirs.end();++itDirs)
+		BuildAssetPathListHelper(cString::AddSlashAtEndW(asDiskFolder) + *itDirs, asAssetPathPrefix + _W("/") + *itDirs, asetAssetPaths);
 }
 
 //-------------------------------------------------------------------
@@ -374,7 +477,8 @@ void cEditorWindowObjectBrowser::WriteInvalidFileListToFile(tWString& asFolder, 
 
 void cEditorWindowObjectBrowser::BuildObjectList()
 {
-	mpCurrentIndex = CreateIndex(mpObjectSets->GetText());
+	tWString sCategory = GetSearchCategory();
+	mpCurrentIndex = sCategory==_W("")? NULL : CreateIndex(sCategory);
 
 	UpdateObjectList();
 }
@@ -384,6 +488,7 @@ void cEditorWindowObjectBrowser::BuildObjectList()
 void cEditorWindowObjectBrowser::ClearObjectList()
 {
 	mvCurrentListedEntries.clear();
+	mvCurrentListedAssetPaths.clear();
 	mpObjectList->ClearItems();
 	UpdateObjectInfo();
 }
@@ -393,7 +498,87 @@ void cEditorWindowObjectBrowser::ClearObjectList()
 void cEditorWindowObjectBrowser::UpdateObjectList()
 {
 	ClearObjectList();
-	AddEntriesInDirToList(mpCurrentIndex->GetRootDir(), mvCurrentListedEntries); 
+
+	if(IsListingSearchResults())
+		AddSearchResultsToList();
+	else if(mpCurrentIndex)
+		AddEntriesInDirToList(mpCurrentIndex->GetRootDir(), mvCurrentListedEntries);
+}
+
+//-------------------------------------------------------------------
+
+tWString cEditorWindowObjectBrowser::GetSearchCategory()
+{
+	if(mpObjectSets->GetSelectedItem()<=0)
+		return _W("");
+
+	return mpObjectSets->GetText();
+}
+
+//-------------------------------------------------------------------
+
+bool cEditorWindowObjectBrowser::IsSearchQueryBlank()
+{
+	const tWString& sQuery = mpSearchBox->GetText();
+	for(size_t i=0;i<sQuery.size();++i)
+	{
+		if(iswspace(sQuery[i])==0)
+			return false;
+	}
+
+	return true;
+}
+
+//-------------------------------------------------------------------
+
+bool cEditorWindowObjectBrowser::IsListingSearchResults()
+{
+	////////////////////////////////////////////////////////////
+	// A Category with an empty query lists its index, as before searching existed
+	return GetSearchCategory()==_W("") || IsSearchQueryBlank()==false;
+}
+
+//-------------------------------------------------------------------
+
+void cEditorWindowObjectBrowser::AddSearchResultsToList()
+{
+	tWString sCategory = GetSearchCategory();
+	const tWString& sQuery = mpSearchBox->GetText();
+
+	if(sCategory==_W("") && IsSearchQueryBlank())
+	{
+		AddUnselectableItemToList(_W("Type to search or pick a Category"));
+		return;
+	}
+
+	tWString sHeaderCategory;
+	for(size_t i=0;i<mvAssetPaths.size();++i)
+	{
+		const tWString& sAssetPath = mvAssetPaths[i];
+		if(MatchesObjectSearch(sAssetPath, sCategory, sQuery)==false)
+			continue;
+
+		tWString sAssetCategory = GetAssetPathCategory(sAssetPath);
+		if(sCategory==_W("") && sAssetCategory!=sHeaderCategory)
+		{
+			AddUnselectableItemToList(sAssetCategory);
+			sHeaderCategory = sAssetCategory;
+		}
+
+		mpObjectList->AddItem(cString::SubW(sAssetPath, (int)sAssetCategory.size()+1));
+		mvCurrentListedEntries.push_back(NULL);
+		mvCurrentListedAssetPaths.push_back(sAssetPath);
+	}
+}
+
+//-------------------------------------------------------------------
+
+void cEditorWindowObjectBrowser::AddUnselectableItemToList(const tWString& asText)
+{
+	cWidgetItem* pItem = mpObjectList->AddItem(asText);
+	pItem->SetSelectable(false);
+	mvCurrentListedEntries.push_back(NULL);
+	mvCurrentListedAssetPaths.push_back(_W(""));
 }
 
 //-------------------------------------------------------------------
@@ -440,8 +625,12 @@ void cEditorWindowObjectBrowser::UpdateObjectInfo()
 		pImg = pGui->CreateGfxImage(sThumbFile,eGuiMaterial_Diffuse);
 	}
 
+	int lIndex = mpObjectList->GetSelectedItem();
+	tWString sAssetPath = (pObj && lIndex>=0 && lIndex<(int)mvCurrentListedAssetPaths.size())? mvCurrentListedAssetPaths[lIndex] : _W("");
+
 	mvLabelBVSize[1]->SetText(sBVSize);
 	mvLabelPolyCount[1]->SetText(sTriCount);
+	mvLabelAssetPath[1]->SetText(sAssetPath);
 
 	mpThumbnail->SetImage(pImg);
 }
@@ -488,6 +677,10 @@ iEditorObjectIndex* cEditorWindowObjectBrowser::CreateIndex(const tWString& asFo
 
 void cEditorWindowObjectBrowser::AddEntriesInDirToList(iEditorObjectIndexDir* apDir, std::vector<iEditorObjectIndexEntryMeshObject*>& avEntries)
 {
+	tWString sAssetFolder = apDir->GetIndex()->GetBaseFolder();
+	if(apDir->GetRelPath()!=_W(""))
+		sAssetFolder += _W("/") + apDir->GetRelPath();
+
 	const tIndexEntryMap& mapEntries = apDir->GetEntries();
 	tIndexEntryMapConstIt itEntries = mapEntries.begin();
 	for(;itEntries!=mapEntries.end();++itEntries)
@@ -496,6 +689,7 @@ void cEditorWindowObjectBrowser::AddEntriesInDirToList(iEditorObjectIndexDir* ap
 
 		mpObjectList->AddItem(pEntry->GetEntryName());
 		avEntries.push_back((iEditorObjectIndexEntryMeshObject*)pEntry);
+		mvCurrentListedAssetPaths.push_back(sAssetFolder + _W("/") + cString::To16Char(pEntry->GetEntryName()));
 	}
 
 	tIndexDirMap& mapSubDirs = (tIndexDirMap&)apDir->GetSubDirs();
@@ -509,10 +703,51 @@ void cEditorWindowObjectBrowser::AddEntriesInDirToList(iEditorObjectIndexDir* ap
 			cWidgetItem* pDirHeader = mpObjectList->AddItem((pSubDir->IsExpanded()?_W("- "):_W("+ ")) + pSubDir->GetDirName());
 			pDirHeader->SetSelectable(false);
 			avEntries.push_back(NULL);
+			mvCurrentListedAssetPaths.push_back(_W(""));
 		}
 
 		AddEntriesInDirToList(pSubDir, avEntries);
 	}
+}
+
+//-------------------------------------------------------------------
+
+iEditorObjectIndexEntryMeshObject* cEditorWindowObjectBrowser::FindEntryByAssetPath(const tWString& asAssetPath)
+{
+	////////////////////////////////////////////////////////////
+	// Use the Category's index, building it the first time. An existing index is not
+	// refreshed here, since that would free the entries the list still points to
+	tWString sCategory = GetAssetPathCategory(asAssetPath);
+	iEditorObjectIndex* pIndex = NULL;
+
+	std::map<tWString, iEditorObjectIndex*>::iterator it = mmapObjectIndices.find(sCategory);
+	if(it!=mmapObjectIndices.end())
+		pIndex = it->second;
+	else
+		pIndex = CreateIndex(sCategory);
+
+	if(pIndex==NULL)
+		return NULL;
+
+	////////////////////////////////////////////////////////////
+	// Walk the folders after the Category down to the entry
+	iEditorObjectIndexDir* pDir = pIndex->GetRootDir();
+	tWString sRest = cString::SubW(asAssetPath, (int)sCategory.size()+1);
+	int lSlashPos = cString::GetFirstStringPosW(sRest, _W("/"));
+	while(pDir && lSlashPos!=-1)
+	{
+		const tIndexDirMap& mapSubDirs = pDir->GetSubDirs();
+		tIndexDirMap::const_iterator itDir = mapSubDirs.find(cString::SubW(sRest, 0, lSlashPos));
+		pDir = itDir!=mapSubDirs.end()? itDir->second : NULL;
+
+		sRest = cString::SubW(sRest, lSlashPos+1);
+		lSlashPos = cString::GetFirstStringPosW(sRest, _W("/"));
+	}
+
+	if(pDir==NULL)
+		return NULL;
+
+	return (iEditorObjectIndexEntryMeshObject*)pDir->GetEntry(cString::To8Char(sRest));
 }
 
 //-------------------------------------------------------------------

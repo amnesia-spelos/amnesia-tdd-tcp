@@ -98,7 +98,8 @@ iEditorObjectIndexDir* cEditorObjectIndexEntities::CreateDir(iEditorObjectIndexD
 cEditorWindowEntities::cEditorWindowEntities(cEditorEditModeEntities* apEditMode,
 											 const tWStringVec& avBaseDirs) : cEditorWindowObjectBrowser(apEditMode,
 																									 avBaseDirs,
-																									 false)
+																									 false,
+																									 _W("*.ent"))
 {
 	mbRotateUpdated = true;
 }
@@ -132,15 +133,9 @@ void cEditorWindowEntities::Reset()
 
 void cEditorWindowEntities::OnSetActive(bool abX)
 {
+	if(abX)
+		BuildAssetPathListOnFirstOpen();
 }
-
-//-------------------------------------------------------------------
-
-bool cEditorWindowEntities::Input_OnTextBoxEnter(iWidget* apWidget, const cGuiMessageData& aData)
-{
-	return true;
-}
-kGuiCallbackDeclaredFuncEnd(cEditorWindowEntities, Input_OnTextBoxEnter);
 
 //-------------------------------------------------------------------
 
@@ -152,7 +147,7 @@ void cEditorWindowEntities::OnInitLayout()
 	// Set up layout
 	mpSelectionGroup->SetText(_W("Entities"));
 
-	cVector3f vPos = cVector3f(5,515,0.1f);
+	cVector3f vPos = cVector3f(5,mpInfoGroup->GetLocalPosition().y+mpInfoGroup->GetSize().y+15,0.1f);
 	cVector2f vSize;
 
 	///////////////////////////////////////////////

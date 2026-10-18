@@ -108,6 +108,9 @@
     <ClCompile Include="..\common\EditorWindowObjectBrowser.cpp">
       <Filter>Common\Windows\EditModeWindows</Filter>
     </ClCompile>
+    <ClCompile Include="..\common\ObjectSearch.cpp">
+      <Filter>Common\Windows\EditModeWindows</Filter>
+    </ClCompile>
     <ClCompile Include="..\common\EditorWindowParticleSystems.cpp">
       <Filter>Common\Windows\EditModeWindows</Filter>
     </ClCompile>
@@ -444,6 +447,9 @@
       <Filter>Common\Windows\EditModeWindows</Filter>
     </ClInclude>
     <ClInclude Include="..\common\EditorWindowObjectBrowser.h">
+      <Filter>Common\Windows\EditModeWindows</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\ObjectSearch.h">
       <Filter>Common\Windows\EditModeWindows</Filter>
     </ClInclude>
     <ClInclude Include="..\common\EditorWindowParticleSystems.h">

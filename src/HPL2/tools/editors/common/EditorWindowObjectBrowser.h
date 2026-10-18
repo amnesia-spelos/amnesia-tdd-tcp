@@ -23,6 +23,8 @@
 #include "EditorWindow.h"
 #include "EditorIndex.h"
 
+#include <set>
+
 //----------------------------------------------------------
 
 class iEditorBase;
@@ -81,7 +83,7 @@ protected:
 class cEditorWindowObjectBrowser : public iEditModeObjectCreatorWindow
 {
 public:
-	cEditorWindowObjectBrowser(iEditorEditMode* apEditMode, const tWStringVec& avBaseDirs, bool abAddCategoryHeaders);
+	cEditorWindowObjectBrowser(iEditorEditMode* apEditMode, const tWStringVec& avBaseDirs, bool abAddCategoryHeaders, const tWString& asAssetFileMask);
 	~cEditorWindowObjectBrowser();
 
 	virtual iEditorObjectIndexEntryMeshObject* GetSelectedObject();
@@ -99,24 +101,38 @@ protected:
 	bool ObjectList_OnChangeSelection(iWidget* apWidget, const cGuiMessageData& aData);
 	kGuiCallbackDeclarationEnd(ObjectList_OnChangeSelection);
 
-	bool Input_OnTextBoxEnter(iWidget* apWidget, const cGuiMessageData& aData);
-	kGuiCallbackDeclarationEnd(Input_OnTextBoxEnter);
+	bool Search_OnTextChange(iWidget* apWidget, const cGuiMessageData& aData);
+	kGuiCallbackDeclarationEnd(Search_OnTextChange);
 
 	bool Refresh_OnPressed(iWidget* apWidget, const cGuiMessageData& aData);
 	kGuiCallbackDeclarationEnd(Refresh_OnPressed);
 
+	void OnSetActive(bool abX);
+
 	void BuildObjectSetList();
 	void BuildObjectSetListHelper(const tWString& asFolder, int alLevel);
+
+	void BuildAssetPathListOnFirstOpen();
+	void BuildAssetPathList();
+	void BuildAssetPathListHelper(const tWString& asDiskFolder, const tWString& asAssetPathPrefix, std::set<tWString>& asetAssetPaths);
 
 	void BuildObjectList();
 	void BuildObjectListHelper(const tWString& asBaseFolder, const tWString& asCurrentFolder, tWStringList& alstInvalidFiles);
 	void ClearObjectList();
 	virtual void UpdateObjectList();
 
+	tWString GetSearchCategory();
+	bool IsSearchQueryBlank();
+	bool IsListingSearchResults();
+	void AddSearchResultsToList();
+	void AddUnselectableItemToList(const tWString& asText);
+
 	void WriteInvalidFileListToFile(tWString& asFolder, tWStringList& alstInvalidFiles);
 
 	void UpdateObjectInfo();
 	void AddEntriesInDirToList(iEditorObjectIndexDir* apDir,std::vector<iEditorObjectIndexEntryMeshObject*>& avEntries);
+
+	iEditorObjectIndexEntryMeshObject* FindEntryByAssetPath(const tWString& asAssetPath);
 
 	iEditorObjectIndex* CreateIndex(const tWString& asFolder);
 	virtual iEditorObjectIndex* CreateSpecificIndex(iEditorBase* apEditorBase, const tWString& asFolder)=0;
@@ -132,12 +148,14 @@ protected:
 	// Layout stuff
 	cWidgetGroup* mpSelectionGroup;
 	cWidgetComboBox* mpObjectSets;
+	cWidgetTextBox* mpSearchBox;
 	cWidgetListBox* mpObjectList;
 	cWidgetButton* mpButtonRefresh;
 
 	cWidgetGroup* mpInfoGroup;
 	cWidgetLabel* mvLabelBVSize[2];
 	cWidgetLabel* mvLabelPolyCount[2];
+	cWidgetLabel* mvLabelAssetPath[2];
 	cWidgetLabel* mpLabelThumbnail;
 	cWidgetImage* mpThumbnail;
 
@@ -150,6 +168,14 @@ protected:
 	std::map<tWString, iEditorObjectIndex*> mmapObjectIndices;
 	iEditorObjectIndex* mpCurrentIndex;
 	std::vector<iEditorObjectIndexEntryMeshObject*> mvCurrentListedEntries;
+	// The Asset Path of each listed item, empty for headers and hints. A search result's entry
+	// is only looked up, building its Category index if needed, once the result is selected.
+	tWStringVec mvCurrentListedAssetPaths;
+
+	// Every Asset Path under the base dirs, sorted, walked without building any index
+	tWString msAssetFileMask;
+	tWStringVec mvAssetPaths;
+	bool mbAssetPathListBuilt;
 
 	tIntVec mvDirIndices;
 };

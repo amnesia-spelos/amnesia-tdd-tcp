@@ -71,6 +71,7 @@ file(GLOB_RECURSE leveleditor_sources
     EditorWindowLowerToolbar.cpp
     EditorWindowMaterialEditor.cpp
     EditorWindowObjectBrowser.cpp
+    ObjectSearch.cpp
     EditorWindowOptions.cpp
     EditorWindowParticleSystems.cpp
     EditorWindowPrimitives.cpp
@@ -187,6 +188,7 @@ file(GLOB_RECURSE modeleditor_sources
     EditorWindowLowerToolbar.cpp
     EditorWindowMaterialEditor.cpp
     EditorWindowObjectBrowser.cpp
+    ObjectSearch.cpp
     EditorWindowOptions.cpp
     EditorWindowParticleSystems.cpp
     EditorWindowSelect.cpp
