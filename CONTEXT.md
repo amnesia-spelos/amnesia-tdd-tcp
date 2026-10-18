@@ -151,3 +151,19 @@ _Avoid_: Shared kill, death sync, team wipe
 **Shared Callback**:
 A Map Script callback the local player or a Shared Enemy this game simulates triggered, an item pickup or Flashback area the local player set off, two inventory items the local player combined, or a sticky area attaching an entity the local player Holds, reported to Peers by the identifiers of its registration, item, area, items, or attached body, or the run of this game's own registration, pickup, Flashback area, combine, or sticky attach for those identifiers that a Peer's Command asks for. A Shared Callback never names a function or carries script text.
 _Avoid_: Callback sync, remote script, trigger relay
+
+## Level Editor
+
+Terms for the HPL2 Level Editor, the internal tool used to build this team's custom stories.
+
+**Object Browser**:
+The Level Editor panel for picking an entity or static object to place, shared by the Entities and Static Objects modes.
+_Avoid_: Entity list, object picker
+
+**Category**:
+A top-level folder under the entities or static objects folder, grouping related objects.
+_Avoid_: Object set, set, group
+
+**Asset Path**:
+The path of an entity or static object file relative to the entities or static objects folder, beginning with its Category and ending with its name without extension.
+_Avoid_: Object path, entry path
