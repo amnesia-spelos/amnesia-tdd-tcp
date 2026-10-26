@@ -706,9 +706,12 @@ void cLuxInputHandler::AppDeviceWasRemoved()
 
 void cLuxInputHandler::UpdateGlobalInput()
 {
+	//Keys typed into the Chat Composer must not fire global actions.
+	bool bChatOwnsInput = gpBase->mpChatHandler && gpBase->mpChatHandler->OwnsInput();
+
 	/////////////////
 	// ScreenShot
-	if(mpInput->BecameTriggerd(eLuxAction_ScreenShot))
+	if(!bChatOwnsInput && mpInput->BecameTriggerd(eLuxAction_ScreenShot))
 	{
 		tWString sFileName = _W("");
 		tWString sBaseName = _W("Screen_");
@@ -744,8 +747,8 @@ void cLuxInputHandler::UpdateGlobalInput()
 	}
 
 	/////////////////
-	// Debug output
-	if(mpInput->BecameTriggerd(eLuxAction_PrintInfo))
+	// Debug output (developer mode only, since P is free for players to bind)
+	if(!bChatOwnsInput && gpBase->mpDebugHandler->GetScriptDebugOn() && mpInput->BecameTriggerd(eLuxAction_PrintInfo))
 	{
 		gpBase->mpMapHandler->GetViewport()->GetRenderSettings()->mbLog = true;
 	}
