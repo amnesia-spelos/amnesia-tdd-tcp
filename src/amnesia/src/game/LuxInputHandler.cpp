@@ -1438,7 +1438,7 @@ void cLuxInputHandler::UpdateLoadScreenInput()
 
 bool cLuxInputHandler::CurrentStateSendsInputToGui()
 {
-	if(gpBase->mpChatHandler && gpBase->mpChatHandler->IsComposerOpen()) return true;
+	if(gpBase->mpChatHandler && gpBase->mpChatHandler->OwnsInput()) return true;
 	switch(mState)
 	{
 	case eLuxInputState_Inventory:

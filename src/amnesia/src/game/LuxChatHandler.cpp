@@ -33,7 +33,7 @@ namespace
 cLuxChatHandler::cLuxChatHandler()
 	: iLuxUpdateable("LuxChatHandler"), mpSet(NULL), mpSkin(NULL), mpComposer(NULL),
 	  mpUnderline(NULL), mpPreviousFocus(NULL), mpSubmissionSink(NULL), mlLastTick(0),
-	  mbWasLoading(false), mbConsumedComposerInput(false)
+	  mbWasLoading(false), mbAwaitingKeystrokeRelease(false)
 {
 }
 
@@ -125,14 +125,18 @@ bool cLuxChatHandler::CanOpenComposer() const
 
 bool cLuxChatHandler::HandleInput(cInput* apInput)
 {
-	if(mbConsumedComposerInput)
+	// The Chat set keeps focus until the closing keystroke is released, so neither its
+	// press nor its release reaches the previously focused set or the input state.
+	if(mbAwaitingKeystrokeRelease)
 	{
-		mbConsumedComposerInput = false;
+		if(IsComposerKeystrokeHeld(apInput)) return true;
+		mbAwaitingKeystrokeRelease = false;
+		RestorePreviousFocus();
 		return true;
 	}
 	if(mModel.IsComposerOpen())
 	{
-		if(apInput->BecameTriggerd(eLuxAction_Exit)) CloseComposer(false);
+		if(apInput->BecameTriggerd(eLuxAction_Exit)) CloseComposerByKeystroke(false);
 		return true;
 	}
 	if(apInput->BecameTriggerd(eLuxAction_Chat) && CanOpenComposer())
@@ -183,6 +187,25 @@ void cLuxChatHandler::CloseComposer(bool abSubmit)
 	mpComposer->SetEnabled(false);
 	mpSet->SetDrawMouse(false);
 	mpSet->SetFocusedWidget(NULL);
+	if(!mbAwaitingKeystrokeRelease) RestorePreviousFocus();
+}
+
+void cLuxChatHandler::CloseComposerByKeystroke(bool abSubmit)
+{
+	mbAwaitingKeystrokeRelease = true;
+	CloseComposer(abSubmit);
+	if(mModel.IsComposerOpen()) mbAwaitingKeystrokeRelease = false;
+}
+
+bool cLuxChatHandler::IsComposerKeystrokeHeld(cInput* apInput) const
+{
+	return apInput->IsTriggerd(eLuxAction_UIPrimary) ||
+		apInput->IsTriggerd(eLuxAction_UISecondary) ||
+		apInput->IsTriggerd(eLuxAction_Exit);
+}
+
+void cLuxChatHandler::RestorePreviousFocus()
+{
 	if(mpPreviousFocus) gpBase->mpEngine->GetGui()->SetFocus(mpPreviousFocus);
 	mpPreviousFocus = NULL;
 }
@@ -196,8 +219,7 @@ kGuiCallbackDeclaredFuncEnd(cLuxChatHandler, TextChanged);
 
 bool cLuxChatHandler::ComposerEntered(iWidget* apWidget, const cGuiMessageData& aData)
 {
-	CloseComposer(true);
-	mbConsumedComposerInput = true;
+	CloseComposerByKeystroke(true);
 	return true;
 }
 kGuiCallbackDeclaredFuncEnd(cLuxChatHandler, ComposerEntered);

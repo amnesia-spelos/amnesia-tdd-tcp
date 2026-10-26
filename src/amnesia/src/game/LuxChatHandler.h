@@ -24,6 +24,8 @@ public:
 	void OnDraw(float afFrameTime);
 	bool HandleInput(cInput* apInput);
 	bool IsComposerOpen() const { return mModel.IsComposerOpen(); }
+	// Also true while the Enter or Escape that closed the Chat Composer is still held.
+	bool OwnsInput() const { return mModel.IsComposerOpen() || mbAwaitingKeystrokeRelease; }
 	void SetSubmissionSink(iLuxChatSubmissionSink* apSink) { mpSubmissionSink = apSink; }
 	bool DisplayChatEntry(const cChatEntry& aEntry);
 
@@ -31,6 +33,9 @@ private:
 	bool CanOpenComposer() const;
 	void OpenComposer();
 	void CloseComposer(bool abSubmit);
+	void CloseComposerByKeystroke(bool abSubmit);
+	bool IsComposerKeystrokeHeld(cInput* apInput) const;
+	void RestorePreviousFocus();
 	void EnsureComposerFocus();
 	void DrawLog();
 	bool TextChanged(iWidget* apWidget, const cGuiMessageData& aData);
@@ -47,7 +52,7 @@ private:
 	iLuxChatSubmissionSink* mpSubmissionSink;
 	unsigned long mlLastTick;
 	bool mbWasLoading;
-	bool mbConsumedComposerInput;
+	bool mbAwaitingKeystrokeRelease;
 };
 
 #endif
