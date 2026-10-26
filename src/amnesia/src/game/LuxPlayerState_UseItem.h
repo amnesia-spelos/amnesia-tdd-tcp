@@ -58,6 +58,8 @@ public:
 
 	cGuiGfxElement* GetCrosshair();
 	bool OnDrawCrossHair(cGuiGfxElement *apGfx, const cVector3f& avPos, const cVector2f &avSize);
+
+	void OnItemRemoved(cLuxInventory_Item *apItem);
 	
 	/////////////////////////////////
 	//Save data stuff
@@ -73,6 +75,7 @@ protected:
 	void UseItem();
 	
 	cLuxInventory_Item *mpCurrentItem;
+	bool mbUsingItem;
 	cLinearOscillation mFlashOscill;
 
 	float mfMinUseItemDistance;

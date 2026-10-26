@@ -33,6 +33,7 @@
 #include "LuxGlobalDataHandler.h"
 #include "LuxAchievementHandler.h"
 #include "LuxSharedCallbackHandler.h"
+#include "LuxPlayerState_UseItem.h"
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -1148,6 +1149,7 @@ void cLuxInventory::RemoveItem(const tString& asName)
 		{
 			if(mpPickedItem == pItem) mpPickedItem = NULL;
 			if(mpEquippedItem == pItem) mpEquippedItem = NULL;
+			OnItemRemoved(pItem);
 
 			hplDelete(pItem);
 			mvItems.erase(it);
@@ -1170,6 +1172,7 @@ void cLuxInventory::RemoveItem(cLuxInventory_Item *apItem)
 
 	if(mpPickedItem == apItem) mpPickedItem = NULL;
 	if(mpEquippedItem == apItem) mpEquippedItem = NULL;
+	OnItemRemoved(apItem);
 
 	std::vector<cLuxInventory_Item*>::iterator it = mvItems.begin();
 	for(; it != mvItems.end(); ++it)
@@ -1493,6 +1496,15 @@ void cLuxInventory::DrawDescTextRow(const tWString& asText, const cColor& aCol)
 		//mpGuiSet->DrawFont(vRows[i], mpFontDefault, cVector3f(vMessageBodyCenter.x,fY ,1),vFontSize.y,finalCol,eFontAlign_Center);
 		mpGuiSet->DrawFont(vRows[i], mpFontDefault, cVector3f(vMessageBodyCenter.x-fHalfWidth, fY, 1), vFontSize.y, finalCol, eFontAlign_Left);
 	}
+}
+
+//-----------------------------------------------------------------------
+
+void cLuxInventory::OnItemRemoved(cLuxInventory_Item *apItem)
+{
+	// A script, such as a Shared Callback, can remove the item the player has selected for use.
+	cLuxPlayerState_UseItem *pUseItemState = static_cast<cLuxPlayerState_UseItem*>(gpBase->mpPlayer->GetStateData(eLuxPlayerState_UseItem));
+	pUseItemState->OnItemRemoved(apItem);
 }
 
 //-----------------------------------------------------------------------

@@ -39,6 +39,7 @@
 cLuxPlayerState_UseItem::cLuxPlayerState_UseItem(cLuxPlayer *apPlayer) : iLuxPlayerState_DefaultBase(apPlayer, eLuxPlayerState_UseItem)
 {
 	mpCurrentItem = NULL; 
+	mbUsingItem = false;
 	mFlashOscill.SetUp(0,1,0,1.5f,1.5f);
 
 	mfMinUseItemDistance = gpBase->mpGameCfg->GetFloat("Player_Interaction", "MinUseItemDistance",0);
@@ -82,7 +83,9 @@ bool cLuxPlayerState_UseItem::ImplementedDoAction(eLuxPlayerAction aAction,bool 
 		// Pressed
 		if(abPressed)
 		{
+			mbUsingItem = true;
 			UseItem();
+			mbUsingItem = false;
 			
 			mpPlayer->ChangeState(eLuxPlayerState_Normal);
             return false;
@@ -135,6 +138,21 @@ bool cLuxPlayerState_UseItem::OnDrawCrossHair(cGuiGfxElement *apGfx, const cVect
 	for(int i=0; i<3; ++i)
 		gpBase->mpGameHudSet->DrawGfx(apGfx, vNewPos, avSize, cColor(mFlashOscill.val), eGuiMaterial_Additive);
 	return true;
+}
+
+//-----------------------------------------------------------------------
+
+void cLuxPlayerState_UseItem::OnItemRemoved(cLuxInventory_Item *apItem)
+{
+	if(mpCurrentItem != apItem) return;
+
+	mpCurrentItem = NULL;
+
+	// The player's own use leaves the state once the use callback returns.
+	if(mbUsingItem) return;
+
+	if(mpPlayer->GetCurrentState() == eLuxPlayerState_UseItem)
+		mpPlayer->ChangeState(eLuxPlayerState_Normal);
 }
 
 //-----------------------------------------------------------------------

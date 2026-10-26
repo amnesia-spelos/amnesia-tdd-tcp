@@ -276,6 +276,8 @@ private:
 
 	void ResetSessionVars();
 
+	void OnItemRemoved(cLuxInventory_Item *apItem);
+
 	bool CheckSpecialCombineAction(cLuxInventory_Item *apItemA, cLuxInventory_Item *apItemB, int alSlotIndex);
 
 	void CreateBackground();
