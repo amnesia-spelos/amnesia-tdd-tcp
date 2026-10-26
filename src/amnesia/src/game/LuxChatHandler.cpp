@@ -169,13 +169,13 @@ void cLuxChatHandler::EnsureComposerFocus()
 	}
 }
 
-void cLuxChatHandler::CloseComposer(bool abSubmit)
+bool cLuxChatHandler::CloseComposer(bool abSubmit, bool abRestoreFocus)
 {
 	mModel.SetDraft(mpComposer->GetText());
 	if(abSubmit)
 	{
 		const eChatSubmitResult result = mModel.SubmitComposer();
-		if(result == eChatSubmitResult_Invalid) return;
+		if(result == eChatSubmitResult_Invalid) return false;
 		if(result == eChatSubmitResult_Added && mpSubmissionSink)
 			mpSubmissionSink->ReportLocalChatEntry(mModel.GetEntries(mModel.GetContext()).back());
 	}
@@ -187,14 +187,13 @@ void cLuxChatHandler::CloseComposer(bool abSubmit)
 	mpComposer->SetEnabled(false);
 	mpSet->SetDrawMouse(false);
 	mpSet->SetFocusedWidget(NULL);
-	if(!mbAwaitingKeystrokeRelease) RestorePreviousFocus();
+	if(abRestoreFocus) RestorePreviousFocus();
+	return true;
 }
 
 void cLuxChatHandler::CloseComposerByKeystroke(bool abSubmit)
 {
-	mbAwaitingKeystrokeRelease = true;
-	CloseComposer(abSubmit);
-	if(mModel.IsComposerOpen()) mbAwaitingKeystrokeRelease = false;
+	mbAwaitingKeystrokeRelease = CloseComposer(abSubmit, false);
 }
 
 bool cLuxChatHandler::IsComposerKeystrokeHeld(cInput* apInput) const
@@ -206,7 +205,9 @@ bool cLuxChatHandler::IsComposerKeystrokeHeld(cInput* apInput) const
 
 void cLuxChatHandler::RestorePreviousFocus()
 {
-	if(mpPreviousFocus) gpBase->mpEngine->GetGui()->SetFocus(mpPreviousFocus);
+	// Something else took focus while the closing keystroke was held; leave it there.
+	cGui* pGui = gpBase->mpEngine->GetGui();
+	if(mpPreviousFocus && pGui->GetFocusedSet() == mpSet) pGui->SetFocus(mpPreviousFocus);
 	mpPreviousFocus = NULL;
 }
 

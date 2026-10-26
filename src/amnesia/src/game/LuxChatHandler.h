@@ -32,7 +32,7 @@ public:
 private:
 	bool CanOpenComposer() const;
 	void OpenComposer();
-	void CloseComposer(bool abSubmit);
+	bool CloseComposer(bool abSubmit, bool abRestoreFocus = true);
 	void CloseComposerByKeystroke(bool abSubmit);
 	bool IsComposerKeystrokeHeld(cInput* apInput) const;
 	void RestorePreviousFocus();

@@ -33,10 +33,20 @@ if ($guiRouting -notmatch 'mpChatHandler->OwnsInput\(\)') {
     throw 'GUI input is not kept on the Chat set while the closing keystroke is held.'
 }
 
-$close = Get-FunctionBody $chatSource 'void cLuxChatHandler::CloseComposer(bool abSubmit)'
+$close = Get-FunctionBody $chatSource 'bool cLuxChatHandler::CloseComposer(bool abSubmit, bool abRestoreFocus)'
 if ($close -match 'SetFocus\(mpPreviousFocus\)' -or
-    $close -notmatch 'if\s*\(\s*!mbAwaitingKeystrokeRelease\s*\)\s*RestorePreviousFocus\(\)') {
-    throw 'Closing the Chat Composer restores the previous focus before its keystroke is released.'
+    $close -notmatch 'if\s*\(\s*abRestoreFocus\s*\)\s*RestorePreviousFocus\(\)') {
+    throw 'Closing the Chat Composer cannot defer restoring the previous focus.'
+}
+
+$byKeystroke = Get-FunctionBody $chatSource 'void cLuxChatHandler::CloseComposerByKeystroke(bool abSubmit)'
+if ($byKeystroke -notmatch 'mbAwaitingKeystrokeRelease\s*=\s*CloseComposer\(abSubmit,\s*false\)') {
+    throw 'Closing by keystroke restores focus immediately, or awaits release after a rejected submission.'
+}
+
+$restore = Get-FunctionBody $chatSource 'void cLuxChatHandler::RestorePreviousFocus()'
+if ($restore -notmatch 'GetFocusedSet\(\) == mpSet[^;]*SetFocus\(mpPreviousFocus\)') {
+    throw 'Restoring focus after the closing keystroke overrides a set that took focus meanwhile.'
 }
 
 $entered = Get-FunctionBody $chatSource 'bool cLuxChatHandler::ComposerEntered(iWidget* apWidget, const cGuiMessageData& aData)'

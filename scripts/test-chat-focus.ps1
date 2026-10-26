@@ -21,7 +21,7 @@ if ($updateBody -notmatch 'if\s*\(mModel\.IsComposerOpen\(\)\)\s*\{[^}]*EnsureCo
 }
 
 $ensureStart = $source.IndexOf('void cLuxChatHandler::EnsureComposerFocus()')
-$closeStart = $source.IndexOf('void cLuxChatHandler::CloseComposer(bool abSubmit)')
+$closeStart = $source.IndexOf('bool cLuxChatHandler::CloseComposer(bool abSubmit, bool abRestoreFocus)')
 if ($ensureStart -lt 0 -or $closeStart -le $ensureStart) {
     throw 'Could not isolate cLuxChatHandler::EnsureComposerFocus.'
 }
