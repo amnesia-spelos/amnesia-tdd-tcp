@@ -706,12 +706,13 @@ void cLuxInputHandler::AppDeviceWasRemoved()
 
 void cLuxInputHandler::UpdateGlobalInput()
 {
-	//Keys typed into the Chat Composer must not fire global actions.
+	//Keys typed into the Chat Composer must not fire global actions. Each action's trigger is
+	//still consumed first, so a key held past the end of chat ownership does not fire late.
 	bool bChatOwnsInput = gpBase->mpChatHandler && gpBase->mpChatHandler->OwnsInput();
 
 	/////////////////
 	// ScreenShot
-	if(!bChatOwnsInput && mpInput->BecameTriggerd(eLuxAction_ScreenShot))
+	if(mpInput->BecameTriggerd(eLuxAction_ScreenShot) && !bChatOwnsInput)
 	{
 		tWString sFileName = _W("");
 		tWString sBaseName = _W("Screen_");
@@ -747,8 +748,8 @@ void cLuxInputHandler::UpdateGlobalInput()
 	}
 
 	/////////////////
-	// Debug output (developer mode only, since P is free for players to bind)
-	if(!bChatOwnsInput && gpBase->mpDebugHandler->GetScriptDebugOn() && mpInput->BecameTriggerd(eLuxAction_PrintInfo))
+	// Debug output (script debug only, since its key is free for players to bind)
+	if(mpInput->BecameTriggerd(eLuxAction_PrintInfo) && !bChatOwnsInput && gpBase->mpDebugHandler->GetScriptDebugOn())
 	{
 		gpBase->mpMapHandler->GetViewport()->GetRenderSettings()->mbLog = true;
 	}
