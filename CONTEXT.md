@@ -108,6 +108,14 @@ _Avoid_: Chat history, message archive
 The temporary input mode in which the local player writes a Chat Entry while ordinary game controls are suppressed without pausing the game.
 _Avoid_: Chat box, console
 
+**Peer Setting**:
+A string option a Peer announces with a Setting Key and a default value, shown in the game's options while its Session lasts, and remembered by the game across Sessions once the player changes it.
+_Avoid_: Client config, plugin setting, client option
+
+**Setting Key**:
+The Peer-chosen value that uniquely identifies a Peer Setting across every Peer and Session, under which the game stores its value.
+_Avoid_: Setting name, setting ID
+
 **Avatar**:
 An in-world stand-in whose Pose is driven by a Peer rather than by local input or AI. An Avatar belongs to its Session rather than to a map, and a Session may drive several Avatars.
 _Avoid_: Remote player, ghost, puppet, other player
