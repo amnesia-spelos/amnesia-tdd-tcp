@@ -446,9 +446,10 @@ void cLuxAvatarHandler::ResolvePitchBones(cAvatar& aAvatar, cMesh *apMesh)
 	}
 }
 
-// The lean bones and their share of the tilt. In TheSkeletonSpelos the legs hang off Hip_L and Hip_R,
-// which are Hip's siblings, so tilting Hip and Chest leans the torso, arms and head while the feet
-// stay planted, and leaves the pitch bones to UpdatePitch.
+// The lean bones and their share of the tilt, named by their Collada ids like the .ent's MoveHeadBones.
+// In TheSkeletonSpelos the legs hang off Hip_L and Hip_R, which are Hip's siblings, so tilting Hip and
+// Chest leans the torso, arms and head while the feet stay planted, and leaves the pitch bones to
+// UpdatePitch.
 namespace
 {
 	struct cLeanBoneConfig
@@ -456,13 +457,12 @@ namespace
 		const char *mpName;
 		float mfWeight;
 	};
-	const cLeanBoneConfig kLeanBones[] = { { "Hip", 0.6f }, { "Chest", 0.4f } };
+	const cLeanBoneConfig kLeanBones[] = { { "Armature_Hip", 0.6f }, { "Armature_Chest", 0.4f } };
 }
 
 // Resolves the lean bones against the loaded mesh's skeleton and precomputes each bone's model
-// backward axis in its bind-pose frame, the way ResolvePitchBones does. A positive angle around it
-// should tilt the model to its own right, by analogy with a positive angle around the model's
-// sideways axis pitching it up; confirm in game that Q leans the Avatar left. A missing skeleton or bone is reported but leaves the Avatar visible; it simply
+// forward axis in its bind-pose frame, the way ResolvePitchBones does. The model faces +Z, so a
+// positive angle around that axis tilts it to its own right. A missing skeleton or bone is reported but leaves the Avatar visible; it simply
 // renders no lean through that bone.
 void cLuxAvatarHandler::ResolveLeanBones(cAvatar& aAvatar, cMesh *apMesh)
 {
@@ -491,7 +491,7 @@ void cLuxAvatarHandler::ResolveLeanBones(cAvatar& aAvatar, cMesh *apMesh)
 		bone.mfWeight = kLeanBones[i].mfWeight;
 		// MatrixMul3x3 for a direction, as in ResolvePitchBones.
 		bone.mvAxis = cMath::Vector3Normalize(
-			cMath::MatrixMul3x3(cMath::MatrixInverse(pBone->GetWorldTransform()), cVector3f(0, 0, -1)));
+			cMath::MatrixMul3x3(cMath::MatrixInverse(pBone->GetWorldTransform()), cVector3f(0, 0, 1)));
 		aAvatar.mvLeanBones.push_back(bone);
 	}
 }
