@@ -256,13 +256,13 @@ namespace
 		return abValue ? "1" : "0";
 	}
 
-	// avatarcreate <id> [<entityFile>], avatarremove <id>, avatarcollision <id> <0|1>, and
 	// A lean from -1 to 1.
 	bool TryReadLean(cGameInteractionFieldReader& aReader, float& afLean)
 	{
 		return TryReadNumber(aReader, afLean) && afLean >= -1.0f && afLean <= 1.0f;
 	}
 
+	// avatarcreate <id> [<entityFile>], avatarremove <id>, avatarcollision <id> <0|1>, and
 	// avatarpose <id> <timeMs> <teleportCounter> <x> <y> <z> <yaw> <pitch> <crouch> <lantern> [<lean>] <map>,
 	// with <lean> exactly when the Session was granted lean.
 	cGameInteractionCommand ParseAvatarCommand(eGameInteractionCommandType aType, const std::string& asLine,

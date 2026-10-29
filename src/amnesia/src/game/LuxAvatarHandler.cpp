@@ -460,9 +460,9 @@ namespace
 }
 
 // Resolves the lean bones against the loaded mesh's skeleton and precomputes each bone's model
-// backward axis in its bind-pose frame, the way ResolvePitchBones does. Around it, a positive angle
-// tilts the model to its own right, just as a positive angle around the model's sideways axis
-// pitches it up. A missing skeleton or bone is reported but leaves the Avatar visible; it simply
+// backward axis in its bind-pose frame, the way ResolvePitchBones does. A positive angle around it
+// should tilt the model to its own right, by analogy with a positive angle around the model's
+// sideways axis pitching it up; confirm in game that Q leans the Avatar left. A missing skeleton or bone is reported but leaves the Avatar visible; it simply
 // renders no lean through that bone.
 void cLuxAvatarHandler::ResolveLeanBones(cAvatar& aAvatar, cMesh *apMesh)
 {
