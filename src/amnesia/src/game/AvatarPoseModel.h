@@ -11,7 +11,7 @@ struct cAvatarPoseSample
 {
 	cAvatarPoseSample()
 		: mfSenderTimeMs(0.0), mlTeleportCounter(0), mfX(0.0f), mfY(0.0f), mfZ(0.0f), mfYawDegrees(0.0f),
-		  mfCameraPitchDegrees(0.0f), mbCrouching(false), mbLanternRaised(false) {}
+		  mfCameraPitchDegrees(0.0f), mfLean(0.0f), mbCrouching(false), mbLanternRaised(false) {}
 	double mfSenderTimeMs;
 	unsigned int mlTeleportCounter;
 	float mfX;
@@ -19,18 +19,20 @@ struct cAvatarPoseSample
 	float mfZ;
 	float mfYawDegrees;
 	float mfCameraPitchDegrees;
+	// From -1 (fully left) to 1 (fully right).
+	float mfLean;
 	bool mbCrouching;
 	bool mbLanternRaised;
 	std::string msMapFile;
 };
 
-// Where an awake Avatar is shown: feet position and body yaw, camera pitch, and whether its lantern
-// is raised.
+// Where an awake Avatar is shown: feet position and body yaw, camera pitch, lean, and whether its
+// lantern is raised.
 struct cAvatarRenderedPose
 {
 	cAvatarRenderedPose()
 		: mfSenderTimeMs(0.0), mfX(0.0f), mfY(0.0f), mfZ(0.0f), mfYawDegrees(0.0f), mfCameraPitchDegrees(0.0f),
-		  mbCrouching(false), mbLanternRaised(false), mfHorizontalSpeedMps(0.0f), mfForwardSpeedMps(0.0f) {}
+		  mfLean(0.0f), mbCrouching(false), mbLanternRaised(false), mfHorizontalSpeedMps(0.0f), mfForwardSpeedMps(0.0f) {}
 	// Sender time actually rendered, clamped at holds and discontinuities.
 	double mfSenderTimeMs;
 	float mfX;
@@ -38,6 +40,7 @@ struct cAvatarRenderedPose
 	float mfZ;
 	float mfYawDegrees;
 	float mfCameraPitchDegrees;
+	float mfLean;
 	// A flag cannot be blended, so it is the older sample's: it switches on the sender's time.
 	bool mbCrouching;
 	bool mbLanternRaised;

@@ -29,8 +29,8 @@ Run the game-side harness without starting the game:
 protocol <version> [<capability>...]
 ```
 
-- The only supported Protocol Version is `2`. The supported Capabilities are `avatars`, `localpose`, `interactions`, `sharedcallbacks`, and `playerplace`.
-- Success: `RESPONSE protocol ok 2 [<capability>...]`. The granted Capabilities are the requested ones that the game supports. Each is listed once, in the order `avatars`, `localpose`, `interactions`, `sharedcallbacks`, `playerplace`. Unknown names are ignored, so a Session can request none and still negotiate.
+- The only supported Protocol Version is `2`. The supported Capabilities are `avatars`, `localpose`, `interactions`, `sharedcallbacks`, `playerplace`, `enemies`, and `lean`.
+- Success: `RESPONSE protocol ok 2 [<capability>...]`. The granted Capabilities are the requested ones that the game supports. Each is listed once, in the order `avatars`, `localpose`, `interactions`, `sharedcallbacks`, `playerplace`, `enemies`, `lean`. Unknown names are ignored, so a Session can request none and still negotiate.
 - `RESPONSE protocol unsupported-version`: the version is a positive decimal integer other than `2`. Leading zeros are allowed, so `02` means `2`.
 - `RESPONSE protocol invalid`: the version is missing, `0`, or not a decimal integer that fits in 32 bits, or the line has an empty field.
 - `RESPONSE protocol already-negotiated`: the Session already negotiated.
@@ -52,6 +52,7 @@ A negotiated Session keeps every legacy Command, Response, and Event of the [leg
 - **Time** (`<timeMs>`) is an unsigned decimal integer of milliseconds on the sender's monotonic game clock. It fits in 64 bits.
 - **Teleport counter** (`<teleportCounter>`) is an unsigned decimal 32-bit integer. It changes whenever the sender's Pose is placed rather than moved.
 - **Flags** (`<crouch>`, `<lantern>`, the collision toggle) are `0` or `1`.
+- **Lean** (`<lean>`) is a number from `-1` (fully left) to `1` (fully right), written like any other number. A reader rejects a lean outside that range as malformed.
 - **Avatar Identifiers** (`<id>`) are 1–32 printable ASCII characters (`!` through `~`), and cannot contain `:`.
 - **Entity Identifiers** (`<entityId>`) name a map-placed entity by the integer `ID` it has in its map file. **Body Identifiers** (`<bodyId>`) name one of its bodies by the integer `ID` the body has in its entity file. Entities and bodies are never named by name. Both are signed decimal 32-bit integers, `-?digits` from `-2147483648` to `2147483647`. Readers accept leading zeros and reject `+`. Writers write no leading zeros and write zero without a sign.
 - **Body states** (`<state>`) are 13 numbers: `<x> <y> <z> <qx> <qy> <qz> <qw> <vx> <vy> <vz> <wx> <wy> <wz>`. `<x> <y> <z>` is the translation of the body's world matrix. `<qx> <qy> <qz> <qw>` is its world rotation as a unit quaternion. `<vx> <vy> <vz>` is its linear velocity in world units per second, and `<wx> <wy> <wz>` is its angular velocity in degrees per second, both along the world axes. Every number's magnitude is at most `1000000000`, and the quaternion's length is within `0.01` of 1. A reader rejects any other state as malformed. A writer never writes one: it writes a number beyond the bound as the bound with its sign, a non-finite number as `0.0000`, and the quaternion normalized, or as `0.0000 0.0000 0.0000 1.0000` when it has a non-finite component or no length.
@@ -78,7 +79,7 @@ The gateway checks Capabilities before it parses a message. A Protocol Version 2
 | `avatarremove <id>` | `avatars` | `ok <id>`, `not-found <id>`, `invalid` |
 | `avatarcollision <id> <0\|1>` | `avatars` | `ok <id>`, `not-found <id>`, `invalid` |
 | `avatarenemysight <id> <0\|1>` | `avatars` | `ok <id>`, `not-found <id>`, `invalid` |
-| `avatarpose <id> <timeMs> <teleportCounter> <x> <y> <z> <yaw> <pitch> <crouch> <lantern> <map>` | `avatars` | none on success; `not-found <id>`, `invalid [<id>]` |
+| `avatarpose <id> <timeMs> <teleportCounter> <x> <y> <z> <yaw> <pitch> <crouch> <lantern> [<lean>] <map>` | `avatars` | none on success; `not-found <id>`, `invalid [<id>]` |
 | `localpose subscribe <hz>` | `localpose` | `ok subscribe <hz>`, `invalid` |
 | `localpose unsubscribe` | `localpose` | `ok unsubscribe`, `invalid` |
 | `reportedbodies subscribe <hz>` | `interactions` | `ok subscribe <hz>`, `invalid` |
@@ -98,19 +99,27 @@ The gateway checks Capabilities before it parses a message. A Protocol Version 2
 - `avatarremove`: `invalid` means the line is malformed or the Avatar Identifier is invalid, and the Response does not echo the identifier.
 - `avatarcollision`: `1` turns on collision between the local player and the Avatar, and `0` turns it off. Collision is on for a new Avatar. The setting stays in place across map changes, save loads, and dormancy until the next `avatarcollision` for that Avatar. `invalid` means the line is malformed, the Avatar Identifier is invalid, or the flag is not `0` or `1`, and the Response does not echo the identifier.
 - `avatarenemysight`: opts this Avatar into enemy perception (`1`) or out (`0`). Off for each newly created Avatar. The setting belongs to the Session's Avatar and survives map changes and dormancy; only awake Avatars on the current map can be perceived. Removing the Avatar or ending the Session removes the setting. Validation and Responses match `avatarcollision`. Enemies use the rendered Pose's crouch and lantern, map lighting, motion, FOV and line of sight. Each enemy keeps its current player while perceived, then selects the closest fully perceived player. Grunt/Brute sight takes three consecutive checks (close-range detection is immediate); Kaernk uses its immediate feet-height detection. Avatars remain silent and cannot be hit. `ShowEnemyPlayerPosition` and `AlertEnemyOfPlayerPresence` reveal the player who triggered the callback, which may be an Avatar (see [Enemy-triggered callbacks](#enemy-triggered-callbacks)). The simulating Peer should enable this only while sharing a map; a Peer driving enemy copies need not enable it.
-- `avatarpose`: `<map>` is the map path of the sender's Pose, `<x> <y> <z>` is the feet position, and `<lantern>` is `1` while the sender's lantern is raised. A line without `<lantern>`, or with a flag other than `0` or `1`, is malformed. A successful `avatarpose` is not answered. `invalid` takes precedence over `not-found`. A failure is reported once per Avatar per failure streak, and the next success for that Avatar resets its streak. `invalid` echoes `<id>` only when that field is a valid Avatar Identifier. All lines without a valid identifier share one streak.
+- `avatarpose`: `<map>` is the map path of the sender's Pose, `<x> <y> <z>` is the feet position, and `<lantern>` is `1` while the sender's lantern is raised. A line without `<lantern>`, or with a flag other than `0` or `1`, is malformed. `<lean>` is present exactly when the Session was granted `lean` (see [Lean](#lean)). A successful `avatarpose` is not answered. `invalid` takes precedence over `not-found`. A failure is reported once per Avatar per failure streak, and the next success for that Avatar resets its streak. `invalid` echoes `<id>` only when that field is a valid Avatar Identifier. All lines without a valid identifier share one streak.
 - `localpose subscribe`: `<hz>` is a decimal integer. The rate is clamped to 1–60, even when `<hz>` does not fit in 32 bits, and the Response reports the clamped rate. Subscribing again changes the rate and restarts the subscription, so the current Pose follows at once. `localpose unsubscribe` succeeds even if the Session is not subscribed. `invalid` means the line is malformed, including a negative or fractional `<hz>`. The subscription ends when the Session ends.
 
 The `localpose` State Update is sent to a subscribed Session:
 
 ```text
-STATE localpose <timeMs> <teleportCounter> <x> <y> <z> <yaw> <pitch> <crouch> <lantern> <map>
+STATE localpose <timeMs> <teleportCounter> <x> <y> <z> <yaw> <pitch> <crouch> <lantern> [<lean>] <map>
 ```
 
-- It reports the local player's feet position, body yaw, camera pitch, crouch flag, and lantern flag in the current map. `<lantern>` is `1` exactly while the lantern is raised. It turns `0` as soon as the lantern is lowered, runs out of oil, or is disabled. `<timeMs>` is the game clock, which only moves forward while the game runs. `<teleportCounter>` changes whenever the player is placed rather than moved: `TeleportPlayer`, `SetPlayerPos`, `playerplace`, start position placement on map entry or at a checkpoint, and save load.
+- It reports the local player's feet position, body yaw, camera pitch, crouch flag, and lantern flag in the current map, and in a Session granted `lean`, its lean. `<lantern>` is `1` exactly while the lantern is raised. It turns `0` as soon as the lantern is lowered, runs out of oil, or is disabled. `<timeMs>` is the game clock, which only moves forward while the game runs. `<teleportCounter>` changes whenever the player is placed rather than moved: `TeleportPlayer`, `SetPlayerPos`, `playerplace`, start position placement on map entry or at a checkpoint, and save load.
 - The first State Update is the current Pose and follows the subscribing Response. After that, at most one State Update is sent per `1000 / <hz>` milliseconds of game time. The schedule holds that average rate even when game updates do not land on it exactly.
 - State Updates are sent only while a map is loaded. None are sent in the main menu or while a map loads. While the game is paused or the player is in the inventory, journal, or another menu, a State Update is sent only when the Pose changed. Time does not count as a change.
 - A newer Pose replaces any undelivered older one instead of queueing behind it. A Peer that reads slowly receives the newest Pose once it catches up, and is never disconnected because of State Updates.
+
+## Lean
+
+The `lean` Capability adds `<lean>` after `<lantern>` in both the `localpose` State Update and the `avatarpose` Command. A Session without it keeps both lines exactly as they were, and an Avatar it poses stands upright.
+
+- `localpose` reports how far the local camera leans now, from `-1` (fully left) to `1` (fully right). The collision check cuts it short, so it is only as far as the player can actually lean. It fades back to `0` with the camera when the lean is released.
+- `avatarpose` reads `<lean>` and tilts the Avatar's model at the hips and chest by up to 25 degrees either way. Its feet stay planted, and its body and lantern light stay upright. A line without `<lean>`, or with one outside `-1` to `1`, is malformed.
+- A game older than `lean` ignores the name and does not grant it. That game would read `<lean>` as the start of the map path and keep the Avatar dormant, so a Peer that sends lean must refuse a game that did not grant it, at negotiation.
 
 ## Interactions
 

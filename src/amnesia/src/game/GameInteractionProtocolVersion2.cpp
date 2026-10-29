@@ -44,7 +44,8 @@ namespace
 		{ eGameInteractionCapability_Interactions, "interactions" },
 		{ eGameInteractionCapability_SharedCallbacks, "sharedcallbacks" },
 		{ eGameInteractionCapability_PlayerPlace, "playerplace" },
-		{ eGameInteractionCapability_Enemies, "enemies" }
+		{ eGameInteractionCapability_Enemies, "enemies" },
+		{ eGameInteractionCapability_Lean, "lean" }
 	};
 	const int kCapabilityNameCount = sizeof(kCapabilityNames) / sizeof(kCapabilityNames[0]);
 
@@ -256,8 +257,16 @@ namespace
 	}
 
 	// avatarcreate <id> [<entityFile>], avatarremove <id>, avatarcollision <id> <0|1>, and
-	// avatarpose <id> <timeMs> <teleportCounter> <x> <y> <z> <yaw> <pitch> <crouch> <lantern> <map>.
-	cGameInteractionCommand ParseAvatarCommand(eGameInteractionCommandType aType, const std::string& asLine)
+	// A lean from -1 to 1.
+	bool TryReadLean(cGameInteractionFieldReader& aReader, float& afLean)
+	{
+		return TryReadNumber(aReader, afLean) && afLean >= -1.0f && afLean <= 1.0f;
+	}
+
+	// avatarpose <id> <timeMs> <teleportCounter> <x> <y> <z> <yaw> <pitch> <crouch> <lantern> [<lean>] <map>,
+	// with <lean> exactly when the Session was granted lean.
+	cGameInteractionCommand ParseAvatarCommand(eGameInteractionCommandType aType, const std::string& asLine,
+		bool abLean)
 	{
 		cGameInteractionFieldReader reader(asLine);
 		std::string keyword;
@@ -279,7 +288,7 @@ namespace
 				TryReadNumber(reader, pose.mFeetPosition.mfX) && TryReadNumber(reader, pose.mFeetPosition.mfY) &&
 				TryReadNumber(reader, pose.mFeetPosition.mfZ) && TryReadNumber(reader, pose.mfBodyYawDegrees) &&
 				TryReadNumber(reader, pose.mfCameraPitchDegrees) && TryReadFlag(reader, pose.mbCrouching) &&
-				TryReadFlag(reader, pose.mbLanternRaised) &&
+				TryReadFlag(reader, pose.mbLanternRaised) && (!abLean || TryReadLean(reader, pose.mfLean)) &&
 				reader.TryReadRest(pose.msMapFile);
 			pose.mlTeleportCounter = static_cast<unsigned int>(teleportCounter);
 		}
@@ -857,7 +866,8 @@ bool cGameInteractionProtocolVersion2::IsNegotiation(const std::string& asLine)
 
 // Fields beyond the keyword of a Command without a typed form are kept whole for its Capability's
 // behavior to parse.
-cGameInteractionCommand cGameInteractionProtocolVersion2::ParseCommand(const std::string& asLine)
+cGameInteractionCommand cGameInteractionProtocolVersion2::ParseCommand(const std::string& asLine,
+	unsigned int alGrantedCapabilities)
 {
 	if (IsNegotiation(asLine)) return ParseNegotiation(asLine);
 	cGameInteractionFieldReader reader(asLine);
@@ -884,7 +894,7 @@ cGameInteractionCommand cGameInteractionProtocolVersion2::ParseCommand(const std
 		return ParseEntityCommand(type, asLine);
 	if (type == eGameInteractionCommand_AvatarCreate || type == eGameInteractionCommand_AvatarRemove ||
 		type == eGameInteractionCommand_AvatarCollision || type == eGameInteractionCommand_AvatarEnemySight || type == eGameInteractionCommand_AvatarPose)
-		return ParseAvatarCommand(type, asLine);
+		return ParseAvatarCommand(type, asLine, (alGrantedCapabilities & eGameInteractionCapability_Lean) != 0);
 	std::string fields;
 	reader.TryReadRest(fields);
 	return cGameInteractionCommand(type, fields);
@@ -974,14 +984,17 @@ std::string cGameInteractionProtocolVersion2::SerializeEvent(const cGameInteract
 	}
 }
 
-std::string cGameInteractionProtocolVersion2::SerializeLocalPose(const cGameInteractionPose& aPose)
+std::string cGameInteractionProtocolVersion2::SerializeLocalPose(const cGameInteractionPose& aPose,
+	unsigned int alGrantedCapabilities)
 {
 	char clockFields[64];
 	sprintf(clockFields, "STATE localpose %llu %u ", aPose.mlTimeMs, aPose.mlTeleportCounter);
+	const std::string lean = (alGrantedCapabilities & eGameInteractionCapability_Lean) ?
+		FormatNumber(aPose.mfLean) + " " : std::string();
 	return clockFields + FormatNumber(aPose.mFeetPosition.mfX) + " " + FormatNumber(aPose.mFeetPosition.mfY) +
 		" " + FormatNumber(aPose.mFeetPosition.mfZ) + " " + FormatNumber(aPose.mfBodyYawDegrees) + " " +
 		FormatNumber(aPose.mfCameraPitchDegrees) + " " + FormatFlag(aPose.mbCrouching) + " " +
-		FormatFlag(aPose.mbLanternRaised) + " " + aPose.msMapFile;
+		FormatFlag(aPose.mbLanternRaised) + " " + lean + aPose.msMapFile;
 }
 
 std::string cGameInteractionProtocolVersion2::SerializeEnemyPose(const cGameInteractionEnemyPose& aEnemy)

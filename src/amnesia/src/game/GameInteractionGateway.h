@@ -297,7 +297,9 @@ enum eGameInteractionCapability
 	eGameInteractionCapability_Interactions = 1 << 2,
 	eGameInteractionCapability_SharedCallbacks = 1 << 3,
 	eGameInteractionCapability_PlayerPlace = 1 << 4,
-	eGameInteractionCapability_Enemies = 1 << 5
+	eGameInteractionCapability_Enemies = 1 << 5,
+	// Adds a <lean> field to the localpose State Update and the avatarpose Command.
+	eGameInteractionCapability_Lean = 1 << 6
 };
 
 struct cGameInteractionRotation
@@ -314,7 +316,7 @@ struct cGameInteractionPose
 {
 	cGameInteractionPose()
 		: mlTimeMs(0), mlTeleportCounter(0), mfBodyYawDegrees(0.0f), mfCameraPitchDegrees(0.0f),
-		  mbCrouching(false), mbLanternRaised(false) {}
+		  mbCrouching(false), mbLanternRaised(false), mfLean(0.0f) {}
 	// Milliseconds on the sending game's monotonic clock.
 	unsigned long long mlTimeMs;
 	// Changes whenever the player is placed rather than moved.
@@ -325,6 +327,9 @@ struct cGameInteractionPose
 	bool mbCrouching;
 	// Whether the lantern is raised. Its oil level and flicker are not part of the Pose.
 	bool mbLanternRaised;
+	// From -1 (fully left) to 1 (fully right). Only a Session granted lean exchanges it; for any
+	// other it is 0.
+	float mfLean;
 	std::string msMapFile;
 };
 

@@ -262,6 +262,7 @@ public:
 	void FadeAspectMulTo(float afX, float afSpeed);
 	void FadeRollTo(float afX, float afSpeedMul, float afMaxSpeed);
 	void FadeLeanRollTo(float afX, float afSpeedMul, float afMaxSpeed);
+	float GetLeanRoll(){ return mfLeanRoll;}
 	void SetRoll(float afX);
 
 	bool GetNoFallDamage(){ return mbNoFallDamage;}
@@ -287,6 +288,7 @@ public:
 	cLuxPlayerInDarkness *GetHelperInDarkness(){ return mpHelperInDarkness;}
 	cLuxPlayerHudEffect *GetHelperHudEffect(){ return mpHudEffect;}
 	cLuxPlayerLantern *GetHelperLantern(){ return mpLantern;}
+	cLuxPlayerLean *GetHelperLean(){ return mpLean;}
 	cLuxPlayerSanity *GetHelperSanity(){ return mpSanity; }
 	cLuxPlayerLookAt *GetHelperLookAt(){ return mpLookAt; }
 	cLuxPlayerDeath *GetHelperDeath(){ return mpDeath; }

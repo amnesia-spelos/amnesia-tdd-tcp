@@ -178,7 +178,7 @@ namespace
 	const unsigned int kSupportedCapabilities =
 		eGameInteractionCapability_Avatars | eGameInteractionCapability_LocalPose |
 		eGameInteractionCapability_Interactions | eGameInteractionCapability_SharedCallbacks |
-		eGameInteractionCapability_PlayerPlace | eGameInteractionCapability_Enemies;
+		eGameInteractionCapability_PlayerPlace | eGameInteractionCapability_Enemies | eGameInteractionCapability_Lean;
 
 	const unsigned int kMinimumSubscriptionRate = 1;
 	const unsigned int kMaximumSubscriptionRate = 60;
@@ -343,7 +343,8 @@ namespace
 		aSubscription.msLastSample = asTimelessSample;
 	}
 
-	void SampleLocalPose(iGameInteractionGameAdapter& aGameAdapter, cStateUpdateSubscription& aSubscription)
+	void SampleLocalPose(iGameInteractionGameAdapter& aGameAdapter, cStateUpdateSubscription& aSubscription,
+		unsigned int alGrantedCapabilities)
 	{
 		if (!aSubscription.mbSubscribed) return;
 		const eGameInteractionLocalPoseAvailability availability = aGameAdapter.GetLocalPoseAvailability();
@@ -357,10 +358,10 @@ namespace
 		cGameInteractionPose pose = aGameAdapter.GetLocalPose();
 		const unsigned long long timeMs = pose.mlTimeMs;
 		if (!IsSampleDue(aSubscription, timeMs)) return;
-		const std::string stateUpdate = cGameInteractionProtocolVersion2::SerializeLocalPose(pose);
+		const std::string stateUpdate = cGameInteractionProtocolVersion2::SerializeLocalPose(pose, alGrantedCapabilities);
 		pose.mlTimeMs = 0;
 		KeepSample(aSubscription, availability, timeMs, stateUpdate,
-			cGameInteractionProtocolVersion2::SerializeLocalPose(pose));
+			cGameInteractionProtocolVersion2::SerializeLocalPose(pose, alGrantedCapabilities));
 	}
 
 	void SampleEnemies(iGameInteractionGameAdapter& aGameAdapter, cSessionProtocol& aSession)
@@ -908,7 +909,7 @@ public:
 	cGameInteractionCommand ParseCommand(const std::string& asLine) const
 	{
 		if (mSession.mbNegotiated || cGameInteractionProtocolVersion2::IsNegotiation(asLine))
-			return cGameInteractionProtocolVersion2::ParseCommand(asLine);
+			return cGameInteractionProtocolVersion2::ParseCommand(asLine, mSession.mlGrantedCapabilities);
 		return cLegacyGameInteractionProtocol::ParseCommand(asLine);
 	}
 
@@ -1017,7 +1018,8 @@ void cGameInteractionGateway::Update(iGameInteractionGameAdapter& aGameAdapter)
 	// Delivering Responses now rather than on the next update removes a tick of latency.
 	mpImplementation->mTransport.Flush();
 	SampleEnemies(aGameAdapter, mpImplementation->mSession);
-	SampleLocalPose(aGameAdapter, mpImplementation->mSession.mLocalPoseSubscription);
+	SampleLocalPose(aGameAdapter, mpImplementation->mSession.mLocalPoseSubscription,
+		mpImplementation->mSession.mlGrantedCapabilities);
 	SampleReportedBodies(aGameAdapter, mpImplementation->mSession.mReportedBodiesSubscription);
 	mpImplementation->DeliverStateUpdates();
 

@@ -18,7 +18,8 @@
 // The local player collides with an awake Avatar unless its Peer turns that off; enemies pass
 // through Avatars, so an Avatar standing in their way never leaves them stuck.
 // While its Peer's lantern is raised, an awake Avatar also gives off a shadowless light like the
-// local lantern's, at standing eye height on its facing side.
+// local lantern's, at standing eye height on its facing side. Leaning tilts only its mesh: the body
+// and the light stay upright.
 // World objects, the light included, live only in the current map. They are destroyed when that map
 // is left or reloaded and recreated once the Avatar is awake in the current map again.
 class cLuxAvatarHandler : public iLuxUpdateable
@@ -55,6 +56,8 @@ public:
 	static const tFlag kCollideFlag = eFlagBit_15;
 	// The neck and head bones' total rendered pitch is clamped to this many degrees either way.
 	static const float kMaxPitchDegrees;
+	// The hip and chest bones' total tilt at a full lean either way.
+	static const float kMaxLeanDegrees;
 
 private:
 	struct cAvatarAnimation
@@ -74,11 +77,12 @@ private:
 		float mfWeight;
 	};
 
-	// A pitch bone resolved against a loaded mesh's skeleton: its index and the model's sideways
-	// axis expressed in its bind-pose frame (cLuxProp_NPC's pre-animation bone-transform pattern).
-	struct cAvatarPitchBone
+	// A pitch or lean bone resolved against a loaded mesh's skeleton: its index and the model axis it
+	// turns around, expressed in its bind-pose frame (cLuxProp_NPC's pre-animation bone-transform
+	// pattern).
+	struct cAvatarTiltBone
 	{
-		cAvatarPitchBone() : mlBoneIndex(-1), mfWeight(0.0f) {}
+		cAvatarTiltBone() : mlBoneIndex(-1), mfWeight(0.0f) {}
 		int mlBoneIndex;
 		float mfWeight;
 		cVector3f mvAxis;
@@ -94,7 +98,8 @@ private:
 		tString msMeshFile;
 		std::vector<cAvatarAnimation> mvAnimations;
 		std::vector<cAvatarPitchBoneConfig> mvPitchBoneConfig;
-		std::vector<cAvatarPitchBone> mvPitchBones;
+		std::vector<cAvatarTiltBone> mvPitchBones;
+		std::vector<cAvatarTiltBone> mvLeanBones;
 		cAvatarPoseModel mPoseModel;
 		cAvatarClipModel mClipModel;
 		// Kept with the Avatar rather than its body, so it lasts across map changes and dormancy.
@@ -141,6 +146,7 @@ private:
 	void CreateWorldObjects(const tString& asIdentifier, cAvatar& aAvatar, cLuxMap *apMap);
 	void DestroyWorldObjects(cAvatar& aAvatar);
 	void ResolvePitchBones(cAvatar& aAvatar, cMesh *apMesh);
+	void ResolveLeanBones(cAvatar& aAvatar, cMesh *apMesh);
 	void ResolveClips(cAvatar& aAvatar);
 	void ReportModelFault(const tString& asMeshFile, const tString& asFault);
 	void SetAwake(cAvatar& aAvatar, bool abAwake);
@@ -148,6 +154,7 @@ private:
 	void UpdateCollision(cAvatar& aAvatar, bool abAwake);
 	void UpdateLantern(cAvatar& aAvatar, const cAvatarRenderedPose *apPose, float afTimeStep);
 	void UpdatePitch(cAvatar& aAvatar, const cAvatarRenderedPose *apPose);
+	void UpdateLean(cAvatar& aAvatar, const cAvatarRenderedPose *apPose);
 	void UpdateAnimation(cAvatar& aAvatar, const cAvatarRenderedPose *apPose);
 
 	tAvatarMap m_mapAvatars;

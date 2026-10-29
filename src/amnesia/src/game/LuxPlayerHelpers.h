@@ -538,6 +538,9 @@ public:
 
 	void SetLean(float afMul);
 	void AddLean(float afAdd);
+	// How far the camera leans now, from -1 (fully left) to 1 (fully right). It is cut short by
+	// collision like the lean itself, and fades back with the camera when the lean is released.
+	float GetLean();
 
 	void Reset();
 private:

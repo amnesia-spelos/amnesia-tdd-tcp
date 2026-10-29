@@ -132,6 +132,8 @@ namespace
 		cFixtureGameAdapter() : mbChatAvailable(true) {}
 		bool mbChatAvailable;
 		std::vector<std::string> mvDisplayedChatEntries;
+		// The lean of each Pose an avatarpose delivered, as Protocol Version 2 writes numbers.
+		std::vector<std::string> mvPosedLeans;
 
 		virtual std::vector<cGameInteractionEnemyPose> GetEnemyPoses() const { return std::vector<cGameInteractionEnemyPose>(); }
 		virtual eGameInteractionCommandOutcome DriveEnemy(int) { return eGameInteractionCommandOutcome_EntityNotFound; }
@@ -182,6 +184,7 @@ namespace
 			pose.mfCameraPitchDegrees = -45.0f;
 			pose.mbCrouching = true;
 			pose.mbLanternRaised = true;
+			pose.mfLean = -0.75f;
 			pose.msMapFile = "custom_stories/My Story: Part 2/maps/cellar one.map";
 			return pose;
 		}
@@ -190,7 +193,10 @@ namespace
 			return asEntityFile != "entities/missing.ent";
 		}
 		virtual void RemoveAvatar(const std::string&) {}
-		virtual void PoseAvatar(const std::string&, const cGameInteractionPose&) {}
+		virtual void PoseAvatar(const std::string&, const cGameInteractionPose& aPose)
+		{
+			mvPosedLeans.push_back(cGameInteractionProtocolVersion2::FormatNumber(aPose.mfLean));
+		}
 		virtual void SetAvatarEnemySight(const std::string&, bool) {}
 		virtual void SetAvatarCollision(const std::string&, bool) {}
 		virtual cGameInteractionBodySamples GetReportedBodies() const
@@ -448,6 +454,12 @@ int main(int argc, char** argv)
 			{
 				actual += "displayed " + JoinFields(adapter.mvDisplayedChatEntries);
 				expected += "displayed " + JoinFields(ReadStrings(line, "expected_chat_entries"));
+			}
+			// A lean fixture also names the lean of every Pose an avatarpose delivered, in order.
+			if (line.find("\"expected_posed_leans\"") != std::string::npos)
+			{
+				actual += "posed " + JoinFields(adapter.mvPosedLeans);
+				expected += "posed " + JoinFields(ReadStrings(line, "expected_posed_leans"));
 			}
 		}
 		else if (kind == "format_number")

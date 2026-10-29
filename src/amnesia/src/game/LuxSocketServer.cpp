@@ -138,6 +138,7 @@ namespace
 			pose.mfCameraPitchDegrees = cMath::ToDeg(pPlayer->GetCamera()->GetPitch());
 			pose.mbCrouching = pMoveNormal->IsCrouching();
 			pose.mbLanternRaised = pPlayer->GetHelperLantern()->IsActive();
+			pose.mfLean = pPlayer->GetHelperLean()->GetLean();
 			pose.msMapFile = GetMapFile();
 			return pose;
 		}

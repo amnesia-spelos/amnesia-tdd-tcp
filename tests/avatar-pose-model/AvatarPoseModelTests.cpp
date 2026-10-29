@@ -43,6 +43,20 @@ namespace
 		return sample;
 	}
 
+	cAvatarPoseSample LeanPose(double afSenderTimeMs, float afLean, unsigned int alTeleportCounter = 0)
+	{
+		cAvatarPoseSample sample = Pose(afSenderTimeMs, 0.0f, 0.0f, alTeleportCounter);
+		sample.mfLean = afLean;
+		return sample;
+	}
+
+	float RenderedLean(cAvatarPoseModel& aModel, double afLocalTimeMs, const std::string& asDescription)
+	{
+		cAvatarRenderedPose rendered;
+		Expect(aModel.Sample(afLocalTimeMs, kMap, rendered), asDescription + " (awake)");
+		return rendered.mfLean;
+	}
+
 	// Renders the model at a local time and returns the rendered camera pitch, failing if it is dormant.
 	float RenderedPitch(cAvatarPoseModel& aModel, double afLocalTimeMs, const std::string& asDescription)
 	{
@@ -435,6 +449,28 @@ int main()
 		Expect(!RenderedCrouch(model, 1250.0, "crouch before a distance snap"),
 			"crouch is held with the Pose before a distance snap");
 		Expect(RenderedCrouch(model, 1300.0, "crouch at a distance snap"), "and snaps with the distant Pose");
+	}
+
+	{
+		cAvatarPoseModel model;
+		model.AddPose(LeanPose(5000.0, 0.0f), 1000.0);
+		model.AddPose(LeanPose(5100.0, -0.8f), 1100.0);
+		Expect(Near(RenderedLean(model, 1100.0, "lean at a sample"), 0.0f),
+			"lean renders 100 ms behind the newest sample, in the sender's time");
+		Expect(Near(RenderedLean(model, 1150.0, "lean interpolates"), -0.4f),
+			"lean interpolates linearly between the samples around the render time");
+		Expect(Near(RenderedLean(model, 60000.0, "lean hold"), -0.8f),
+			"lean holds the last Pose when the buffer runs dry instead of extrapolating");
+	}
+
+	{
+		cAvatarPoseModel model;
+		model.AddPose(LeanPose(5000.0, 1.0f, 7), 1000.0);
+		model.AddPose(LeanPose(5100.0, 0.0f, 8), 1100.0);
+		Expect(Near(RenderedLean(model, 1199.0, "lean before a teleport"), 1.0f),
+			"lean is held with the Pose before a teleport instead of gliding across it");
+		Expect(Near(RenderedLean(model, 1200.0, "lean at a teleport"), 0.0f),
+			"and snaps with the teleported Pose");
 	}
 
 	std::cout << "Avatar Pose model cases passed\n";

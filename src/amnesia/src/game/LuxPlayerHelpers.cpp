@@ -2509,6 +2509,14 @@ void cLuxPlayerLean::AddLean(float afAdd)
 
 //-----------------------------------------------------------------------
 
+// Leaning right rolls the camera by a negative angle.
+float cLuxPlayerLean::GetLean()
+{
+	return cMath::Clamp(-mpPlayer->GetLeanRoll() / mfMaxRotation, -1.0f, 1.0f);
+}
+
+//-----------------------------------------------------------------------
+
 
 //////////////////////////////////////////////////////////////////////////
 // PLAYER HUD EFFECT

@@ -13,6 +13,9 @@ static const float kUnpushableMass = 1.0e6f;
 static const float kClipFadeSeconds = 0.3f;
 
 const float cLuxAvatarHandler::kMaxPitchDegrees = 45.0f;
+// The local lean rolls the camera 15 degrees and moves the head up to 0.5 m sideways. Tilting at the
+// hips moves the Avatar's head much less, so its tilt is exaggerated.
+const float cLuxAvatarHandler::kMaxLeanDegrees = 25.0f;
 
 cLuxAvatarHandler::cLuxAvatarHandler()
 	: iLuxUpdateable("LuxAvatarHandler")
@@ -67,6 +70,7 @@ void cLuxAvatarHandler::PoseAvatar(const tString& asIdentifier, const cGameInter
 	sample.mfZ = aPose.mFeetPosition.mfZ;
 	sample.mfYawDegrees = aPose.mfBodyYawDegrees;
 	sample.mfCameraPitchDegrees = aPose.mfCameraPitchDegrees;
+	sample.mfLean = aPose.mfLean;
 	sample.mbCrouching = aPose.mbCrouching;
 	sample.mbLanternRaised = aPose.mbLanternRaised;
 	sample.msMapFile = aPose.msMapFile;
@@ -138,6 +142,7 @@ void cLuxAvatarHandler::Update(float afTimeStep)
 			UpdateCollision(avatar, false);
 			UpdateLantern(avatar, NULL, afTimeStep);
 			UpdatePitch(avatar, NULL);
+			UpdateLean(avatar, NULL);
 			UpdateAnimation(avatar, NULL);
 			continue;
 		}
@@ -167,6 +172,7 @@ void cLuxAvatarHandler::Update(float afTimeStep)
 		SetAwake(avatar, true);
 		UpdateLantern(avatar, &pose, afTimeStep);
 		UpdatePitch(avatar, &pose);
+		UpdateLean(avatar, &pose);
 		UpdateAnimation(avatar, &pose);
 	}
 }
@@ -338,6 +344,7 @@ void cLuxAvatarHandler::CreateWorldObjects(const tString& asIdentifier, cAvatar&
 	}
 	ResolveClips(aAvatar);
 	ResolvePitchBones(aAvatar, pMesh);
+	ResolveLeanBones(aAvatar, pMesh);
 
 	iCharacterBody *pBody = apMap->GetPhysicsWorld()->CreateCharacterBody(sName, gpBase->mpPlayer->GetBodySize());
 	pBody->SetGravityActive(false);
@@ -427,7 +434,7 @@ void cLuxAvatarHandler::ResolvePitchBones(cAvatar& aAvatar, cMesh *apMesh)
 		}
 
 		cBone *pBone = pSkeleton->GetBoneByIndex(lBoneIndex);
-		cAvatarPitchBone bone;
+		cAvatarTiltBone bone;
 		bone.mlBoneIndex = lBoneIndex;
 		bone.mfWeight = config.mfWeight;
 		// MatrixMul3x3, not MatrixMul: the axis is a direction, and MatrixMul would add the inverse
@@ -436,6 +443,56 @@ void cLuxAvatarHandler::ResolvePitchBones(cAvatar& aAvatar, cMesh *apMesh)
 		bone.mvAxis = cMath::Vector3Normalize(
 			cMath::MatrixMul3x3(cMath::MatrixInverse(pBone->GetWorldTransform()), cVector3f(1, 0, 0)));
 		aAvatar.mvPitchBones.push_back(bone);
+	}
+}
+
+// The lean bones and their share of the tilt. In TheSkeletonSpelos the legs hang off Hip_L and Hip_R,
+// which are Hip's siblings, so tilting Hip and Chest leans the torso, arms and head while the feet
+// stay planted, and leaves the pitch bones to UpdatePitch.
+namespace
+{
+	struct cLeanBoneConfig
+	{
+		const char *mpName;
+		float mfWeight;
+	};
+	const cLeanBoneConfig kLeanBones[] = { { "Hip", 0.6f }, { "Chest", 0.4f } };
+}
+
+// Resolves the lean bones against the loaded mesh's skeleton and precomputes each bone's model
+// backward axis in its bind-pose frame, the way ResolvePitchBones does. Around it, a positive angle
+// tilts the model to its own right, just as a positive angle around the model's sideways axis
+// pitches it up. A missing skeleton or bone is reported but leaves the Avatar visible; it simply
+// renders no lean through that bone.
+void cLuxAvatarHandler::ResolveLeanBones(cAvatar& aAvatar, cMesh *apMesh)
+{
+	aAvatar.mvLeanBones.clear();
+
+	cSkeleton *pSkeleton = apMesh->GetSkeleton();
+	if(pSkeleton == NULL)
+	{
+		ReportModelFault(aAvatar.msMeshFile, "mesh has no skeleton, so lean cannot be rendered");
+		return;
+	}
+
+	for(size_t i = 0; i < sizeof(kLeanBones) / sizeof(kLeanBones[0]); ++i)
+	{
+		const tString sName = kLeanBones[i].mpName;
+		const int lBoneIndex = pSkeleton->GetBoneIndexByName(sName);
+		if(lBoneIndex < 0)
+		{
+			ReportModelFault(aAvatar.msMeshFile, "lean bone '" + sName + "' not found");
+			continue;
+		}
+
+		cBone *pBone = pSkeleton->GetBoneByIndex(lBoneIndex);
+		cAvatarTiltBone bone;
+		bone.mlBoneIndex = lBoneIndex;
+		bone.mfWeight = kLeanBones[i].mfWeight;
+		// MatrixMul3x3 for a direction, as in ResolvePitchBones.
+		bone.mvAxis = cMath::Vector3Normalize(
+			cMath::MatrixMul3x3(cMath::MatrixInverse(pBone->GetWorldTransform()), cVector3f(0, 0, -1)));
+		aAvatar.mvLeanBones.push_back(bone);
 	}
 }
 
@@ -553,12 +610,31 @@ void cLuxAvatarHandler::UpdatePitch(cAvatar& aAvatar, const cAvatarRenderedPose 
 		cMath::Clamp(apPose->mfCameraPitchDegrees, -kMaxPitchDegrees, kMaxPitchDegrees));
 	for(size_t i = 0; i < aAvatar.mvPitchBones.size(); ++i)
 	{
-		const cAvatarPitchBone& bone = aAvatar.mvPitchBones[i];
+		const cAvatarTiltBone& bone = aAvatar.mvPitchBones[i];
 		cBoneState *pBoneState = aAvatar.mpMeshEntity->GetBoneState(bone.mlBoneIndex);
 		if(pBoneState == NULL) continue;
 		pBoneState->SetUsePreTransform(true);
 		pBoneState->SetPreTransform(
 			cMath::MatrixQuaternion(cQuaternion(fPitchRadians * bone.mfWeight, bone.mvAxis)));
+	}
+}
+
+// Renders the Pose's lean by tilting the resolved hip and chest bones, kMaxLeanDegrees in total at a
+// full lean, distributed by their weights. Like UpdatePitch it is inert while no animation is active.
+// The pose is NULL while the Avatar is dormant.
+void cLuxAvatarHandler::UpdateLean(cAvatar& aAvatar, const cAvatarRenderedPose *apPose)
+{
+	if(aAvatar.mpMeshEntity == NULL || apPose == NULL) return;
+
+	const float fLeanRadians = cMath::ToRad(cMath::Clamp(apPose->mfLean, -1.0f, 1.0f) * kMaxLeanDegrees);
+	for(size_t i = 0; i < aAvatar.mvLeanBones.size(); ++i)
+	{
+		const cAvatarTiltBone& bone = aAvatar.mvLeanBones[i];
+		cBoneState *pBoneState = aAvatar.mpMeshEntity->GetBoneState(bone.mlBoneIndex);
+		if(pBoneState == NULL) continue;
+		pBoneState->SetUsePreTransform(true);
+		pBoneState->SetPreTransform(
+			cMath::MatrixQuaternion(cQuaternion(fLeanRadians * bone.mfWeight, bone.mvAxis)));
 	}
 }
 
