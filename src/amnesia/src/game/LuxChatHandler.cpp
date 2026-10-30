@@ -62,6 +62,8 @@ void cLuxChatHandler::OnStart()
 	mpComposer->SetDrawFrame(false);
 	mpComposer->SetShowButtons(false);
 	mpComposer->SetMaxTextLength(512);
+	// The Chat Composer is opened and typed from the keyboard, so it never needs the on-screen keyboard.
+	mpComposer->SetUIKeyboardEnabled(false);
 	mpComposer->SetDefaultFontSize(gvChatFontSize);
 	mpComposer->SetDefaultFontColor(cColor(0.9f, 0.9f, 0.86f, 1));
 	mpComposer->AddCallback(eGuiMessage_TextChange, this, kGuiCallback(TextChanged));

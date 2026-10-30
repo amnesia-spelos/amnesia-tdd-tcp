@@ -97,6 +97,7 @@ namespace hpl {
 		mbNumericValueUpdated = true;
 
 		mbUIKeyboardOpen = false;
+		mbUIKeyboardEnabled = true;
 		mpUIKeyboardNextFocus = NULL;
 	}
 
@@ -1154,7 +1155,7 @@ namespace hpl {
 		// XXX = maybe does not have sense to capture keypresses if edit is disabled?
 		if(mbCanEdit==false) return false;
 		
-		if(HasFocus() && aData.mlVal==eUIButton_Primary)
+		if(mbUIKeyboardEnabled && HasFocus() && aData.mlVal==eUIButton_Primary)
 		{
 			mlSelectedTextEnd = 0;
 			SetMarkerPos(msText.length());
