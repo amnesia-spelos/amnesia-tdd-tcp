@@ -165,7 +165,7 @@ int main()
 		!authorModel.IsComposerOpen() && authorModel.GetEntries(eChatContext_Game).back().GetAuthor() == L"Alice",
 		"colons and control characters are removed from a submitted Chat Author");
 	const std::wstring unusableNames[] = { L"", L" \x3000\t", L":\x0001:\xDE00" };
-	for (size_t index = 0; index < 3; ++index)
+	for (size_t index = 0; index < sizeof(unusableNames) / sizeof(unusableNames[0]); ++index)
 	{
 		authorModel.OpenComposer();
 		authorModel.SetDraft(L"hello");

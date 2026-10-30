@@ -4,6 +4,10 @@
 
 namespace
 {
+	const size_t kMaxChatAuthorScalars = 32;
+	const size_t kMaxChatMessageScalars = 256;
+	const wchar_t* const kFallbackChatAuthor = L"Player";
+
 	bool IsUnicodeWhitespace(unsigned int aScalar)
 	{
 		return (aScalar >= 0x0009 && aScalar <= 0x000D) || aScalar == 0x0020 ||
@@ -29,26 +33,41 @@ namespace
 		return asText.substr(first, last - first);
 	}
 
+	// Reads the Unicode scalar at aIndex and how many characters it spans. Returns false
+	// for an unpaired surrogate or a value outside Unicode.
+	bool ReadScalar(const std::wstring& asText, std::wstring::size_type aIndex,
+		unsigned int& aScalar, std::wstring::size_type& aLength)
+	{
+		aScalar = static_cast<unsigned int>(asText[aIndex]);
+		aLength = 1;
+#if WCHAR_MAX <= 0xFFFF
+		if (aScalar >= 0xD800 && aScalar <= 0xDBFF && aIndex + 1 < asText.size())
+		{
+			const unsigned int low = static_cast<unsigned int>(asText[aIndex + 1]);
+			if (low >= 0xDC00 && low <= 0xDFFF)
+			{
+				aScalar = 0x10000 + ((aScalar - 0xD800) << 10) + (low - 0xDC00);
+				aLength = 2;
+				return true;
+			}
+		}
+#endif
+		return (aScalar < 0xD800 || aScalar > 0xDFFF) && aScalar <= 0x10FFFF;
+	}
+
+	bool IsAllowedScalar(unsigned int aScalar, bool abRejectColon)
+	{
+		return !IsControl(aScalar) && !(abRejectColon && aScalar == ':');
+	}
+
 	bool InspectText(const std::wstring& asText, size_t aMaxScalars, bool abRejectColon)
 	{
 		size_t scalarCount = 0;
-		for (std::wstring::size_type index = 0; index < asText.size(); ++index)
+		std::wstring::size_type length = 0;
+		for (std::wstring::size_type index = 0; index < asText.size(); index += length)
 		{
-			unsigned int scalar = static_cast<unsigned int>(asText[index]);
-#if WCHAR_MAX <= 0xFFFF
-			if (scalar >= 0xD800 && scalar <= 0xDBFF)
-			{
-				if (index + 1 >= asText.size()) return false;
-				const unsigned int low = static_cast<unsigned int>(asText[index + 1]);
-				if (low < 0xDC00 || low > 0xDFFF) return false;
-				scalar = 0x10000 + ((scalar - 0xD800) << 10) + (low - 0xDC00);
-				++index;
-			}
-			else if (scalar >= 0xDC00 && scalar <= 0xDFFF) return false;
-#else
-			if (scalar >= 0xD800 && scalar <= 0xDFFF) return false;
-#endif
-			if (scalar > 0x10FFFF || IsControl(scalar) || (abRejectColon && scalar == ':'))
+			unsigned int scalar = 0;
+			if (!ReadScalar(asText, index, scalar, length) || !IsAllowedScalar(scalar, abRejectColon))
 				return false;
 			if (++scalarCount > aMaxScalars) return false;
 		}
@@ -56,37 +75,25 @@ namespace
 	}
 
 	// Removes what Chat Author validation rejects, so any profile name can be submitted.
-	std::wstring CleanAuthor(const std::wstring& asName)
+	std::wstring ToValidChatAuthor(const std::wstring& asName)
 	{
-		std::wstring cleaned;
-		for (std::wstring::size_type index = 0; index < asName.size(); ++index)
+		std::wstring kept;
+		unsigned int scalar = 0;
+		std::wstring::size_type length = 0;
+		for (std::wstring::size_type index = 0; index < asName.size(); index += length)
 		{
-			const unsigned int scalar = static_cast<unsigned int>(asName[index]);
-#if WCHAR_MAX <= 0xFFFF
-			if (scalar >= 0xD800 && scalar <= 0xDBFF && index + 1 < asName.size())
-			{
-				const unsigned int low = static_cast<unsigned int>(asName[index + 1]);
-				if (low >= 0xDC00 && low <= 0xDFFF)
-				{
-					cleaned += asName.substr(index, 2);
-					++index;
-					continue;
-				}
-			}
-#endif
-			if ((scalar >= 0xD800 && scalar <= 0xDFFF) || scalar > 0x10FFFF || IsControl(scalar) ||
-				scalar == ':') continue;
-			cleaned += asName[index];
+			if (ReadScalar(asName, index, scalar, length) && IsAllowedScalar(scalar, true))
+				kept += asName.substr(index, length);
 		}
-		cleaned = Trim(cleaned);
+		kept = Trim(kept);
 		std::wstring::size_type end = 0;
-		for (size_t scalarCount = 0; end < cleaned.size() && scalarCount < 32; ++scalarCount)
+		for (size_t scalarCount = 0; end < kept.size() && scalarCount < kMaxChatAuthorScalars; ++scalarCount)
 		{
-			const unsigned int scalar = static_cast<unsigned int>(cleaned[end]);
-			end += scalar >= 0xD800 && scalar <= 0xDBFF ? 2 : 1;
+			ReadScalar(kept, end, scalar, length);
+			end += length;
 		}
-		cleaned = Trim(cleaned.substr(0, end));
-		return cleaned.empty() ? L"Player" : cleaned;
+		kept = Trim(kept.substr(0, end));
+		return kept.empty() ? kFallbackChatAuthor : kept;
 	}
 }
 
@@ -123,12 +130,12 @@ eChatEntryValidation cChatModel::TryCreateEntry(const std::wstring& asAuthor,
 	if (!InspectText(asAuthor, static_cast<size_t>(-1), true))
 		return eChatEntryValidation_InvalidAuthor;
 	const std::wstring author = Trim(asAuthor);
-	if (author.empty() || !InspectText(author, 32, true))
+	if (author.empty() || !InspectText(author, kMaxChatAuthorScalars, true))
 		return eChatEntryValidation_InvalidAuthor;
 	if (!InspectText(asMessage, static_cast<size_t>(-1), false))
 		return eChatEntryValidation_InvalidMessage;
 	const std::wstring message = Trim(asMessage);
-	if (message.empty() || !InspectText(message, 256, false))
+	if (message.empty() || !InspectText(message, kMaxChatMessageScalars, false))
 		return eChatEntryValidation_InvalidMessage;
 	aEntry = cChatEntry(author, message, aAuthorColor, aMessageColor);
 	return eChatEntryValidation_Valid;
@@ -237,7 +244,7 @@ eChatSubmitResult cChatModel::SubmitComposer(const std::wstring& asAuthor)
 		CancelComposer();
 		return eChatSubmitResult_Empty;
 	}
-	const eChatEntryValidation validation = AddEntry(mContext, CleanAuthor(asAuthor), state.msDraft);
+	const eChatEntryValidation validation = AddEntry(mContext, ToValidChatAuthor(asAuthor), state.msDraft);
 	if (validation != eChatEntryValidation_Valid) return eChatSubmitResult_Invalid;
 	CancelComposer();
 	return eChatSubmitResult_Added;
