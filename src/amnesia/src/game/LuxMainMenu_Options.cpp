@@ -1020,6 +1020,11 @@ void cLuxMainMenu_Options::AddTddTcpOptions(cWidgetTab* apTab)
 	float fInputPosX = 160;
 	cVector3f vPos(fBorderSize, 6 + fBorderSize, 0.1f);
 
+	// The main menu destroys every widget before it creates the windows again, as on entering the
+	// pause menu, so the rows of an earlier creation are gone.
+	mvPeerSettingRows.clear();
+	mPeerSettingForm.Reset(std::vector<cPeerSetting>());
+
 	/////////////////////////////////
 	// Connection group, in compact rows so the Peer Settings group below it has room to scroll
 	cWidgetGroup *pGroup = mpGuiSet->CreateWidgetGroup(vPos, 0, _W("Connection"), apTab);
