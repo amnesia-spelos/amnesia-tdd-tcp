@@ -233,6 +233,8 @@ public:
 	const cGameInteractionEntityState& GetEntityState() const { return mEntityState; }
 	eGameInteractionEventType GetType() const { return mType; }
 	bool IsInteractionsEvent() const;
+	// A story start, which the gateway delivers as it is reported rather than on the next update.
+	bool IsStoryStartEvent() const;
 	const cGameInteractionSharedCallback& GetSharedCallback() const { return mSharedCallback; }
 	const std::string& GetData() const { return msData; }
 	const std::wstring& GetChatAuthor() const { return msChatAuthor; }

@@ -88,6 +88,11 @@ bool cGameInteractionEvent::IsInteractionsEvent() const
 		mType == eGameInteractionEvent_MapEntered;
 }
 
+bool cGameInteractionEvent::IsStoryStartEvent() const
+{
+	return mType == eGameInteractionEvent_CustomStoryStarted;
+}
+
 cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
 	const std::string& asData)
 	: mType(aType), msData(asData), mlProtocolVersion(0), mlCapabilities(0),
@@ -1120,6 +1125,8 @@ void cGameInteractionGateway::Report(const cGameInteractionEvent& aEvent)
 	{
 		mpImplementation->mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(
 			cLegacyGameInteractionProtocol::SerializeEvent(aEvent)));
+		// The game loads the start map before its next update, so the Peer can start loading alongside it.
+		if (aEvent.IsStoryStartEvent()) mpImplementation->mTransport.Flush();
 		return;
 	}
 	if (mpImplementation->mSession.mlGrantedCapabilities & eGameInteractionCapability_Interactions)

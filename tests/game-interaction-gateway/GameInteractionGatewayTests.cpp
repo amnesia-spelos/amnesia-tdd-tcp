@@ -2031,6 +2031,26 @@ namespace
 		closesocket(peer);
 		gateway.Shutdown();
 	}
+
+	// The start map loads in the same frame as the report, so the start cannot wait for the next update.
+	void CustomStoryStartIsDeliveredBeforeTheNextUpdate()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenSession(gateway, adapter);
+		gateway.Report(cGameInteractionEvent(eGameInteractionEvent_ScriptCallObserved, "OnStart()"));
+		gateway.Report(cGameInteractionEvent(eGameInteractionEvent_LocalChatSubmitted, L"Daniel", L"go"));
+		Expect(ReceiveAvailable(peer, 50).empty(), "other Events wait for the next update");
+		gateway.Report(cGameInteractionEvent(eGameInteractionEvent_CustomStoryStarted, L"mp-test-cs"));
+		Expect(ReceiveLines(peer, 3) == "SCRIPT_CALL:OnStart()\nEVENT:CHAT:Daniel:go\nEVENT:CustomStoryStarted:mp-test-cs\n",
+			"the Custom Story start is delivered with no further update, after the lines queued before it");
+		gateway.Report(cGameInteractionEvent(eGameInteractionEvent_MapChanged, "custom_stories/mp-test-cs/start.map"));
+		gateway.Update(adapter);
+		Expect(Receive(peer) == "EVENT:MapChanged:custom_stories/mp-test-cs/start.map\n",
+			"the start map's change follows the start");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
 }
 
 int main()
@@ -2160,6 +2180,7 @@ int main()
 	ProtocolVersion2NegotiationGrantsSupportedRequestedCapabilities();
 	ChatEntryCarriesItsChatColorsToTheGameAdapter();
 	ResponseIsDeliveredWithinTheUpdateThatProcessedItsCommand();
+	CustomStoryStartIsDeliveredBeforeTheNextUpdate();
 	GameIsToldWhetherAPeerIsConnected();
 	OverlongInboundLineDisconnectsThePeerWithAReason();
 	LocalPoseStateUpdatesFollowTheSubscribedRate();
