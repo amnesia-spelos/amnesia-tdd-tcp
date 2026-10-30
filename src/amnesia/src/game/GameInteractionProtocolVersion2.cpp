@@ -45,7 +45,8 @@ namespace
 		{ eGameInteractionCapability_SharedCallbacks, "sharedcallbacks" },
 		{ eGameInteractionCapability_PlayerPlace, "playerplace" },
 		{ eGameInteractionCapability_Enemies, "enemies" },
-		{ eGameInteractionCapability_Lean, "lean" }
+		{ eGameInteractionCapability_Lean, "lean" },
+		{ eGameInteractionCapability_Settings, "settings" }
 	};
 	const int kCapabilityNameCount = sizeof(kCapabilityNames) / sizeof(kCapabilityNames[0]);
 
@@ -81,7 +82,9 @@ namespace
 		{ eGameInteractionCommand_EnemyRelease, "enemyrelease" },
 		{ eGameInteractionCommand_EnemyAttack, "enemyattack" },
 		{ eGameInteractionCommand_EnemyDoorBreak, "enemydoorbreak" },
-		{ eGameInteractionCommand_SharedDeath, "shareddeath" }
+		{ eGameInteractionCommand_SharedDeath, "shareddeath" },
+		{ eGameInteractionCommand_SettingAnnounce, "settingannounce" },
+		{ eGameInteractionCommand_SettingValue, "settingvalue" }
 	};
 	const int kCommandKeywordCount = sizeof(kCommandKeywords) / sizeof(kCommandKeywords[0]);
 
@@ -147,6 +150,7 @@ namespace
 		case eGameInteractionCommandOutcome_Unavailable: return "unavailable";
 		case eGameInteractionCommandOutcome_Duplicate: return "duplicate";
 		case eGameInteractionCommandOutcome_Stale: return "stale";
+		case eGameInteractionCommandOutcome_SettingNotFound: return "not-found";
 		default: return "invalid";
 		}
 	}
@@ -559,6 +563,43 @@ namespace
 		return cGameInteractionCommand(eGameInteractionCommand_SharedDeath, request);
 	}
 
+	// settingannounce <key> <label>\t<default>[\t<description>] and settingvalue <key>. After the key, the
+	// announce's fields are separated by tabs, so they may hold spaces and the default may be empty.
+	cGameInteractionCommand ParseSettingCommand(eGameInteractionCommandType aType, const std::string& asLine)
+	{
+		cGameInteractionFieldReader reader(asLine);
+		std::string keyword;
+		reader.TryReadField(keyword);
+		cGameInteractionSettingRequest request;
+		cPeerSettingAnnouncement& announcement = request.mAnnouncement;
+		bool valid = reader.TryReadField(announcement.msKey) && cPeerSettingModel::IsValidKey(announcement.msKey);
+		if (valid && aType == eGameInteractionCommand_SettingAnnounce)
+		{
+			std::string rest;
+			valid = reader.TryReadRest(rest);
+			std::vector<std::string> fields;
+			for (std::string::size_type start = 0; valid;)
+			{
+				const std::string::size_type tab = rest.find('\t', start);
+				fields.push_back(rest.substr(start, tab == std::string::npos ? std::string::npos : tab - start));
+				if (tab == std::string::npos) break;
+				start = tab + 1;
+			}
+			valid = valid && (fields.size() == 2 || fields.size() == 3);
+			if (valid)
+			{
+				announcement.msLabel = fields[0];
+				announcement.msDefault = fields[1];
+				if (fields.size() == 3) announcement.msDescription = fields[2];
+			}
+			valid = valid && cPeerSettingModel::IsValidLabel(announcement.msLabel) &&
+				cPeerSettingModel::IsValidValue(announcement.msDefault) &&
+				cPeerSettingModel::IsValidDescription(announcement.msDescription);
+		}
+		request.mbValid = valid && reader.IsAtEnd();
+		return cGameInteractionCommand(aType, request);
+	}
+
 	bool TryReadSharedCallbackKind(cGameInteractionFieldReader& aReader, eGameInteractionSharedCallbackKind& aKind)
 	{
 		std::string field;
@@ -880,6 +921,8 @@ cGameInteractionCommand cGameInteractionProtocolVersion2::ParseCommand(const std
 		return ParseEnemyCommand(type, asLine);
 	if (type == eGameInteractionCommand_EnemyAttack) return ParseEnemyAttack(asLine);
 	if (type == eGameInteractionCommand_SharedDeath) return ParseSharedDeath(asLine);
+	if (type == eGameInteractionCommand_SettingAnnounce || type == eGameInteractionCommand_SettingValue)
+		return ParseSettingCommand(type, asLine);
 	if (type == eGameInteractionCommand_Chat) return ParseChatEntry(asLine);
 	if (type == eGameInteractionCommand_SharedCallback) return ParseSharedCallback(asLine);
 	if (type == eGameInteractionCommand_PlayerPlace) return ParsePlayerPlace(asLine);
@@ -910,6 +953,14 @@ std::string cGameInteractionProtocolVersion2::SerializeResponse(const cGameInter
 		return aResponse.GetAvatarIdentifier().empty() ? response : response + " " + aResponse.GetAvatarIdentifier();
 	if (aResponse.GetType() == eGameInteractionResponse_Entity)
 		return aResponse.NamesEntity() ? response + " " + FormatEntityIdentifier(aResponse.GetEntityId()) : response;
+	if (aResponse.GetType() == eGameInteractionResponse_Setting)
+	{
+		if (aResponse.GetSettingKey().empty()) return response;
+		response += " " + aResponse.GetSettingKey();
+		// The value is the rest of the line, so it may hold spaces or be empty.
+		return aResponse.GetOutcome() == eGameInteractionCommandOutcome_Success ?
+			response + " " + aResponse.GetSettingValue() : response;
+	}
 	if (aResponse.GetOutcome() != eGameInteractionCommandOutcome_Success) return response;
 	if (aResponse.GetType() == eGameInteractionResponse_ProtocolNegotiated)
 	{
@@ -982,6 +1033,12 @@ std::string cGameInteractionProtocolVersion2::SerializeEvent(const cGameInteract
 	default:
 		return std::string();
 	}
+}
+
+std::string cGameInteractionProtocolVersion2::SerializeSettingChanged(const std::string& asKey,
+	const std::string& asValue)
+{
+	return "EVENT settingchanged " + asKey + " " + asValue;
 }
 
 std::string cGameInteractionProtocolVersion2::SerializeLocalPose(const cGameInteractionPose& aPose,

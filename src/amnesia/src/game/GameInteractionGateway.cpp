@@ -26,6 +26,12 @@ cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aTy
 	  mSubscriptionRequest(eGameInteractionSubscriptionRequest_Invalid), mlSubscriptionRate(0),
 	  mSharedDeathRequest(aRequest) {}
 
+cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
+	const cGameInteractionSettingRequest& aRequest)
+	: mType(aType), mlProtocolVersion(0), mlCapabilities(0),
+	  mSubscriptionRequest(eGameInteractionSubscriptionRequest_Invalid), mlSubscriptionRate(0),
+	  mSettingRequest(aRequest) {}
+
 cGameInteractionEvent::cGameInteractionEvent(eGameInteractionEventType aType,
 	const std::string& asData)
 	: mType(aType), msData(asData)
@@ -178,7 +184,8 @@ namespace
 	const unsigned int kSupportedCapabilities =
 		eGameInteractionCapability_Avatars | eGameInteractionCapability_LocalPose |
 		eGameInteractionCapability_Interactions | eGameInteractionCapability_SharedCallbacks |
-		eGameInteractionCapability_PlayerPlace | eGameInteractionCapability_Enemies | eGameInteractionCapability_Lean;
+		eGameInteractionCapability_PlayerPlace | eGameInteractionCapability_Enemies | eGameInteractionCapability_Lean |
+		eGameInteractionCapability_Settings;
 
 	const unsigned int kMinimumSubscriptionRate = 1;
 	const unsigned int kMaximumSubscriptionRate = 60;
@@ -676,6 +683,40 @@ namespace
 		return AvatarResponse(aCommand.GetType(), outcome, request.msIdentifier);
 	}
 
+	eGameInteractionCommandOutcome CommandOutcomeFor(ePeerSettingOutcome aOutcome)
+	{
+		switch (aOutcome)
+		{
+		case ePeerSettingOutcome_Success: return eGameInteractionCommandOutcome_Success;
+		case ePeerSettingOutcome_Duplicate: return eGameInteractionCommandOutcome_Duplicate;
+		case ePeerSettingOutcome_Unavailable: return eGameInteractionCommandOutcome_Unavailable;
+		default: return eGameInteractionCommandOutcome_SettingNotFound;
+		}
+	}
+
+	// Names the key unless the line was invalid, and carries the effective value on success.
+	cGameInteractionResponse SettingResponse(eGameInteractionCommandType aType, eGameInteractionCommandOutcome aOutcome,
+		const std::string& asKey, const std::string& asValue)
+	{
+		cGameInteractionResponse response(aType, eGameInteractionResponse_Setting, aOutcome);
+		if (aOutcome != eGameInteractionCommandOutcome_Invalid) response.SetSetting(asKey, asValue);
+		return response;
+	}
+
+	cGameInteractionResponse ExecuteSettingCommand(const cGameInteractionCommand& aCommand,
+		cPeerSettingModel& aPeerSettings, unsigned int alSession)
+	{
+		const cGameInteractionSettingRequest& request = aCommand.GetSettingRequest();
+		const std::string& key = request.mAnnouncement.msKey;
+		if (!request.mbValid)
+			return SettingResponse(aCommand.GetType(), eGameInteractionCommandOutcome_Invalid, key, std::string());
+		std::string value;
+		const ePeerSettingOutcome outcome = aCommand.GetType() == eGameInteractionCommand_SettingAnnounce ?
+			aPeerSettings.Announce(alSession, request.mAnnouncement, value) :
+			aPeerSettings.ReadValue(alSession, key, value);
+		return SettingResponse(aCommand.GetType(), CommandOutcomeFor(outcome), key, value);
+	}
+
 	unsigned int RequiredCapability(eGameInteractionCommandType aType)
 	{
 		switch (aType)
@@ -709,6 +750,9 @@ namespace
 			return eGameInteractionCapability_SharedCallbacks;
 		case eGameInteractionCommand_PlayerPlace:
 			return eGameInteractionCapability_PlayerPlace;
+		case eGameInteractionCommand_SettingAnnounce:
+		case eGameInteractionCommand_SettingValue:
+			return eGameInteractionCapability_Settings;
 		default:
 			return eGameInteractionCapability_None;
 		}
@@ -727,7 +771,7 @@ namespace
 
 	cGameInteractionResponse ExecuteCommand(const cGameInteractionCommand& aCommand,
 		iGameInteractionGameAdapter& aGameAdapter, cSessionProtocol& aSession,
-		cPendingCustomStoryStart& aPendingStart)
+		cPendingCustomStoryStart& aPendingStart, cPeerSettingModel& aPeerSettings, unsigned int alSession)
 	{
 		if (aCommand.GetType() != eGameInteractionCommand_NegotiateProtocol) aSession.mbCommandProcessed = true;
 		const unsigned int requiredCapability = RequiredCapability(aCommand.GetType());
@@ -765,6 +809,9 @@ namespace
 			return ApplyEntityState(aCommand, aGameAdapter);
 		case eGameInteractionCommand_PlayerPlace:
 			return PlacePlayer(aCommand, aGameAdapter);
+		case eGameInteractionCommand_SettingAnnounce:
+		case eGameInteractionCommand_SettingValue:
+			return ExecuteSettingCommand(aCommand, aPeerSettings, alSession);
 		case eGameInteractionCommand_SharedCallback:
 			return RunSharedCallback(aCommand, aGameAdapter);
 		case eGameInteractionCommand_AvatarCreate:
@@ -880,10 +927,16 @@ public:
 	bool mbEndedSessionDroveEntities;
 
 	bool mbEndedSessionDroveEnemies;
-	cImplementation() : mbEndedSessionDroveEntities(false), mbEndedSessionDroveEnemies(false) {}
+	// Outlives every Session, so a later Session can announce a key an ended one owned.
+	cPeerSettingModel mPeerSettings;
+	// Numbers the current Session for the Peer Setting model.
+	unsigned int mlSessionNumber;
+	cImplementation() : mbEndedSessionDroveEntities(false), mbEndedSessionDroveEnemies(false), mlSessionNumber(1) {}
 
 	void EndSession()
 	{
+		mPeerSettings.EndSession(mlSessionNumber);
+		++mlSessionNumber;
 		const std::vector<std::string>& avatars = mSession.mAvatars.mvIdentifiers;
 		mvEndedSessionAvatars.insert(mvEndedSessionAvatars.end(), avatars.begin(), avatars.end());
 		mbEndedSessionDroveEntities = mbEndedSessionDroveEntities || mSession.mEntities.mbDroveEntity;
@@ -1008,7 +1061,8 @@ void cGameInteractionGateway::Update(iGameInteractionGameAdapter& aGameAdapter)
 	{
 		const cGameInteractionCommand command = mpImplementation->ParseCommand(commandText);
 		const cGameInteractionResponse response = ExecuteCommand(command, aGameAdapter,
-			mpImplementation->mSession, mpImplementation->mPendingCustomStoryStart);
+			mpImplementation->mSession, mpImplementation->mPendingCustomStoryStart, mpImplementation->mPeerSettings,
+			mpImplementation->mlSessionNumber);
 		if (response.GetType() == eGameInteractionResponse_None) continue;
 		mpImplementation->mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(
 			mpImplementation->SerializeResponse(response)));
@@ -1111,6 +1165,34 @@ bool cGameInteractionGateway::SharesEnemies() const
 {
 	return mpImplementation->mTransport.HasPeer() &&
 		(mpImplementation->mSession.mlGrantedCapabilities & eGameInteractionCapability_Enemies) != 0;
+}
+
+void cGameInteractionGateway::SetPeerSettingStore(iPeerSettingStore* apStore)
+{
+	mpImplementation->mPeerSettings.SetStore(apStore);
+}
+
+const std::vector<cPeerSetting>& cGameInteractionGateway::GetPeerSettings() const
+{
+	return mpImplementation->mPeerSettings.GetSettings();
+}
+
+unsigned int cGameInteractionGateway::GetPeerSettingsRevision() const
+{
+	return mpImplementation->mPeerSettings.GetRevision();
+}
+
+// Only the current Session can own a key, so every change goes to its Peer; the next update delivers it.
+void cGameInteractionGateway::ConfirmPeerSettings(const std::vector<cPeerSettingEdit>& avEdits)
+{
+	const std::vector<cPeerSettingChange> changes = mpImplementation->mPeerSettings.Confirm(avEdits);
+	for (size_t index = 0; index < changes.size(); ++index)
+	{
+		if (changes[index].mlSession != mpImplementation->mlSessionNumber || !mpImplementation->mTransport.HasPeer())
+			continue;
+		mpImplementation->mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(
+			cGameInteractionProtocolVersion2::SerializeSettingChanged(changes[index].msKey, changes[index].msValue)));
+	}
 }
 
 int cGameInteractionGateway::GetPort() const

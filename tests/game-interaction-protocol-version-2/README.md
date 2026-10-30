@@ -29,8 +29,8 @@ Run the game-side harness without starting the game:
 protocol <version> [<capability>...]
 ```
 
-- The only supported Protocol Version is `2`. The supported Capabilities are `avatars`, `localpose`, `interactions`, `sharedcallbacks`, `playerplace`, `enemies`, and `lean`.
-- Success: `RESPONSE protocol ok 2 [<capability>...]`. The granted Capabilities are the requested ones that the game supports. Each is listed once, in the order `avatars`, `localpose`, `interactions`, `sharedcallbacks`, `playerplace`, `enemies`, `lean`. Unknown names are ignored, so a Session can request none and still negotiate.
+- The only supported Protocol Version is `2`. The supported Capabilities are `avatars`, `localpose`, `interactions`, `sharedcallbacks`, `playerplace`, `enemies`, `lean`, and `settings`.
+- Success: `RESPONSE protocol ok 2 [<capability>...]`. The granted Capabilities are the requested ones that the game supports. Each is listed once, in the order `avatars`, `localpose`, `interactions`, `sharedcallbacks`, `playerplace`, `enemies`, `lean`, `settings`. Unknown names are ignored, so a Session can request none and still negotiate.
 - `RESPONSE protocol unsupported-version`: the version is a positive decimal integer other than `2`. Leading zeros are allowed, so `02` means `2`.
 - `RESPONSE protocol invalid`: the version is missing, `0`, or not a decimal integer that fits in 32 bits, or the line has an empty field.
 - `RESPONSE protocol already-negotiated`: the Session already negotiated.
@@ -91,10 +91,13 @@ The gateway checks Capabilities before it parses a message. A Protocol Version 2
 | `entityrelease <entityId> <map>` | `interactions` | `ok <entityId>`, `wrong-map <entityId>`, `not-found <entityId>`, `invalid` |
 | `sharedcallback <kind> <field>... <map>` | `sharedcallbacks` | `ok`, `not-found`, `wrong-map`, `invalid` |
 | `playerplace <x> <y> <z> <yaw> <crouch> <map>` | `playerplace` | `ok`, `wrong-map`, `unavailable`, `invalid` |
+| `settingannounce <key> <label><TAB><default>[<TAB><description>]` | `settings` | `ok <key> <value>`, `duplicate <key>`, `unavailable <key>`, `invalid` |
+| `settingvalue <key>` | `settings` | `ok <key> <value>`, `not-found <key>`, `invalid` |
 
 - `chatentry`: see [Chat](#chat).
 - `sharedcallback`: see [Shared Callbacks](#shared-callbacks).
 - `playerplace`: see [Placing the local player](#placing-the-local-player).
+- `settingannounce` and `settingvalue`: see [Peer Settings](#peer-settings).
 - `avatarcreate`: `<entityFile>` is a path field and defaults to `entities/multiplayer/skeleton_spelos/TheSkeletonSpelos.ent`. The checks run in this order: `invalid` means the line is malformed or the Avatar Identifier is invalid, and the Response does not echo the identifier. `exists` means the Session already drives an Avatar with that identifier. `limit` means the Session already drives 16 Avatars. `model-not-found` means the game cannot find the model file or the mesh it names.
 - `avatarremove`: `invalid` means the line is malformed or the Avatar Identifier is invalid, and the Response does not echo the identifier.
 - `avatarcollision`: `1` turns on collision between the local player and the Avatar, and `0` turns it off. Collision is on for a new Avatar. The setting stays in place across map changes, save loads, and dormancy until the next `avatarcollision` for that Avatar. `invalid` means the line is malformed, the Avatar Identifier is invalid, or the flag is not `0` or `1`, and the Response does not echo the identifier.
@@ -267,6 +270,26 @@ chatentry <authorColor> <messageColor> <Author>:<message>
 - `invalid-author` and `invalid-message` mean that part failed validation. The Chat Author is checked first.
 - `unavailable` means the game cannot display chat right now.
 - The local player's own Chat Entries always use the default colors, and `EVENT:CHAT:<Author>:<message>` carries no colors.
+
+## Peer Settings
+
+```text
+settingannounce <key> <label><TAB><default>[<TAB><description>]
+settingvalue <key>
+EVENT settingchanged <key> <value>
+```
+
+A Session granted `settings` announces Peer Settings: string options the game shows in its TDD TCP options tab while the Session lasts. The player edits them there, and the game remembers each value the player changed, under its Setting Key, across Sessions and restarts. Peer Settings change no game state, so an Observing Peer may announce them too.
+
+- `<key>` is the Setting Key: 1 to 64 characters of `a`-`z`, `0`-`9`, `_`, `.`, and `-`. By convention it is namespaced by the Peer application, such as `multimnesia.username`.
+- After the key and its space, the `settingannounce` fields are separated by tabs, so they may hold spaces. `<label>` is 1 to 48 Unicode scalars, `<default>` at most 256 and may be empty, and the optional `<description>` at most 256; an absent or empty one leaves the options tip line empty. Every field is valid UTF-8 without tabs or newlines, so a tab more or less than the two or three fields is malformed.
+- In a Response or Event, `<value>` is the rest of the line after the key's space. It may hold spaces and may be empty, in which case the line ends with that space.
+- `settingannounce` may be sent at any time in the Session. It answers with the effective value: the value the game stored for the key if it has one, otherwise `<default>`. Announcing a key the Session already owns updates its label, default, and description.
+- `settingvalue` answers with the current effective value of a key the Session announced. A Session cannot read another Session's Peer Settings: any other key is `not-found`.
+- `invalid` means the line is malformed or a field breaks its limits, and the Response does not echo the key. `duplicate` means another live Session owns the key. `unavailable` means the announce would give the Session more than 16 Peer Settings, or the live Sessions more than 32.
+- `EVENT settingchanged` goes only to the owning Session, when the player confirms the options with OK. It is sent once for each owned key whose effective value differs from the one the Session was last given by an announce Response, a `settingvalue` Response, or an earlier `settingchanged`.
+- There is no Command to write a value or withdraw a Peer Setting. Ending the Session withdraws its Peer Settings; their stored values stay, and a later Session that announces the key gets them.
+- The game stores a key only once the player changed its value and confirmed with OK, so an untouched Peer Setting follows whatever default its Peer announces. A stored value stays stored, even when later set back to the default text. Stored keys no live Session announced are kept but not shown.
 
 ## Avatars
 

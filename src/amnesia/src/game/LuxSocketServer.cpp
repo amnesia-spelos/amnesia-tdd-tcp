@@ -29,6 +29,34 @@ namespace
 		return checkPoint;
 	}
 
+	// Keeps the values in the main config's PeerSettings section, so they exist before any profile does.
+	class cLuxMainConfigPeerSettingStore : public iPeerSettingStore
+	{
+	public:
+		virtual bool TryLoadValue(const std::string& asKey, std::string& asValue)
+		{
+			if (gpBase->mpMainConfig == NULL) return false;
+			// No value holds a newline, so this default means the key has none.
+			const tString value = gpBase->mpMainConfig->GetString(kSection, AttributeName(asKey), "\n");
+			if (value == "\n") return false;
+			asValue = value;
+			return true;
+		}
+
+		virtual void StoreValue(const std::string& asKey, const std::string& asValue)
+		{
+			if (gpBase->mpMainConfig) gpBase->mpMainConfig->SetString(kSection, AttributeName(asKey), asValue);
+		}
+
+	private:
+		static const char* const kSection;
+
+		// An XML attribute name cannot start with a digit, '.', or '-', as a Setting Key can.
+		static tString AttributeName(const std::string& asKey) { return "_" + asKey; }
+	};
+
+	const char* const cLuxMainConfigPeerSettingStore::kSection = "PeerSettings";
+
 	class cLuxGameInteractionGameAdapter : public iGameInteractionGameAdapter
 	{
 	public:
@@ -375,11 +403,12 @@ namespace
 }
 
 cLuxSocketServer::cLuxSocketServer()
-    : iLuxUpdateable("LuxSocketServer")
+    : iLuxUpdateable("LuxSocketServer"), mpPeerSettingStore(hplNew(cLuxMainConfigPeerSettingStore, ()))
 {
 	mHost = "127.0.0.1";
 	mPort = 5150;
 	if (gpBase->mpChatHandler) gpBase->mpChatHandler->SetSubmissionSink(this);
+	mGateway.SetPeerSettingStore(mpPeerSettingStore);
 
 	InitSocket();
     Log("cLuxSocketServer created!\n");
@@ -440,6 +469,14 @@ void cLuxSocketServer::ReportLocalChatEntry(const cChatEntry& aEntry)
 		aEntry.GetAuthor(), aEntry.GetMessage()));
 }
 
+void cLuxSocketServer::ConfirmPeerSettings(const std::vector<cPeerSettingEdit>& avEdits)
+{
+	const unsigned int revision = mGateway.GetPeerSettingsRevision();
+	mGateway.ConfirmPeerSettings(avEdits);
+	// Saved at once, so a changed value survives even if the game later exits without saving its config.
+	if (mGateway.GetPeerSettingsRevision() != revision && gpBase->mpMainConfig) gpBase->mpMainConfig->Save();
+}
+
 void cLuxSocketServer::LogNewGatewayDiagnostic()
 {
 	const tString& diagnostic = mGateway.GetDiagnostic();
@@ -466,6 +503,8 @@ void cLuxSocketServer::SetConnectionSettings(const tString& host, int port)
 cLuxSocketServer::~cLuxSocketServer()
 {
 	mGateway.Shutdown();
+	mGateway.SetPeerSettingStore(NULL);
+	hplDelete(mpPeerSettingStore);
     Log("cLuxSocketServer destroyed!\n");
 }
 

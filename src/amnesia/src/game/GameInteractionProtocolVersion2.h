@@ -34,6 +34,8 @@ public:
 	static std::string SerializeLocalPose(const cGameInteractionPose& aPose,
 		unsigned int alGrantedCapabilities = eGameInteractionCapability_None);
 	static std::string SerializeReportedBodies(const cGameInteractionBodySamples& aBodies);
+	// The settingchanged Event, whose value is the rest of the line and may be empty.
+	static std::string SerializeSettingChanged(const std::string& asKey, const std::string& asValue);
 	// Only the interactions and sharedcallbacks Events have a Protocol Version 2 form.
 	static std::string SerializeEvent(const cGameInteractionEvent& aEvent);
 	// The fields a sharedcallback Event and Command share: <kind> <fields>... <map>.

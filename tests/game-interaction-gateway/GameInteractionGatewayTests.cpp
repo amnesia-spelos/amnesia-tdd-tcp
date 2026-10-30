@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <set>
 #include <sstream>
 #include <string>
@@ -731,6 +732,175 @@ namespace
 		Expect(Receive(peer) == "EVENT:MapChanged:maps/main/level02.map\nEVENT:CHAT:Daniel:hi: all\n",
 			"legacy Events keep their wire form in a negotiated Session");
 		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void UpdateUntilPeerIsGone(cGameInteractionGateway& aGateway, cFakeGameAdapter& aAdapter);
+
+	class cFakePeerSettingStore : public iPeerSettingStore
+	{
+	public:
+		virtual bool TryLoadValue(const std::string& asKey, std::string& asValue)
+		{
+			std::map<std::string, std::string>::const_iterator value = mValues.find(asKey);
+			if (value == mValues.end()) return false;
+			asValue = value->second;
+			return true;
+		}
+		virtual void StoreValue(const std::string& asKey, const std::string& asValue) { mValues[asKey] = asValue; }
+		std::map<std::string, std::string> mValues;
+	};
+
+	SOCKET OpenSettingsSession(cGameInteractionGateway& aGateway, cFakeGameAdapter& aAdapter)
+	{
+		SOCKET peer = OpenSession(aGateway, aAdapter);
+		Expect(Exchange(peer, aGateway, aAdapter, "protocol 2 settings\n") == "RESPONSE protocol ok 2 settings\n",
+			"negotiation grants settings");
+		return peer;
+	}
+
+	void SettingCommandsRequireTheSettingsCapability()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenSession(gateway, adapter);
+		Expect(Exchange(peer, gateway, adapter, "settingannounce a.name Name\tPlayer\nsettingvalue a.name\n") ==
+			"WARNING:Unknown command\nWARNING:Unknown command\n", "a legacy Session does not know the setting Commands");
+		closesocket(peer);
+		gateway.Shutdown();
+
+		peer = OpenSession(gateway, adapter);
+		Expect(Exchange(peer, gateway, adapter, "protocol 2 avatars\nsettingannounce a.name Name\tPlayer\nsettingvalue\n") ==
+			"RESPONSE protocol ok 2 avatars\nRESPONSE settingannounce not-granted\nRESPONSE settingvalue not-granted\n",
+			"a Session without settings is rejected, even for a malformed line");
+		Expect(gateway.GetPeerSettings().empty(), "a rejected announce adds no Peer Setting");
+		closesocket(peer);
+		gateway.Shutdown();
+		Expect(cGameInteractionCommand(eGameInteractionCommand_SettingAnnounce).GetClassification() ==
+			eGameInteractionCommandClassification_Observational &&
+			cGameInteractionCommand(eGameInteractionCommand_SettingValue).GetClassification() ==
+			eGameInteractionCommandClassification_Observational,
+			"Peer Settings change no game state, so an Observing Peer may announce");
+	}
+
+	void SettingAnnounceAnswersTheEffectiveValue()
+	{
+		cFakeGameAdapter adapter;
+		cFakePeerSettingStore store;
+		store.mValues["multimnesia.color"] = "FF0000";
+		cGameInteractionGateway gateway;
+		gateway.SetPeerSettingStore(&store);
+		SOCKET peer = OpenSettingsSession(gateway, adapter);
+		Expect(Exchange(peer, gateway, adapter,
+			"settingannounce multimnesia.username Your name\tThe Player\tShown to others\n"
+			"settingannounce multimnesia.color Color\tFFFFFF\n"
+			"settingannounce multimnesia.note Note\t\n") ==
+			"RESPONSE settingannounce ok multimnesia.username The Player\n"
+			"RESPONSE settingannounce ok multimnesia.color FF0000\n"
+			"RESPONSE settingannounce ok multimnesia.note \n",
+			"an announce is answered with the stored value, otherwise the default, which may be empty");
+		const std::vector<cPeerSetting>& settings = gateway.GetPeerSettings();
+		Expect(settings.size() == 3 && settings[0].msKey == "multimnesia.username" && settings[0].msLabel == "Your name" &&
+			settings[0].msDescription == "Shown to others" && settings[0].msValue == "The Player" &&
+			settings[1].msDescription.empty() && settings[1].msValue == "FF0000",
+			"the options tab lists the announced Peer Settings in order");
+		Expect(Exchange(peer, gateway, adapter, "settingvalue multimnesia.color\nsettingvalue multimnesia.other\n") ==
+			"RESPONSE settingvalue ok multimnesia.color FF0000\nRESPONSE settingvalue not-found multimnesia.other\n",
+			"settingvalue reads an owned key and does not find an unannounced one");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void MalformedSettingCommandsAreInvalid()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenSettingsSession(gateway, adapter);
+		const std::string longLabel(49, 'l');
+		const std::string longText(257, 'v');
+		Expect(Exchange(peer, gateway, adapter,
+			"settingannounce a.name Name\n"
+			"settingannounce a.name\n"
+			"settingannounce a.name Name\tPlayer\tTip\textra\n"
+			"settingannounce a.name \tPlayer\n"
+			"settingannounce A.Name Name\tPlayer\n"
+			"settingannounce a/name Name\tPlayer\n"
+			"settingannounce a.name " + longLabel + "\tPlayer\n" +
+			"settingannounce a.name Name\t" + longText + "\n" +
+			"settingannounce a.name Name\tPlayer\t" + longText + "\n" +
+			"settingannounce a.name Name\t\xC3\x28\n"
+			"settingannounce a.name Na\rme\tPlayer\n"
+			"settingvalue\n"
+			"settingvalue a.name extra\n"
+			"settingvalue A.NAME\n") ==
+			"RESPONSE settingannounce invalid\nRESPONSE settingannounce invalid\nRESPONSE settingannounce invalid\n"
+			"RESPONSE settingannounce invalid\nRESPONSE settingannounce invalid\nRESPONSE settingannounce invalid\n"
+			"RESPONSE settingannounce invalid\nRESPONSE settingannounce invalid\nRESPONSE settingannounce invalid\n"
+			"RESPONSE settingannounce invalid\nRESPONSE settingannounce invalid\n"
+			"RESPONSE settingvalue invalid\nRESPONSE settingvalue invalid\nRESPONSE settingvalue invalid\n",
+			"a missing field, a tab or CR in a field, a bad key, an overlong field, or malformed UTF-8 is invalid");
+		Expect(gateway.GetPeerSettings().empty(), "an invalid announce adds no Peer Setting");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void SettingAnnouncesBeyondTheSessionCapAreUnavailable()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenSettingsSession(gateway, adapter);
+		std::string announces;
+		std::string expected;
+		for (int index = 0; index < 16; ++index)
+		{
+			const std::string key = std::string("a.") + static_cast<char>('a' + index);
+			announces += "settingannounce " + key + " Label\tx\n";
+			expected += "RESPONSE settingannounce ok " + key + " x\n";
+		}
+		SendCommands(peer, gateway, adapter, announces);
+		Expect(ReceiveLines(peer, 16) == expected, "a Session announces 16 Peer Settings");
+		Expect(Exchange(peer, gateway, adapter, "settingannounce a.extra Label\tx\nsettingannounce a.c Relabeled\ty\n") ==
+			"RESPONSE settingannounce unavailable a.extra\nRESPONSE settingannounce ok a.c y\n",
+			"a 17th Peer Setting is unavailable, but re-announcing an owned one succeeds");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
+
+	void ConfirmedPeerSettingsAreStoredAndToldOnlyToTheirOwner()
+	{
+		cFakeGameAdapter adapter;
+		cFakePeerSettingStore store;
+		cGameInteractionGateway gateway;
+		gateway.SetPeerSettingStore(&store);
+		SOCKET peer = OpenSettingsSession(gateway, adapter);
+		Expect(Exchange(peer, gateway, adapter, "settingannounce a.name Name\tPlayer\nsettingannounce a.color Color\tFFFFFF\n") ==
+			"RESPONSE settingannounce ok a.name Player\nRESPONSE settingannounce ok a.color FFFFFF\n",
+			"the Session announces two Peer Settings");
+		const unsigned int revision = gateway.GetPeerSettingsRevision();
+		std::vector<cPeerSettingEdit> edits;
+		edits.push_back(cPeerSettingEdit("a.name", "Spelos the Brave"));
+		edits.push_back(cPeerSettingEdit("a.color", "FFFFFF"));
+		gateway.ConfirmPeerSettings(edits);
+		gateway.Update(adapter);
+		Expect(Receive(peer) == "EVENT settingchanged a.name Spelos the Brave\n",
+			"confirming sends settingchanged for the changed key only");
+		Expect(store.mValues.size() == 1 && store.mValues["a.name"] == "Spelos the Brave", "only the changed key is stored");
+		Expect(gateway.GetPeerSettingsRevision() != revision && gateway.GetPeerSettings()[0].msValue == "Spelos the Brave",
+			"the options tab sees the confirmed value");
+		closesocket(peer);
+		UpdateUntilPeerIsGone(gateway, adapter);
+		Expect(gateway.GetPeerSettings().empty(), "the Peer Settings are withdrawn when the Session ends");
+
+		SOCKET laterPeer = Connect(gateway, adapter);
+		Expect(Receive(laterPeer) == "Hello, from Amnesia: The Dark Descent!\n", "a new Session starts");
+		Expect(Exchange(laterPeer, gateway, adapter, "protocol 2 settings\nsettingannounce a.name Name\tGuest\n") ==
+			"RESPONSE protocol ok 2 settings\nRESPONSE settingannounce ok a.name Spelos the Brave\n",
+			"another Session announcing the key gets the stored value");
+		gateway.ConfirmPeerSettings(std::vector<cPeerSettingEdit>(1, cPeerSettingEdit("a.color", "000000")));
+		gateway.Update(adapter);
+		Expect(ReceiveAvailable(laterPeer, 100).empty() && store.mValues.count("a.color") == 0,
+			"an edit of a withdrawn key is not stored or sent to another Session");
+		closesocket(laterPeer);
 		gateway.Shutdown();
 	}
 

@@ -2,6 +2,7 @@
 #define GAME_INTERACTION_GATEWAY_H
 
 #include "ChatModel.h"
+#include "PeerSettingModel.h"
 #include "SharedDeathModel.h"
 
 #include <string>
@@ -286,7 +287,9 @@ enum eGameInteractionCommandType
 	eGameInteractionCommand_EnemyRelease,
 	eGameInteractionCommand_EnemyAttack,
 	eGameInteractionCommand_SharedDeath,
-	eGameInteractionCommand_EnemyDoorBreak
+	eGameInteractionCommand_EnemyDoorBreak,
+	eGameInteractionCommand_SettingAnnounce,
+	eGameInteractionCommand_SettingValue
 };
 
 enum eGameInteractionCapability
@@ -299,7 +302,9 @@ enum eGameInteractionCapability
 	eGameInteractionCapability_PlayerPlace = 1 << 4,
 	eGameInteractionCapability_Enemies = 1 << 5,
 	// Adds a <lean> field to the localpose State Update and the avatarpose Command.
-	eGameInteractionCapability_Lean = 1 << 6
+	eGameInteractionCapability_Lean = 1 << 6,
+	// Lets a Session announce Peer Settings and read their values.
+	eGameInteractionCapability_Settings = 1 << 7
 };
 
 struct cGameInteractionRotation
@@ -443,6 +448,15 @@ struct cGameInteractionSharedCallbackRequest
 	cGameInteractionSharedCallback mCallback;
 };
 
+// What a settingannounce or settingvalue Command asks for; settingvalue fills only the key. Invalid
+// means the line was malformed or a field broke its limits.
+struct cGameInteractionSettingRequest
+{
+	cGameInteractionSettingRequest() : mbValid(false) {}
+	bool mbValid;
+	cPeerSettingAnnouncement mAnnouncement;
+};
+
 enum eGameInteractionCommandClassification
 {
 	eGameInteractionCommandClassification_Observational,
@@ -476,6 +490,8 @@ public:
 	const cGameInteractionEnemyAttackRequest& GetEnemyAttackRequest() const { return mEnemyAttackRequest; }
 	cGameInteractionCommand(eGameInteractionCommandType aType, const cGameInteractionSharedDeathRequest& aRequest);
 	const cGameInteractionSharedDeathRequest& GetSharedDeathRequest() const { return mSharedDeathRequest; }
+	cGameInteractionCommand(eGameInteractionCommandType aType, const cGameInteractionSettingRequest& aRequest);
+	const cGameInteractionSettingRequest& GetSettingRequest() const { return mSettingRequest; }
 	const cGameInteractionEntityStateRequest& GetEntityStateRequest() const { return mEntityStateRequest; }
 	const cGameInteractionPlacementRequest& GetPlacementRequest() const { return mPlacementRequest; }
 	eGameInteractionCommandType GetType() const { return mType; }
@@ -504,6 +520,7 @@ private:
 	cGameInteractionEnemyRequest mEnemyRequest;
 	cGameInteractionEnemyAttackRequest mEnemyAttackRequest;
 	cGameInteractionSharedDeathRequest mSharedDeathRequest;
+	cGameInteractionSettingRequest mSettingRequest;
 	cGameInteractionEntityRequest mEntityRequest;
 	cGameInteractionSharedCallbackRequest mSharedCallbackRequest;
 	cGameInteractionEntityStateRequest mEntityStateRequest;
@@ -529,6 +546,7 @@ enum eGameInteractionResponseType
 	eGameInteractionResponse_EntityState,
 	eGameInteractionResponse_PlayerPlace,
 	eGameInteractionResponse_SharedDeath,
+	eGameInteractionResponse_Setting,
 	eGameInteractionResponse_Rejected,
 	// The Command is not answered, such as a successful avatarpose.
 	eGameInteractionResponse_None
@@ -563,7 +581,9 @@ enum eGameInteractionCommandOutcome
 	// A shareddeath Command whose episode, or a newer one, was already applied.
 	eGameInteractionCommandOutcome_Duplicate,
 	// A shareddeath Command answering a death that already reached its checkpoint, or never happened.
-	eGameInteractionCommandOutcome_Stale
+	eGameInteractionCommandOutcome_Stale,
+	// A settingvalue Command for a Setting Key the Session has not announced.
+	eGameInteractionCommandOutcome_SettingNotFound
 };
 
 // What the game did with a Peer-Driven Entity operation on the current map.
@@ -717,6 +737,14 @@ public:
 		mbNamesEntity = true;
 		mlEntityId = alEntityId;
 	}
+	// The Setting Key a Response names, or empty when it names none, and on success its value.
+	const std::string& GetSettingKey() const { return msSettingKey; }
+	const std::string& GetSettingValue() const { return msSettingValue; }
+	void SetSetting(const std::string& asKey, const std::string& asValue)
+	{
+		msSettingKey = asKey;
+		msSettingValue = asValue;
+	}
 
 private:
 	eGameInteractionCommandType mCommandType;
@@ -732,6 +760,8 @@ private:
 	std::string msAvatarIdentifier;
 	bool mbNamesEntity;
 	int mlEntityId;
+	std::string msSettingKey;
+	std::string msSettingValue;
 };
 
 class cGameInteractionGateway
@@ -761,6 +791,17 @@ public:
 	bool PreservesSharedEnemies() const;
 	// Whether a Session granted enemies lasts, so the game simulating an enemy shares it with the other games.
 	bool SharesEnemies() const;
+
+	// Peer Settings, for the options tab. The store remembers the values the player changed; without one,
+	// nothing is remembered.
+	void SetPeerSettingStore(iPeerSettingStore* apStore);
+	// The live Sessions' Peer Settings in announcement order.
+	const std::vector<cPeerSetting>& GetPeerSettings() const;
+	// Changes whenever the list or a value in it changes.
+	unsigned int GetPeerSettingsRevision() const;
+	// The player confirmed these values with OK: changed ones are stored, and each owning Session is sent
+	// settingchanged for its keys whose value differs from the one it was last given.
+	void ConfirmPeerSettings(const std::vector<cPeerSettingEdit>& avEdits);
 
 	int GetPort() const;
 	bool IsListening() const;

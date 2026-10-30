@@ -158,6 +158,7 @@
     <ClCompile Include="LogFilesModel.cpp" />
     <ClCompile Include="MapPath.cpp" />
     <ClCompile Include="ChatModel.cpp" />
+    <ClCompile Include="PeerSettingModel.cpp" />
     <ClCompile Include="LuxChatHandler.cpp" />
     <ClCompile Include="GameInteractionGateway.cpp" />
     <ClCompile Include="LegacyGameInteractionProtocol.cpp" />
@@ -294,6 +295,7 @@
     <ClInclude Include="MapPath.h" />
     <ClInclude Include="SenderClock.h" />
     <ClInclude Include="ChatModel.h" />
+    <ClInclude Include="PeerSettingModel.h" />
     <ClInclude Include="LuxChatHandler.h" />
     <ClInclude Include="GameInteractionGateway.h" />
     <ClInclude Include="LegacyGameInteractionProtocol.h" />

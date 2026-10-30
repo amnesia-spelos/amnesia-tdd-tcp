@@ -24,8 +24,15 @@ public:
 	void SetConnectionSettings(const tString& host, int port);
 	const tString& GetHost() const { return mHost; }
 	int GetPort() const { return mPort; }
+	// Peer Settings, for the options tab: the connected Peers' settings in announcement order, a revision
+	// that changes whenever the list or a value in it changes, and the values the player confirmed with OK.
+	// Confirming stores the changed values in the main config and tells their Peers.
+	const std::vector<cPeerSetting>& GetPeerSettings() const { return mGateway.GetPeerSettings(); }
+	unsigned int GetPeerSettingsRevision() const { return mGateway.GetPeerSettingsRevision(); }
+	void ConfirmPeerSettings(const std::vector<cPeerSettingEdit>& avEdits);
 private:
 	cGameInteractionGateway mGateway;
+	iPeerSettingStore* mpPeerSettingStore;
 	
 	tString mHost;
 	tString mLastGatewayDiagnostic;
