@@ -164,6 +164,7 @@
     <ClCompile Include="GameInteractionGateway.cpp" />
     <ClCompile Include="GameInteractionEndpoint.cpp" />
     <ClCompile Include="LegacyGameInteractionProtocol.cpp" />
+    <ClCompile Include="Utf8Text.cpp" />
     <ClCompile Include="GameInteractionProtocolVersion2.cpp" />
     <ClCompile Include="GameInteractionTransport.cpp" />
     <ClCompile Include="LuxSideAppManager.cpp" />
@@ -303,6 +304,7 @@
     <ClInclude Include="GameInteractionGateway.h" />
     <ClInclude Include="GameInteractionEndpoint.h" />
     <ClInclude Include="LegacyGameInteractionProtocol.h" />
+    <ClInclude Include="Utf8Text.h" />
     <ClInclude Include="GameInteractionProtocolVersion2.h" />
     <ClInclude Include="GameInteractionTransport.h" />
     <ClInclude Include="LuxSideAppManager.h" />

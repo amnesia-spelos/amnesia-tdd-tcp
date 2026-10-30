@@ -31,7 +31,7 @@
 #include "LuxHelpFuncs.h"
 #include "LuxSocketServer.h"
 #include "GameInteractionEndpoint.h"
-#include "LegacyGameInteractionProtocol.h"
+#include "Utf8Text.h"
 
 //////////////////////////////////////////////////////////////////////////
 // HELPERS
@@ -1133,7 +1133,7 @@ void cLuxMainMenu_Options::SyncPeerSettingRows()
 void cLuxMainMenu_Options::ReadPeerSettingTexts()
 {
 	for(size_t i=0; i<mvPeerSettingRows.size(); ++i)
-		mPeerSettingForm.SetText(i, cLegacyGameInteractionProtocol::EncodeUtf8(mvPeerSettingRows[i].mpTextBox->GetText()));
+		mPeerSettingForm.SetText(i, EncodeUtf8(mvPeerSettingRows[i].mpTextBox->GetText()));
 }
 
 //-----------------------------------------------------------------------
@@ -1197,9 +1197,9 @@ void cLuxMainMenu_Options::ShowPeerSettingRows()
 		widgets.mpTextBox->SetPosition(cVector3f(fInputPosX, fPosY, 0.1f));
 
 		tWString sLabel, sDescription, sText;
-		cLegacyGameInteractionProtocol::TryDecodeUtf8(row.msLabel, sLabel);
-		cLegacyGameInteractionProtocol::TryDecodeUtf8(row.msDescription, sDescription);
-		cLegacyGameInteractionProtocol::TryDecodeUtf8(row.msText, sText);
+		TryDecodeUtf8(row.msLabel, sLabel);
+		TryDecodeUtf8(row.msDescription, sDescription);
+		TryDecodeUtf8(row.msText, sText);
 		widgets.mpLabel->SetText(sLabel);
 		// Setting the same text again would move the caret of the box being typed in.
 		if(widgets.mpTextBox->GetText()!=sText) widgets.mpTextBox->SetText(sText);

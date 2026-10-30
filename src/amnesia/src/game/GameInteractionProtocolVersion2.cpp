@@ -1,5 +1,6 @@
 #include "GameInteractionProtocolVersion2.h"
 #include "LegacyGameInteractionProtocol.h"
+#include "Utf8Text.h"
 
 #include <cfloat>
 #include <cmath>
@@ -367,7 +368,7 @@ namespace
 	std::wstring DecodeChatText(const std::string& asText)
 	{
 		std::wstring text;
-		if (!cLegacyGameInteractionProtocol::TryDecodeUtf8(asText, text)) text.assign(1, static_cast<wchar_t>(1));
+		if (!TryDecodeUtf8(asText, text)) text.assign(1, static_cast<wchar_t>(1));
 		return text;
 	}
 

@@ -33,9 +33,6 @@ public:
 	static cGameInteractionCommand ParseCommand(const std::string& asCommand);
 	static std::string SerializeResponse(const cGameInteractionResponse& aResponse);
 	static std::string ToWireLine(const std::string& asMessage);
-	// Rejects malformed UTF-8, including overlong forms and encoded surrogates.
-	static bool TryDecodeUtf8(const std::string& asText, std::wstring& asDecoded);
-	static std::string EncodeUtf8(const std::wstring& asText);
 };
 
 #endif
