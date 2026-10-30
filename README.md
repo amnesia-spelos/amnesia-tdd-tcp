@@ -33,6 +33,12 @@ The script extracts `src/HPL2/dependencies.zip` when needed, builds the HPL2 sta
 
 Builds are incremental. After you add, remove, or reorder a class's data members in a header, run `.\scripts\build-windows.ps1 -Rebuild`. Otherwise objects compiled against the old layout can stay in the build, and the game crashes at runtime even though the build succeeds.
 
+To run every test script and list any that fail, run `.\scripts\build-windows.ps1` first, then:
+
+```powershell
+.\scripts\test-all.ps1
+```
+
 The legacy Game Interaction Protocol contract can be exercised without an interactive game session:
 
 ```powershell

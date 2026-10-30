@@ -1,3 +1,7 @@
+## Testing
+
+At the end of a change, run `scripts/build-windows.ps1`, then `scripts/test-all.ps1`. `test-all.ps1` runs every `scripts/test-*.ps1` and exits non-zero if any fail.
+
 ## Agent skills
 
 ### Issue tracker
