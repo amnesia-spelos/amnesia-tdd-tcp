@@ -47,7 +47,8 @@ function Invoke-MSBuildProject {
     )
 
     Write-Host "Building $Description..."
-    & $MSBuild $ProjectPath @CommonArguments
+    # Minimal verbosity drops progress messages; NoSummary stops every warning being printed twice.
+    & $MSBuild $ProjectPath @CommonArguments '/v:minimal' '/clp:NoSummary'
     if ($LASTEXITCODE -ne 0) {
         throw "$Description build failed with exit code $LASTEXITCODE."
     }
