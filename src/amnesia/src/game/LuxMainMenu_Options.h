@@ -23,6 +23,7 @@
 //----------------------------------------------
 
 #include "LuxMainMenu.h"
+#include "PeerSettingForm.h"
 
 //----------------------------------------------
 
@@ -60,6 +61,11 @@ private:
 	void AddInputOptions(cWidgetTab* apTab);
 	void AddSoundOptions(cWidgetTab* apTab);
 	void AddTddTcpOptions(cWidgetTab* apTab);
+	void ResetPeerSettingRows();
+	void SyncPeerSettingRows();
+	// Tells the form what the player typed in each row.
+	void ReadPeerSettingTexts();
+	void ShowPeerSettingRows();
 
 	void AddBasicGfxOptions(cWidgetDummy* apDummy);
 	void AddAdvancedGfxOptions(cWidgetDummy* apDummy);
@@ -133,6 +139,18 @@ private:
 	cWidgetTab *mpTabTddTcp;
 	cWidgetTextBox* mpTextBoxHost;
 	cWidgetTextBox* mpTextBoxPort;
+
+	// Peer Settings, a row per setting in mPeerSettingForm's order
+	struct cPeerSettingRowWidgets
+	{
+		cWidgetLabel* mpLabel;
+		cWidgetTextBox* mpTextBox;
+	};
+	cWidgetFrame* mpFPeerSettings;
+	cWidgetLabel* mpLNoPeerSettings;
+	std::vector<cPeerSettingRowWidgets> mvPeerSettingRows;
+	cPeerSettingForm mPeerSettingForm;
+	unsigned int mlPeerSettingsRevision;
 
 	cWidgetButton* mpBOK;
 	cWidgetButton* mpBCancel;

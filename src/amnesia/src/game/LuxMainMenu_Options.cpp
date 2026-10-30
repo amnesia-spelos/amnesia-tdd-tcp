@@ -31,6 +31,7 @@
 #include "LuxHelpFuncs.h"
 #include "LuxSocketServer.h"
 #include "GameInteractionEndpoint.h"
+#include "LegacyGameInteractionProtocol.h"
 
 //////////////////////////////////////////////////////////////////////////
 // HELPERS
@@ -133,6 +134,10 @@ cLuxMainMenu_Options::cLuxMainMenu_Options(cGuiSet *apGuiSet, cGuiSkin *apGuiSki
 	mbSettingInitialValues = false;
 
 	mbKeyConfigOpen = false;
+
+	mpFPeerSettings = NULL;
+	mpLNoPeerSettings = NULL;
+	mlPeerSettingsRevision = 0;
 }
 
 //-----------------------------------------------------------------------
@@ -1009,30 +1014,47 @@ void cLuxMainMenu_Options::AddInputOptions(cWidgetTab* apTab)
 void cLuxMainMenu_Options::AddTddTcpOptions(cWidgetTab* apTab)
 {
 	float fBorderSize = 15;
+	float fGroupWidth = 520;
+	float fRowHeight = 25;
+	float fRowSep = 5;
+	float fInputPosX = 160;
 	cVector3f vPos(fBorderSize, 6 + fBorderSize, 0.1f);
 
 	/////////////////////////////////
-	// Connection group, sized to its inputs so a Peer Settings group can sit beside it
+	// Connection group, in compact rows so the Peer Settings group below it has room to scroll
 	cWidgetGroup *pGroup = mpGuiSet->CreateWidgetGroup(vPos, 0, _W("Connection"), apTab);
 	{
 		cVector3f vPosInGroup = cVector3f(fBorderSize, fBorderSize, 0.1f);
 
 		/////////////////////////////////
 		// Host
-		cWidgetLabel* pLabel = mpGuiSet->CreateWidgetLabel(vPosInGroup, -1, _W("Host:"), pGroup);
-		mpTextBoxHost = mpGuiSet->CreateWidgetTextBox(pLabel->GetLocalPosition() + cVector3f(0,pLabel->GetSize().y+5,0), cVector2f(250, 25), _W("127.0.0.1"), pGroup);
+		cWidgetLabel* pLabel = mpGuiSet->CreateWidgetLabel(vPosInGroup + cVector3f(0,3,0), -1, _W("Host:"), pGroup);
+		mpTextBoxHost = mpGuiSet->CreateWidgetTextBox(vPosInGroup + cVector3f(fInputPosX,0,0), cVector2f(250, fRowHeight), _W("127.0.0.1"), pGroup);
 		SetUpInput(pLabel, mpTextBoxHost, false, _W("Address the game listens on for Game Interaction Protocol Peers. 127.0.0.1 accepts only Peers on this computer."));
 
-		vPosInGroup.y = mpTextBoxHost->GetLocalPosition().y + mpTextBoxHost->GetSize().y + 10;
+		vPosInGroup.y += fRowHeight + fRowSep;
 
 		/////////////////////////////////
 		// Port
-		pLabel = mpGuiSet->CreateWidgetLabel(vPosInGroup, -1, _W("Port:"), pGroup);
-		mpTextBoxPort = mpGuiSet->CreateWidgetTextBox(pLabel->GetLocalPosition() + cVector3f(0,pLabel->GetSize().y+5,0), cVector2f(100, 25), _W("5150"), pGroup);
+		pLabel = mpGuiSet->CreateWidgetLabel(vPosInGroup + cVector3f(0,3,0), -1, _W("Port:"), pGroup);
+		mpTextBoxPort = mpGuiSet->CreateWidgetTextBox(vPosInGroup + cVector3f(fInputPosX,0,0), cVector2f(100, fRowHeight), _W("5150"), pGroup);
 		SetUpInput(pLabel, mpTextBoxPort, false, _W("TCP port the game listens on for Game Interaction Protocol Peers. Default is 5150."));
 
-		pGroup->SetSize(cVector2f(mpTextBoxHost->GetSize().x + fBorderSize*2,
-			mpTextBoxPort->GetLocalPosition().y + mpTextBoxPort->GetSize().y + fBorderSize));
+		pGroup->SetSize(cVector2f(fGroupWidth, vPosInGroup.y + fRowHeight + fBorderSize));
+	}
+
+	/////////////////////////////////
+	// Peer Settings group, filling the rest of the tab with a scrolling frame of rows
+	vPos.y += pGroup->GetSize().y + fBorderSize + 10;
+	float fTabHeight = pGroup->GetParent()->GetSize().y;
+	pGroup = mpGuiSet->CreateWidgetGroup(vPos, cVector2f(fGroupWidth, fTabHeight - vPos.y - fBorderSize), _W("Peer Settings"), apTab);
+	{
+		mpFPeerSettings = mpGuiSet->CreateWidgetFrame(cVector3f(fBorderSize, fBorderSize, 0.1f),
+			pGroup->GetSize() - cVector2f(fBorderSize*2), false, pGroup, false, true);
+		mpFPeerSettings->SetDrawBackground(false);
+
+		mpLNoPeerSettings = mpGuiSet->CreateWidgetLabel(cVector3f(0,3,0.1f), -1, _W("No connected Peer has announced settings."), mpFPeerSettings);
+		mpLNoPeerSettings->SetDefaultFontColor(cColor(0.6f, 1));
 	}
 }
 
@@ -1073,6 +1095,117 @@ void cLuxMainMenu_Options::AddSoundOptions(cWidgetTab* apTab)
 	apTab->GetTabLabel()->SetUserData(mpCBSndDevice);
 
 	PopulateSoundDevices();
+}
+
+//-----------------------------------------------------------------------
+
+// Every row shows its effective value, so edits from an earlier opening are gone.
+void cLuxMainMenu_Options::ResetPeerSettingRows()
+{
+	if(gpBase->mpSocketServer==NULL) return;
+
+	mlPeerSettingsRevision = gpBase->mpSocketServer->GetPeerSettingsRevision();
+	mPeerSettingForm.Reset(gpBase->mpSocketServer->GetPeerSettings());
+	ShowPeerSettingRows();
+}
+
+//-----------------------------------------------------------------------
+
+// Follows announces and ended Sessions while the window is open, keeping what the player typed.
+void cLuxMainMenu_Options::SyncPeerSettingRows()
+{
+	if(gpBase->mpSocketServer==NULL || gpBase->mpSocketServer->GetPeerSettingsRevision()==mlPeerSettingsRevision)
+		return;
+
+	mlPeerSettingsRevision = gpBase->mpSocketServer->GetPeerSettingsRevision();
+	ReadPeerSettingTexts();
+	mPeerSettingForm.Sync(gpBase->mpSocketServer->GetPeerSettings());
+	ShowPeerSettingRows();
+}
+
+//-----------------------------------------------------------------------
+
+void cLuxMainMenu_Options::ReadPeerSettingTexts()
+{
+	for(size_t i=0; i<mvPeerSettingRows.size(); ++i)
+		mPeerSettingForm.SetText(i, cLegacyGameInteractionProtocol::EncodeUtf8(mvPeerSettingRows[i].mpTextBox->GetText()));
+}
+
+//-----------------------------------------------------------------------
+
+// Makes the row widgets match the form: a kept row keeps its widgets, so the text box being typed in
+// keeps its focus, a new row gets new ones, and a dropped row's widgets are destroyed.
+void cLuxMainMenu_Options::ShowPeerSettingRows()
+{
+	const std::vector<cPeerSettingFormRow>& vRows = mPeerSettingForm.GetRows();
+	float fLabelWidth = 150;
+	float fInputPosX = 160;
+	float fScrollBarWidth = 25;
+	float fRowHeight = 25;
+	float fRowSep = 5;
+
+	std::vector<cPeerSettingRowWidgets> vWidgets(vRows.size());
+	std::vector<bool> vKept(mvPeerSettingRows.size(), false);
+	for(size_t i=0; i<vRows.size(); ++i)
+	{
+		int lPrevious = vRows[i].mlPreviousIndex;
+		if(lPrevious>=0 && lPrevious<(int)mvPeerSettingRows.size())
+		{
+			vWidgets[i] = mvPeerSettingRows[lPrevious];
+			vKept[lPrevious] = true;
+			continue;
+		}
+
+		cPeerSettingRowWidgets& widgets = vWidgets[i];
+		widgets.mpLabel = mpGuiSet->CreateWidgetLabel(0, cVector2f(fLabelWidth, fRowHeight), _W(""), mpFPeerSettings);
+		widgets.mpLabel->SetClipActive(true);
+		widgets.mpTextBox = mpGuiSet->CreateWidgetTextBox(0, cVector2f(mpFPeerSettings->GetSize().x - fInputPosX - fScrollBarWidth, fRowHeight), _W(""), mpFPeerSettings);
+		widgets.mpTextBox->SetMaxTextLength((int)cPeerSettingModel::kMaximumTextLength);
+		widgets.mpTextBox->SetIllegalChars(_W("\t\n\r"));
+		SetUpInput(widgets.mpLabel, widgets.mpTextBox, false, _W(""));
+	}
+
+	for(size_t i=0; i<mvPeerSettingRows.size(); ++i)
+	{
+		if(vKept[i]) continue;
+
+		cPeerSettingRowWidgets& widgets = mvPeerSettingRows[i];
+		if(mpCurrentTipWidget==widgets.mpLabel || mpCurrentTipWidget==widgets.mpTextBox)
+		{
+			mpCurrentTipWidget = NULL;
+			mpLTip->SetText(_W(""));
+		}
+		if(mpLastFocusedWidget==widgets.mpTextBox) mpLastFocusedWidget = NULL;
+		// The label and text box share the option data SetUpInput made for the row.
+		STLFindAndDelete(mvOptionData, (cLuxOption_ExtData*)widgets.mpTextBox->GetUserData());
+		mpGuiSet->DestroyWidget(widgets.mpLabel);
+		mpGuiSet->DestroyWidget(widgets.mpTextBox);
+	}
+	mvPeerSettingRows.swap(vWidgets);
+
+	for(size_t i=0; i<vRows.size(); ++i)
+	{
+		const cPeerSettingFormRow& row = vRows[i];
+		cPeerSettingRowWidgets& widgets = mvPeerSettingRows[i];
+		float fPosY = i * (fRowHeight + fRowSep);
+		widgets.mpLabel->SetPosition(cVector3f(0, fPosY + 3, 0.1f));
+		widgets.mpTextBox->SetPosition(cVector3f(fInputPosX, fPosY, 0.1f));
+
+		tWString sLabel, sDescription, sText;
+		cLegacyGameInteractionProtocol::TryDecodeUtf8(row.msLabel, sLabel);
+		cLegacyGameInteractionProtocol::TryDecodeUtf8(row.msDescription, sDescription);
+		cLegacyGameInteractionProtocol::TryDecodeUtf8(row.msText, sText);
+		widgets.mpLabel->SetText(sLabel);
+		// Setting the same text again would move the caret of the box being typed in.
+		if(widgets.mpTextBox->GetText()!=sText) widgets.mpTextBox->SetText(sText);
+
+		cLuxOption_ExtData* pData = (cLuxOption_ExtData*)widgets.mpTextBox->GetUserData();
+		pData->msMessage = sDescription;
+		if(mpCurrentTipWidget==widgets.mpLabel || mpCurrentTipWidget==widgets.mpTextBox)
+			mbTipWidgetUpdated = true;
+	}
+
+	mpLNoPeerSettings->SetVisible(vRows.empty());
 }
 
 //-----------------------------------------------------------------------
@@ -1382,6 +1515,7 @@ void cLuxMainMenu_Options::SetInputValues(cResourceVarsObject& aObj)
 		mpTextBoxHost->SetText(cString::To16Char(gpBase->mpSocketServer->GetHost()));
 		mpTextBoxPort->SetText(cString::To16Char(cString::ToString(gpBase->mpSocketServer->GetPort())));
 	}
+	ResetPeerSettingRows();
 
 	mbSettingInitialValues = false;
 }
@@ -1581,6 +1715,11 @@ void cLuxMainMenu_Options::ApplyChanges()
 		cString::To8Char(mpTextBoxHost->GetText()), cString::To8Char(mpTextBoxPort->GetText()));
 
 	gpBase->mpSocketServer->SetConnectionSettings(endpoint.msHost, endpoint.mlPort);
+
+	// A Session that ended since the last update must not have its rows' edits confirmed.
+	SyncPeerSettingRows();
+	ReadPeerSettingTexts();
+	gpBase->mpSocketServer->ConfirmPeerSettings(mPeerSettingForm.GetEdits());
 }
 
 
@@ -1976,6 +2115,8 @@ void cLuxMainMenu_Options::DumpCurrentValues(cResourceVarsObject &aObj)
 
 bool cLuxMainMenu_Options::Window_OnUpdate(iWidget* apWidget, const cGuiMessageData& aData)
 {
+	SyncPeerSettingRows();
+
 	///////////////////////////////////////////////////
 	// If there is a popup active, dont update tips
 	if(mpGuiSet->PopUpIsActive())

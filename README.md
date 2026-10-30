@@ -65,6 +65,14 @@ Shared Death episodes, their death-screen wait, and the agreed checkpoint count 
 
 See [Shared Death Controller checks](docs/testing/shared-deaths.md) for checkpoint reports, coordinated and preserving deaths, and driven-copy resets in the real game.
 
+The Peer Settings rows of the TDD TCP options tab follow a standalone form model:
+
+```powershell
+.\scripts\test-peer-setting-form.ps1
+```
+
+See [Peer Settings checks](docs/testing/peer-settings.md) for the options rows, their live updates, and the stored values across a restart.
+
 The check that an Avatar faces where its posing player looks links the engine's math, so it needs `build-windows.ps1` to have built HPL2 first:
 
 ```powershell

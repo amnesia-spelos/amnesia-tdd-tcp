@@ -86,7 +86,6 @@ namespace
 {
 	const std::string::size_type kMaximumKeyLength = 64;
 	const size_t kMaximumLabelLength = 48;
-	const size_t kMaximumTextLength = 256;
 
 	// Counts the Unicode scalars of valid UTF-8 text without tabs or newlines; false for any other text.
 	bool TryCountScalars(const std::string& asText, size_t& alCount)

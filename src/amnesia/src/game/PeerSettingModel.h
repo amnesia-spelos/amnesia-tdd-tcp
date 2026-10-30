@@ -71,6 +71,8 @@ class cPeerSettingModel
 public:
 	static const size_t kMaximumSettingsPerSession = 16;
 	static const size_t kMaximumSettings = 32;
+	// Of a value or description, in Unicode scalars.
+	static const size_t kMaximumTextLength = 256;
 
 	// Without a store, nothing is loaded or remembered.
 	explicit cPeerSettingModel(iPeerSettingStore* apStore = NULL);

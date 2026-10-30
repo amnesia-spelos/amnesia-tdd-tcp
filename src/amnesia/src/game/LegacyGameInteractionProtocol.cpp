@@ -211,6 +211,11 @@ bool cLegacyGameInteractionProtocol::TryDecodeUtf8(const std::string& asText, st
 	return DecodeUtf8(asText, asDecoded);
 }
 
+std::string cLegacyGameInteractionProtocol::EncodeUtf8(const std::wstring& asText)
+{
+	return ::EncodeUtf8(asText);
+}
+
 cGameInteractionCommand cLegacyGameInteractionProtocol::ParseCommand(const std::string& asCommand)
 {
 	if (asCommand.compare(0, 5, "exec:") == 0)
