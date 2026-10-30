@@ -8,7 +8,7 @@ User-facing strings and comments use the terms in `GLOSSARY.md` with the casing 
 
 **Why:** one spelling per concept keeps the code, logs and issues searchable and matches the shared domain language.
 
-**Example:** `scripts/test-chat-focus.ps1` prints `Chat Composer focus invariant is enforced.`, not "Chat composer".
+**Example:** `scripts/test-chat-focus.ps1` prints `Chat Composer focus invariant is enforced.`, with both words capitalised as the glossary gives them.
 
 ## Engine accessor pairs
 

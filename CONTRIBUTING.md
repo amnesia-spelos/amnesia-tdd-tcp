@@ -146,10 +146,10 @@ Updating, improving and correcting the documentation
 -->
 
 ## Styleguides
-Code and commit messages follow [CODING_STANDARDS.md](CODING_STANDARDS.md).
+Code follows [CODING_STANDARDS.md](CODING_STANDARDS.md).
 
 ### Commit Messages
-Commit messages follow [CODING_STANDARDS.md](CODING_STANDARDS.md). A commit that adds or removes a data member on a header class says it needs a rebuild.
+[CODING_STANDARDS.md](CODING_STANDARDS.md) says when a commit message must note that the change needs a rebuild.
 
 ## Join The Project Team
 <!-- TODO -->
