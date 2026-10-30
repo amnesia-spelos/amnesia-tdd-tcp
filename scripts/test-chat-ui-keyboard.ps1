@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'SourceCheck.ps1')
 $textBoxHeader = Get-Content -Raw (Join-Path $repositoryRoot 'src\HPL2\core\include\gui\WidgetTextBox.h')
 $textBoxSource = Get-Content -Raw (Join-Path $repositoryRoot 'src\HPL2\core\sources\gui\WidgetTextBox.cpp')
 $chatSource = Get-Content -Raw (Join-Path $repositoryRoot 'src\amnesia\src\game\LuxChatHandler.cpp')
@@ -12,23 +13,19 @@ if ($textBoxSource -notmatch 'mbUIKeyboardEnabled = true;') {
     throw 'Text boxes do not open the on-screen keyboard by default.'
 }
 
-$pressStart = $textBoxSource.IndexOf('bool cWidgetTextBox::OnUIButtonPress(const cGuiMessageData& aData)')
-$enterStart = $textBoxSource.IndexOf('bool cWidgetTextBox::OnEnter(const cGuiMessageData& aData)')
-if ($pressStart -lt 0 -or $enterStart -le $pressStart) {
-    throw 'Could not isolate cWidgetTextBox::OnUIButtonPress.'
-}
-$pressBody = $textBoxSource.Substring($pressStart, $enterStart - $pressStart)
+$pressBody = Get-FunctionBody $textBoxSource 'bool cWidgetTextBox::OnUIButtonPress(const cGuiMessageData& aData)'
 $keyboardOpen = $pressBody.IndexOf('CreatePopUpUIKeyboard(this)')
 $enabledGuard = $pressBody.IndexOf('mbUIKeyboardEnabled')
 if ($keyboardOpen -lt 0 -or $enabledGuard -lt 0 -or $enabledGuard -gt $keyboardOpen) {
     throw 'The on-screen keyboard opens even when a text box has turned it off.'
 }
 
-$initStart = $chatSource.IndexOf('mpComposer = mpSet->CreateWidgetTextBox(')
+$onStartBody = Get-FunctionBody $chatSource 'void cLuxChatHandler::OnStart()'
+$initStart = $onStartBody.IndexOf('mpComposer = mpSet->CreateWidgetTextBox(')
 if ($initStart -lt 0) {
     throw 'Could not find where Chat Composer is created.'
 }
-if ($chatSource.Substring($initStart) -notmatch '^[^}]*mpComposer->SetUIKeyboardEnabled\(false\)') {
+if ($onStartBody.Substring($initStart) -notmatch '^[^}]*mpComposer->SetUIKeyboardEnabled\(false\)') {
     throw 'Chat Composer can open the on-screen keyboard.'
 }
 

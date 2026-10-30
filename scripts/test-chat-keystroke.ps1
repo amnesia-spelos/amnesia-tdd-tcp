@@ -4,25 +4,11 @@ $ErrorActionPreference = 'Stop'
 # or input state until that keystroke is released.
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'SourceCheck.ps1')
 $gameRoot = Join-Path $repositoryRoot 'src\amnesia\src\game'
 $chatSource = Get-Content -Raw (Join-Path $gameRoot 'LuxChatHandler.cpp')
 $chatHeader = Get-Content -Raw (Join-Path $gameRoot 'LuxChatHandler.h')
 $inputSource = Get-Content -Raw (Join-Path $gameRoot 'LuxInputHandler.cpp')
-
-function Get-FunctionBody([string]$source, [string]$signature) {
-    $start = $source.IndexOf($signature)
-    if ($start -lt 0) { throw "Could not find $signature." }
-    $open = $source.IndexOf('{', $start)
-    $depth = 0
-    for ($i = $open; $i -lt $source.Length; $i++) {
-        if ($source[$i] -eq '{') { $depth++ }
-        elseif ($source[$i] -eq '}') {
-            $depth--
-            if ($depth -eq 0) { return $source.Substring($open, $i - $open + 1) }
-        }
-    }
-    throw "Could not isolate $signature."
-}
 
 if ($chatHeader -notmatch 'bool OwnsInput\(\) const') {
     throw 'Chat handler does not expose whether it still owns input after the Chat Composer closes.'

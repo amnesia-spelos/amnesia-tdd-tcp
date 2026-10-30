@@ -4,23 +4,9 @@ $ErrorActionPreference = 'Stop'
 # PrintInfo actions; they still reach the GUI. PrintInfo only fires while script debug is on.
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'SourceCheck.ps1')
 $gameRoot = Join-Path $repositoryRoot 'src\amnesia\src\game'
 $inputSource = Get-Content -Raw (Join-Path $gameRoot 'LuxInputHandler.cpp')
-
-function Get-FunctionBody([string]$source, [string]$signature) {
-    $start = $source.IndexOf($signature)
-    if ($start -lt 0) { throw "Could not find $signature." }
-    $open = $source.IndexOf('{', $start)
-    $depth = 0
-    for ($i = $open; $i -lt $source.Length; $i++) {
-        if ($source[$i] -eq '{') { $depth++ }
-        elseif ($source[$i] -eq '}') {
-            $depth--
-            if ($depth -eq 0) { return $source.Substring($open, $i - $open + 1) }
-        }
-    }
-    throw "Could not isolate $signature."
-}
 
 function Get-ActionCondition([string]$body, [string]$action) {
     $match = [regex]::Match($body, "if\s*\(([^{;]*BecameTriggerd\($action\)[^{;]*)\)\s*\{")
