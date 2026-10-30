@@ -34,5 +34,5 @@ if ($closeBody -notmatch 'SetDrawMouse\(false\)') {
     throw 'Closing Chat Composer leaves its text-input mouse pointer visible.'
 }
 
-Write-Host 'Chat composer focus invariant is enforced.'
+Write-Host 'Chat Composer focus invariant is enforced.'
 exit 0

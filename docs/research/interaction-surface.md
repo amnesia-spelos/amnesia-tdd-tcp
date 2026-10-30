@@ -1,6 +1,6 @@
 # The game's interaction surface: grabbables and swing/spin entities
 
-Findings for the interaction-ownership design (`amnesia-spelos/amnesia-multiplayer#26`, ticket #44). What the engine and game actually do when a player grabs, rotates, throws, swings, or spins something; what state is authoritative; what can be driven from outside; and what would diverge between two machines. Terms follow `CONTEXT.md`.
+Findings for the interaction-ownership design (`amnesia-spelos/amnesia-multiplayer#26`, ticket #44). What the engine and game actually do when a player grabs, rotates, throws, swings, or spins something; what state is authoritative; what can be driven from outside; and what would diverge between two machines. Terms follow `GLOSSARY.md`.
 
 Paths are relative to `src/`. Line numbers are those at commit `ecb10df`.
 

@@ -146,10 +146,10 @@ Updating, improving and correcting the documentation
 -->
 
 ## Styleguides
-### Commit Messages
-<!-- TODO
+Code and commit messages follow [CODING_STANDARDS.md](CODING_STANDARDS.md).
 
--->
+### Commit Messages
+Commit messages follow [CODING_STANDARDS.md](CODING_STANDARDS.md). A commit that adds or removes a data member on a header class says it needs a rebuild.
 
 ## Join The Project Team
 <!-- TODO -->

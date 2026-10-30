@@ -62,5 +62,5 @@ if ($chatSource -match 'mbConsumedComposerInput' -or $chatHeader -match 'mbConsu
     throw 'The one-frame composer input swallow is still present alongside keystroke ownership.'
 }
 
-Write-Host 'Chat composer closing keystroke stays with the Chat set until released.'
+Write-Host 'Chat Composer closing keystroke stays with the Chat set until released.'
 exit 0

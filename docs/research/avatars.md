@@ -1,6 +1,6 @@
 # Avatar research for later spikes
 
-Findings from the Avatar spec (#28) that later spikes build on: head pitch, crouch, animations, sounds, and enemy possession. Each is out of scope for #28 and is recorded here so the next spike starts from the engine facts rather than rediscovering them. Terms follow `CONTEXT.md`, and the Avatar module's shape follows ADR 0002 and ADR 0003.
+Findings from the Avatar spec (#28) that later spikes build on: head pitch, crouch, animations, sounds, and enemy possession. Each is out of scope for #28 and is recorded here so the next spike starts from the engine facts rather than rediscovering them. Terms follow `GLOSSARY.md`, and the Avatar module's shape follows ADR 0002 and ADR 0003.
 
 Paths are relative to `src/`. Line numbers are those at commit `99ea2af`.
 
@@ -54,7 +54,7 @@ For Avatar **pitch**, use the same recipe with a different axis. Use the model's
 
 ## Crouch
 
-The `avatarpose` line carries a crouch flag, which `CONTEXT.md` counts as part of the Pose. Rendering it has two independent parts.
+The `avatarpose` line carries a crouch flag, which `GLOSSARY.md` counts as part of the Pose. Rendering it has two independent parts.
 
 ### Capsule resizing on the Avatar's character body
 
