@@ -64,7 +64,7 @@ namespace hpl {
 
 		mbShift = false;
 
-		SetNextFocusWidget(static_cast<iWidget*>(apTarget->GetUserData()));
+		SetNextFocusWidget(mpTargetTextBox->GetUIKeyboardNextFocus());
 		
 		Init();
 	}

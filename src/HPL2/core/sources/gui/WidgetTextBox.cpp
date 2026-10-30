@@ -97,6 +97,7 @@ namespace hpl {
 		mbNumericValueUpdated = true;
 
 		mbUIKeyboardOpen = false;
+		mpUIKeyboardNextFocus = NULL;
 	}
 
 	//-----------------------------------------------------------------------

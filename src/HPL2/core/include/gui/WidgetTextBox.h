@@ -59,6 +59,9 @@ namespace hpl {
 		void SetShowButtons(bool abX) { mbShowButtons = abX; }
 		void SetDrawFrame(bool abX) { mbDrawFrame = abX; }
 
+		void SetUIKeyboardNextFocus(iWidget* apWidget) { mpUIKeyboardNextFocus = apWidget; }
+		iWidget* GetUIKeyboardNextFocus() { return mpUIKeyboardNextFocus; }
+
 		void SetNumericAdd(float afX) { mfNumericAdd = afX; }
 		float GetNumericAdd() { return mfNumericAdd; }
 
@@ -198,6 +201,7 @@ namespace hpl {
 		bool mbGotFocusRecently;
 
 		bool mbUIKeyboardOpen;
+		iWidget* mpUIKeyboardNextFocus;
 	};
 
 };

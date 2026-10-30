@@ -243,7 +243,7 @@ void cLuxMainMenu_Profile::CreateEnterNameGui()
 	pButton = mpGuiSet->CreateWidgetButton(vPos,cVector2f(mfEnterNameButtonLength, 30),kTranslate("MainMenu","Create"),mpWindowEnterName);
 	pButton->AddCallback(eGuiMessage_ButtonPressed,this, kGuiCallback(PressEnterNameCreate));
 	mpCreateButton = pButton;
-	mpTextEnterName->SetUserData(mpCreateButton);
+	mpTextEnterName->SetUIKeyboardNextFocus(mpCreateButton);
 	vButtons.push_back(pButton);
 
 	//Cancel
