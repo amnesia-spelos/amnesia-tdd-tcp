@@ -135,16 +135,16 @@ int main()
 	model.OpenComposer();
 	Expect(model.IsComposerOpen() && model.GetDraft().empty(), "opening composer starts empty");
 	model.SetDraft(L"  /world  ");
-	Expect(model.SubmitComposer() == eChatSubmitResult_Added, "valid draft submits");
-	Expect(!model.IsComposerOpen() && model.GetEntries(eChatContext_Game).back().GetAuthor() == L"Daniel" &&
+	Expect(model.SubmitComposer(L"  Alice  ") == eChatSubmitResult_Added, "valid draft submits");
+	Expect(!model.IsComposerOpen() && model.GetEntries(eChatContext_Game).back().GetAuthor() == L"Alice" &&
 		model.GetEntries(eChatContext_Game).back().GetMessage() == L"/world",
-		"local submission adds the literal Chat Author and preserves slash text");
+		"local submission uses the supplied, trimmed Chat Author and preserves slash text");
 	Expect(!model.GetEntries(eChatContext_Game).back().GetAuthorColor().IsSet() &&
 		!model.GetEntries(eChatContext_Game).back().GetMessageColor().IsSet(),
 		"local submission has no Chat Color");
 	model.OpenComposer();
 	model.SetDraft(L"   ");
-	Expect(model.SubmitComposer() == eChatSubmitResult_Empty && !model.IsComposerOpen(),
+	Expect(model.SubmitComposer(L"Alice") == eChatSubmitResult_Empty && !model.IsComposerOpen(),
 		"empty submission closes without adding an entry");
 	const size_t entryCount = model.GetEntries(eChatContext_Game).size();
 	model.OpenComposer();
@@ -154,8 +154,30 @@ int main()
 	Expect(model.GetDraft().empty() && model.GetEntries(eChatContext_Game).size() == entryCount,
 		"cancel and reopen clear the draft without submitting");
 	model.SetDraft(L"bad\nmessage");
-	Expect(model.SubmitComposer() == eChatSubmitResult_Invalid && model.IsComposerOpen(),
+	Expect(model.SubmitComposer(L"Alice") == eChatSubmitResult_Invalid && model.IsComposerOpen(),
 		"invalid non-empty submission stays open for correction");
+
+	cChatModel authorModel;
+	authorModel.SetContext(eChatContext_Game);
+	authorModel.OpenComposer();
+	authorModel.SetDraft(L"hello");
+	Expect(authorModel.SubmitComposer(L" A:li" L"\x0001" L"ce\t ") == eChatSubmitResult_Added &&
+		!authorModel.IsComposerOpen() && authorModel.GetEntries(eChatContext_Game).back().GetAuthor() == L"Alice",
+		"colons and control characters are removed from a submitted Chat Author");
+	const std::wstring unusableNames[] = { L"", L" \x3000\t", L":\x0001:\xDE00" };
+	for (size_t index = 0; index < 3; ++index)
+	{
+		authorModel.OpenComposer();
+		authorModel.SetDraft(L"hello");
+		Expect(authorModel.SubmitComposer(unusableNames[index]) == eChatSubmitResult_Added &&
+			authorModel.GetEntries(eChatContext_Game).back().GetAuthor() == L"Player",
+			"an empty, whitespace-only or fully stripped Chat Author falls back to Player");
+	}
+	authorModel.OpenComposer();
+	authorModel.SetDraft(L"hello");
+	Expect(authorModel.SubmitComposer(Repeated(L"ab", 15) + L"c" + scalarPair + L" d") == eChatSubmitResult_Added &&
+		authorModel.GetEntries(eChatContext_Game).back().GetAuthor() == Repeated(L"ab", 15) + L"c" + scalarPair,
+		"a Chat Author over 32 scalars is shortened instead of failing the submission");
 
 	std::cout << "Chat model cases passed\n";
 	return 0;

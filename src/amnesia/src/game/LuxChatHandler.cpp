@@ -176,7 +176,7 @@ bool cLuxChatHandler::CloseComposer(bool abSubmit, bool abRestoreFocus)
 	mModel.SetDraft(mpComposer->GetText());
 	if(abSubmit)
 	{
-		const eChatSubmitResult result = mModel.SubmitComposer();
+		const eChatSubmitResult result = mModel.SubmitComposer(gpBase->msProfileName);
 		if(result == eChatSubmitResult_Invalid) return false;
 		if(result == eChatSubmitResult_Added && mpSubmissionSink)
 			mpSubmissionSink->ReportLocalChatEntry(mModel.GetEntries(mModel.GetContext()).back());

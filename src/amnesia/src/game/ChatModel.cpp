@@ -54,6 +54,40 @@ namespace
 		}
 		return true;
 	}
+
+	// Removes what Chat Author validation rejects, so any profile name can be submitted.
+	std::wstring CleanAuthor(const std::wstring& asName)
+	{
+		std::wstring cleaned;
+		for (std::wstring::size_type index = 0; index < asName.size(); ++index)
+		{
+			const unsigned int scalar = static_cast<unsigned int>(asName[index]);
+#if WCHAR_MAX <= 0xFFFF
+			if (scalar >= 0xD800 && scalar <= 0xDBFF && index + 1 < asName.size())
+			{
+				const unsigned int low = static_cast<unsigned int>(asName[index + 1]);
+				if (low >= 0xDC00 && low <= 0xDFFF)
+				{
+					cleaned += asName.substr(index, 2);
+					++index;
+					continue;
+				}
+			}
+#endif
+			if ((scalar >= 0xD800 && scalar <= 0xDFFF) || scalar > 0x10FFFF || IsControl(scalar) ||
+				scalar == ':') continue;
+			cleaned += asName[index];
+		}
+		cleaned = Trim(cleaned);
+		std::wstring::size_type end = 0;
+		for (size_t scalarCount = 0; end < cleaned.size() && scalarCount < 32; ++scalarCount)
+		{
+			const unsigned int scalar = static_cast<unsigned int>(cleaned[end]);
+			end += scalar >= 0xD800 && scalar <= 0xDBFF ? 2 : 1;
+		}
+		cleaned = Trim(cleaned.substr(0, end));
+		return cleaned.empty() ? L"Player" : cleaned;
+	}
 }
 
 cChatColor::cChatColor()
@@ -195,7 +229,7 @@ const std::wstring& cChatModel::GetDraft() const
 	return State(mContext).msDraft;
 }
 
-eChatSubmitResult cChatModel::SubmitComposer()
+eChatSubmitResult cChatModel::SubmitComposer(const std::wstring& asAuthor)
 {
 	cContextState& state = State(mContext);
 	if (Trim(state.msDraft).empty())
@@ -203,7 +237,7 @@ eChatSubmitResult cChatModel::SubmitComposer()
 		CancelComposer();
 		return eChatSubmitResult_Empty;
 	}
-	const eChatEntryValidation validation = AddEntry(mContext, L"Daniel", state.msDraft);
+	const eChatEntryValidation validation = AddEntry(mContext, CleanAuthor(asAuthor), state.msDraft);
 	if (validation != eChatEntryValidation_Valid) return eChatSubmitResult_Invalid;
 	CancelComposer();
 	return eChatSubmitResult_Added;

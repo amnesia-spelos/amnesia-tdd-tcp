@@ -90,7 +90,7 @@ public:
 	bool IsComposerOpen() const { return mbComposerOpen; }
 	void SetDraft(const std::wstring& asDraft);
 	const std::wstring& GetDraft() const;
-	eChatSubmitResult SubmitComposer();
+	eChatSubmitResult SubmitComposer(const std::wstring& asAuthor);
 
 private:
 	struct cContextState
