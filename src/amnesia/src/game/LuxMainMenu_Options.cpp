@@ -30,6 +30,7 @@
 #include "LuxPlayer.h"
 #include "LuxHelpFuncs.h"
 #include "LuxSocketServer.h"
+#include "GameInteractionEndpoint.h"
 
 //////////////////////////////////////////////////////////////////////////
 // HELPERS
@@ -233,17 +234,8 @@ void cLuxMainMenu_Options::CreateMainGui()
 	mpTabSound = pTabFrame->AddTab(kTranslate("MainMenu","OptionsSound"));
 #endif
 
-mpTabStreamnesia = pTabFrame->AddTab(_W("Streamnesia"));
-
-// Host input
-cVector3f vStreamHostPos(50, 40, 0);
-mpGuiSet->CreateWidgetLabel(vStreamHostPos - cVector3f(0, 25, 0), -1, _W("Host:"), mpTabStreamnesia);
-mpTextBoxStreamHost = mpGuiSet->CreateWidgetTextBox(vStreamHostPos, cVector2f(250, 25), _W("127.0.0.1"), mpTabStreamnesia);
-
-// Port input
-cVector3f vStreamPortPos(50, 100, 0);
-mpGuiSet->CreateWidgetLabel(vStreamPortPos - cVector3f(0, 25, 0), -1, _W("Port:"), mpTabStreamnesia);
-mpTextBoxStreamPort = mpGuiSet->CreateWidgetTextBox(vStreamPortPos, cVector2f(100, 25), _W("5150"), mpTabStreamnesia);
+	// English literals: this repository ships no .lang files, so new kTranslate keys would render blank.
+	mpTabTddTcp = pTabFrame->AddTab(_W("TDD TCP"));
 
 #if USE_GAMEPAD
 	///////////////////
@@ -277,6 +269,7 @@ mpTextBoxStreamPort = mpGuiSet->CreateWidgetTextBox(vStreamPortPos, cVector2f(10
 #endif
 	AddGameOptions(mpTabGame);
 	AddInputOptions(mpTabInput);
+	AddTddTcpOptions(mpTabTddTcp);
 
 	//////////////////////////
 	//Tip Label
@@ -1013,6 +1006,38 @@ void cLuxMainMenu_Options::AddInputOptions(cWidgetTab* apTab)
 
 //-----------------------------------------------------------------------
 
+void cLuxMainMenu_Options::AddTddTcpOptions(cWidgetTab* apTab)
+{
+	float fBorderSize = 15;
+	cVector3f vPos(fBorderSize, 6 + fBorderSize, 0.1f);
+
+	/////////////////////////////////
+	// Connection group, sized to its inputs so a Peer Settings group can sit beside it
+	cWidgetGroup *pGroup = mpGuiSet->CreateWidgetGroup(vPos, 0, _W("Connection"), apTab);
+	{
+		cVector3f vPosInGroup = cVector3f(fBorderSize, fBorderSize, 0.1f);
+
+		/////////////////////////////////
+		// Host
+		cWidgetLabel* pLabel = mpGuiSet->CreateWidgetLabel(vPosInGroup, -1, _W("Host:"), pGroup);
+		mpTextBoxHost = mpGuiSet->CreateWidgetTextBox(pLabel->GetLocalPosition() + cVector3f(0,pLabel->GetSize().y+5,0), cVector2f(250, 25), _W("127.0.0.1"), pGroup);
+		SetUpInput(pLabel, mpTextBoxHost, false, _W("Address the game listens on for Game Interaction Protocol Peers. 127.0.0.1 accepts only Peers on this computer."));
+
+		vPosInGroup.y = mpTextBoxHost->GetLocalPosition().y + mpTextBoxHost->GetSize().y + 10;
+
+		/////////////////////////////////
+		// Port
+		pLabel = mpGuiSet->CreateWidgetLabel(vPosInGroup, -1, _W("Port:"), pGroup);
+		mpTextBoxPort = mpGuiSet->CreateWidgetTextBox(pLabel->GetLocalPosition() + cVector3f(0,pLabel->GetSize().y+5,0), cVector2f(100, 25), _W("5150"), pGroup);
+		SetUpInput(pLabel, mpTextBoxPort, false, _W("TCP port the game listens on for Game Interaction Protocol Peers. Default is 5150."));
+
+		pGroup->SetSize(cVector2f(mpTextBoxHost->GetSize().x + fBorderSize*2,
+			mpTextBoxPort->GetLocalPosition().y + mpTextBoxPort->GetSize().y + fBorderSize));
+	}
+}
+
+//-----------------------------------------------------------------------
+
 void cLuxMainMenu_Options::AddSoundOptions(cWidgetTab* apTab)
 {
 	float fBorderSize = 15;
@@ -1351,11 +1376,11 @@ void cLuxMainMenu_Options::SetInputValues(cResourceVarsObject& aObj)
 #endif
 
 	///////////////////////////////
-	// Streamnesia settings from server
+	// Game Interaction Protocol endpoint from the server
 	if(gpBase->mpSocketServer)
 	{
-		mpTextBoxStreamHost->SetText(cString::To16Char(gpBase->mpSocketServer->GetHost()));
-		mpTextBoxStreamPort->SetText(cString::To16Char(cString::ToString(gpBase->mpSocketServer->GetPort())));
+		mpTextBoxHost->SetText(cString::To16Char(gpBase->mpSocketServer->GetHost()));
+		mpTextBoxPort->SetText(cString::To16Char(cString::ToString(gpBase->mpSocketServer->GetPort())));
 	}
 
 	mbSettingInitialValues = false;
@@ -1552,10 +1577,10 @@ void cLuxMainMenu_Options::ApplyChanges()
 	//if(gpBase->LoadLanguage(cString::To8Char(mvLangFiles[mpCBLanguage->GetSelectedItem()])))
 	//	gpBase->mpMainMenu->RecreateGui();
 
-	tString sHost = cString::To8Char(mpTextBoxStreamHost->GetText());
-	int iPort = cString::ToInt(cString::To8Char(mpTextBoxStreamPort->GetText()).c_str(), 5150);
+	const cGameInteractionEndpoint endpoint = ParseGameInteractionEndpoint(
+		cString::To8Char(mpTextBoxHost->GetText()), cString::To8Char(mpTextBoxPort->GetText()));
 
-	gpBase->mpSocketServer->SetConnectionSettings(sHost, iPort);
+	gpBase->mpSocketServer->SetConnectionSettings(endpoint.msHost, endpoint.mlPort);
 }
 
 

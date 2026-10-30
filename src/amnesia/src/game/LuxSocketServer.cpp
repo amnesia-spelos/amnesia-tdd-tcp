@@ -13,11 +13,15 @@
 #include "LuxInputHandler.h"
 #include "LuxMainMenu.h"
 #include "LuxMoveState_Normal.h"
+#include "GameInteractionEndpoint.h"
 
 #include <set>
 
 namespace
 {
+	// The main config section holding the endpoint the player applied in the options tab.
+	const char* const kEndpointSection = "GameInteraction";
+
 	cGameInteractionCheckPoint CurrentCheckPoint()
 	{
 		cLuxMap *pMap = gpBase->mpMapHandler->GetCurrentMap();
@@ -405,8 +409,13 @@ namespace
 cLuxSocketServer::cLuxSocketServer()
     : iLuxUpdateable("LuxSocketServer"), mpPeerSettingStore(hplNew(cLuxMainConfigPeerSettingStore, ()))
 {
-	mHost = "127.0.0.1";
-	mPort = 5150;
+	// The endpoint last applied in the options tab, or the default when the main config holds none.
+	const cGameInteractionEndpoint endpoint = gpBase->mpMainConfig ?
+		ParseGameInteractionEndpoint(gpBase->mpMainConfig->GetString(kEndpointSection, "Host", ""),
+			gpBase->mpMainConfig->GetString(kEndpointSection, "Port", "")) :
+		ParseGameInteractionEndpoint("", "");
+	mHost = endpoint.msHost;
+	mPort = endpoint.mlPort;
 	if (gpBase->mpChatHandler) gpBase->mpChatHandler->SetSubmissionSink(this);
 	mGateway.SetPeerSettingStore(mpPeerSettingStore);
 
@@ -493,6 +502,14 @@ void cLuxSocketServer::SetConnectionSettings(const tString& host, int port)
 
     mHost = host;
     mPort = port;
+	// Saved at once, so the next launch listens here even if the game later exits without saving its config.
+	// Kept even if listening fails, as the player applied it; the tab shows it to be changed.
+	if (gpBase->mpMainConfig)
+	{
+		gpBase->mpMainConfig->SetString(kEndpointSection, "Host", mHost);
+		gpBase->mpMainConfig->SetString(kEndpointSection, "Port", cString::ToString(mPort));
+		gpBase->mpMainConfig->Save();
+	}
 
 	Log("LuxSocketServer config changed: re-init\n");
 	mGateway.Shutdown();

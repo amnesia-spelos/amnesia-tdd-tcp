@@ -83,6 +83,12 @@ So is the log line that names the game's Build Version:
 .\scripts\test-build-version.ps1
 ```
 
+So is how the game reads back the endpoint it listens on from the options tab and the main config:
+
+```powershell
+.\scripts\test-game-interaction-endpoint.ps1
+```
+
 You can also open `src/amnesia/src/game/Lux.sln` in Visual Studio, select `Release` and `Win32`, and build the solution after extracting `src/HPL2/dependencies.zip` into `src/HPL2`.
 
 ### Building the Level Editor

@@ -59,6 +59,7 @@ private:
 	void AddGraphicsOptions(cWidgetTab* apTab);
 	void AddInputOptions(cWidgetTab* apTab);
 	void AddSoundOptions(cWidgetTab* apTab);
+	void AddTddTcpOptions(cWidgetTab* apTab);
 
 	void AddBasicGfxOptions(cWidgetDummy* apDummy);
 	void AddAdvancedGfxOptions(cWidgetDummy* apDummy);
@@ -129,9 +130,9 @@ private:
 	cWidgetTab *mpTabGraphics;
 	cWidgetTab *mpTabInput;
 	cWidgetTab *mpTabSound;
-	cWidgetTab* mpTabStreamnesia;
-	cWidgetTextBox* mpTextBoxStreamHost;
-	cWidgetTextBox* mpTextBoxStreamPort;
+	cWidgetTab *mpTabTddTcp;
+	cWidgetTextBox* mpTextBoxHost;
+	cWidgetTextBox* mpTextBoxPort;
 
 	cWidgetButton* mpBOK;
 	cWidgetButton* mpBCancel;

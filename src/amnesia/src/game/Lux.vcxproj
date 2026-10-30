@@ -161,6 +161,7 @@
     <ClCompile Include="PeerSettingModel.cpp" />
     <ClCompile Include="LuxChatHandler.cpp" />
     <ClCompile Include="GameInteractionGateway.cpp" />
+    <ClCompile Include="GameInteractionEndpoint.cpp" />
     <ClCompile Include="LegacyGameInteractionProtocol.cpp" />
     <ClCompile Include="GameInteractionProtocolVersion2.cpp" />
     <ClCompile Include="GameInteractionTransport.cpp" />
@@ -298,6 +299,7 @@
     <ClInclude Include="PeerSettingModel.h" />
     <ClInclude Include="LuxChatHandler.h" />
     <ClInclude Include="GameInteractionGateway.h" />
+    <ClInclude Include="GameInteractionEndpoint.h" />
     <ClInclude Include="LegacyGameInteractionProtocol.h" />
     <ClInclude Include="GameInteractionProtocolVersion2.h" />
     <ClInclude Include="GameInteractionTransport.h" />
