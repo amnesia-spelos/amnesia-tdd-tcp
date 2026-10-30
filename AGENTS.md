@@ -2,6 +2,10 @@
 
 At the end of a change, run `scripts/build-windows.ps1`, then `scripts/test-all.ps1`. `test-all.ps1` runs every `scripts/test-*.ps1` and exits non-zero if any fail.
 
+## Line endings
+
+Working-tree text files are CRLF (LF for `*.sh`), set by `.gitattributes`. Write new files to match, and detect each file's line ending before a scripted edit instead of assuming one.
+
 ## Agent skills
 
 ### Issue tracker

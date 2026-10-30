@@ -1,0 +1,12 @@
+# Text files are LF in the index and CRLF in the working tree, whatever core.autocrlf says.
+* text=auto eol=crlf
+
+# Shell scripts run on Unix-like systems and need LF.
+*.sh eol=lf
+
+# Known binaries; never convert.
+*.zip binary
+*.ico binary
+*.icns binary
+*.jpg binary
+*.lib binary
