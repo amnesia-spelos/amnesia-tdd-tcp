@@ -676,22 +676,7 @@ void cLuxMainMenu::OnMenuExit()
 	// Start Game
 	case eLuxMainMenuExit_StartGame:
 
-		gpBase->mpInputHandler->ChangeState(eLuxInputState_Game);
-
-		//THIS IS VERY TEMP!
-		//TODO: FIX!
-		{
-			if(gpBase->mpUserConfig==NULL)
-			{
-				gpBase->CreateProfile(gpBase->msDefaultProfileName);
-				gpBase->SetProfile(gpBase->msDefaultProfileName);
-				gpBase->InitUserConfig();
-			}
-			
-			gpBase->mpEngine->GetUpdater()->SetContainer("Default");
-
-			gpBase->StartGame("", "", ""); //""= using user config values.
-		}
+		gpBase->StartMainStory();
 		break;
 
 	////////////////
@@ -1587,7 +1572,6 @@ bool cLuxMainMenu::ClickedStartGamePopup(iWidget* apWidget, const cGuiMessageDat
 	
 	if(bStartGame)
 	{
-		gpBase->SetCustomStory(NULL);
 		ExitMenu(eLuxMainMenuExit_StartGame);
 	}
 	else

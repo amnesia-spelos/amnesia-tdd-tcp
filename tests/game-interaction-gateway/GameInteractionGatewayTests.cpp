@@ -33,7 +33,7 @@ namespace
 			: mbMapLoaded(true), mPosition(1.25f, -2.5f, 3.75f),
 			mRotation(1.570796325f, -0.7853981625f), msMapFile("maps/main/level01.map"),
 			mbChatAvailable(true), mlDisplayedChatEntries(0), mbInMainMenu(true),
-			mPeer(INVALID_SOCKET), mbResponseDeliveredBeforeStart(false),
+			mlMainStoryStarts(0), mPeer(INVALID_SOCKET), mbResponseDeliveredBeforeStart(false),
 			mLocalPoseAvailability(eGameInteractionLocalPoseAvailability_Live), mlReportReads(0),
 			mbPlayerInPlay(true), mbPeerConnected(false)
 		{
@@ -116,12 +116,22 @@ namespace
 		}
 		virtual void StartCustomStory(const std::wstring& asIdentifier)
 		{
+			mbResponseDeliveredBeforeStart = IsResponseWaiting();
+			mvStartedCustomStories.push_back(asIdentifier);
+		}
+		virtual bool IsInMainMenu() const { return mbInMainMenu; }
+		virtual void StartMainStory()
+		{
+			mbResponseDeliveredBeforeStart = IsResponseWaiting();
+			++mlMainStoryStarts;
+		}
+		bool IsResponseWaiting() const
+		{
 			fd_set readable;
 			FD_ZERO(&readable);
 			FD_SET(mPeer, &readable);
 			timeval noWait = { 0, 0 };
-			mbResponseDeliveredBeforeStart = select(0, &readable, NULL, NULL, &noWait) == 1;
-			mvStartedCustomStories.push_back(asIdentifier);
+			return select(0, &readable, NULL, NULL, &noWait) == 1;
 		}
 		virtual eGameInteractionLocalPoseAvailability GetLocalPoseAvailability() const
 		{
@@ -238,6 +248,7 @@ namespace
 		std::vector<cGameInteractionCustomStory> mvCustomStories;
 		std::wstring msInvalidCustomStory;
 		std::vector<std::wstring> mvStartedCustomStories;
+		int mlMainStoryStarts;
 		SOCKET mPeer;
 		bool mbResponseDeliveredBeforeStart;
 		eGameInteractionLocalPoseAvailability mLocalPoseAvailability;
@@ -2051,6 +2062,24 @@ namespace
 		closesocket(peer);
 		gateway.Shutdown();
 	}
+
+	void MainStoryStartIsDeliveredBeforeTheNextUpdate()
+	{
+		cFakeGameAdapter adapter;
+		cGameInteractionGateway gateway;
+		SOCKET peer = OpenSession(gateway, adapter);
+		gateway.Report(cGameInteractionEvent(eGameInteractionEvent_ScriptCallObserved, "OnStart()"));
+		Expect(ReceiveAvailable(peer, 50).empty(), "other Events wait for the next update");
+		gateway.Report(cGameInteractionEvent(eGameInteractionEvent_MainStoryStarted));
+		Expect(ReceiveLines(peer, 2) == "SCRIPT_CALL:OnStart()\nEVENT:MainStoryStarted\n",
+			"the Main Story start is delivered with no further update, after the lines queued before it");
+		gateway.Report(cGameInteractionEvent(eGameInteractionEvent_MapChanged, "maps/main/00_rainy_hall.map"));
+		gateway.Update(adapter);
+		Expect(Receive(peer) == "EVENT:MapChanged:maps/main/00_rainy_hall.map\n",
+			"the start map's change follows the start");
+		closesocket(peer);
+		gateway.Shutdown();
+	}
 }
 
 int main()
@@ -2065,6 +2094,8 @@ int main()
 		eGameInteractionCommandClassification_Observational, "Custom Story listing is observational");
 	Expect(cGameInteractionCommand(eGameInteractionCommand_StartCustomStory, L"mp-test-cs").GetClassification() ==
 		eGameInteractionCommandClassification_StateChanging, "Custom Story start is state-changing");
+	Expect(cGameInteractionCommand(eGameInteractionCommand_StartMainStory).GetClassification() ==
+		eGameInteractionCommandClassification_StateChanging, "Main Story start is state-changing");
 	const eGameInteractionCommandType entityCommands[] = { eGameInteractionCommand_EntityDrive,
 		eGameInteractionCommand_EntityBodies, eGameInteractionCommand_EntityInteracting,
 		eGameInteractionCommand_EntityBreak, eGameInteractionCommand_EntityRelease };
@@ -2131,6 +2162,37 @@ int main()
 	gateway.Update(adapter);
 	Expect(adapter.mvStartedCustomStories.size() == 1, "rejected pending start is never performed");
 
+	adapter.mbInMainMenu = false;
+	SendCommands(peer, gateway, adapter, "startmainstory\n");
+	Expect(Receive(peer) == "RESPONSE:startmainstory:not in main menu\n",
+		"Main Story start outside the main menu is rejected");
+	gateway.Update(adapter);
+	Expect(adapter.mlMainStoryStarts == 0, "rejected Main Story starts change no game state");
+	adapter.mbInMainMenu = true;
+
+	adapter.mbResponseDeliveredBeforeStart = false;
+	const std::string mainStoryStarts = "startmainstory\nstartmainstory\nstartcustomstory:mp-test-cs\n";
+	Expect(send(peer, mainStoryStarts.data(), static_cast<int>(mainStoryStarts.size()), 0) ==
+		static_cast<int>(mainStoryStarts.size()), "Peer sends Main Story starts");
+	gateway.Update(adapter);
+	Expect(adapter.mlMainStoryStarts == 0, "accepted Main Story start is deferred past Command processing");
+	gateway.Update(adapter);
+	Expect(adapter.mlMainStoryStarts == 1, "accepted Main Story start is performed once on a later update");
+	Expect(adapter.mbResponseDeliveredBeforeStart, "Main Story starting Response is delivered before the start");
+	Expect(Receive(peer) == "RESPONSE:startmainstory:starting\nRESPONSE:startmainstory:not in main menu\n"
+		"RESPONSE:startcustomstory:not in main menu\n",
+		"a pending Main Story start takes the one pending start slot");
+	gateway.Update(adapter);
+	Expect(adapter.mlMainStoryStarts == 1 && adapter.mvStartedCustomStories.size() == 1,
+		"starts rejected behind a pending Main Story start are never performed");
+
+	SendCommands(peer, gateway, adapter, "startcustomstory:mp-test-cs\nstartmainstory\n");
+	Expect(Receive(peer) == "RESPONSE:startcustomstory:starting\nRESPONSE:startmainstory:not in main menu\n",
+		"a pending Custom Story start takes the one pending start slot");
+	gateway.Update(adapter);
+	Expect(adapter.mvStartedCustomStories.size() == 2 && adapter.mlMainStoryStarts == 1,
+		"only the Custom Story start is performed");
+
 	Expect(send(peer, "get", 3, 0) == 3, "Peer sends a fragmented Command prefix");
 	gateway.Update(adapter);
 	SendCommands(peer, gateway, adapter, "map\nunknown\n");
@@ -2181,6 +2243,7 @@ int main()
 	ChatEntryCarriesItsChatColorsToTheGameAdapter();
 	ResponseIsDeliveredWithinTheUpdateThatProcessedItsCommand();
 	CustomStoryStartIsDeliveredBeforeTheNextUpdate();
+	MainStoryStartIsDeliveredBeforeTheNextUpdate();
 	GameIsToldWhetherAPeerIsConnected();
 	OverlongInboundLineDisconnectsThePeerWithAReason();
 	LocalPoseStateUpdatesFollowTheSubscribedRate();

@@ -74,6 +74,8 @@ enum eGameInteractionEventType
 	eGameInteractionEvent_ScriptCallObserved,
 	eGameInteractionEvent_LocalChatSubmitted,
 	eGameInteractionEvent_CustomStoryStarted,
+	// A fresh Main Story start, whether the menu or a Command triggered it. Carries no data.
+	eGameInteractionEvent_MainStoryStarted,
 	// The interactions Events, which only a Session granted that Capability receives.
 	eGameInteractionEvent_InteractionStarted,
 	eGameInteractionEvent_InteractionEnded,
@@ -266,6 +268,7 @@ enum eGameInteractionCommandType
 	eGameInteractionCommand_Chat,
 	eGameInteractionCommand_GetCustomStories,
 	eGameInteractionCommand_StartCustomStory,
+	eGameInteractionCommand_StartMainStory,
 	eGameInteractionCommand_NegotiateProtocol,
 	eGameInteractionCommand_AvatarCreate,
 	eGameInteractionCommand_AvatarRemove,
@@ -540,6 +543,7 @@ enum eGameInteractionResponseType
 	eGameInteractionResponse_ChatDisplayed,
 	eGameInteractionResponse_CustomStories,
 	eGameInteractionResponse_CustomStoryStarting,
+	eGameInteractionResponse_MainStoryStarting,
 	eGameInteractionResponse_ProtocolNegotiated,
 	eGameInteractionResponse_Subscription,
 	eGameInteractionResponse_Avatar,
@@ -644,6 +648,10 @@ public:
 	virtual eGameInteractionCustomStoryAvailability GetCustomStoryAvailability(
 		const std::wstring& asIdentifier) const = 0;
 	virtual void StartCustomStory(const std::wstring& asIdentifier) = 0;
+	// Whether the game is in the main menu with no menu-initiated start in progress, so a story can start.
+	virtual bool IsInMainMenu() const = 0;
+	// Starts the Main Story in normal mode, as confirming a new game in the main menu does.
+	virtual void StartMainStory() = 0;
 	virtual eGameInteractionLocalPoseAvailability GetLocalPoseAvailability() const = 0;
 	// Called only while the local Pose is available.
 	virtual cGameInteractionPose GetLocalPose() const = 0;

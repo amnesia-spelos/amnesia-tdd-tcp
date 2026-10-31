@@ -170,6 +170,8 @@ namespace
 			return eGameInteractionCustomStoryAvailability_NotFound;
 		}
 		virtual void StartCustomStory(const std::wstring&) {}
+		virtual bool IsInMainMenu() const { return false; }
+		virtual void StartMainStory() {}
 		virtual eGameInteractionLocalPoseAvailability GetLocalPoseAvailability() const
 		{
 			return eGameInteractionLocalPoseAvailability_Live;

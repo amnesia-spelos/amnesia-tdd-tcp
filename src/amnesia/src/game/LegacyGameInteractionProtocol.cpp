@@ -122,6 +122,8 @@ std::string cLegacyGameInteractionProtocol::SerializeEvent(const cGameInteractio
 			EncodeUtf8(aEvent.GetChatMessage());
 	case eGameInteractionEvent_CustomStoryStarted:
 		return "EVENT:CustomStoryStarted:" + EncodeUtf8(aEvent.GetCustomStoryIdentifier());
+	case eGameInteractionEvent_MainStoryStarted:
+		return "EVENT:MainStoryStarted";
 	}
 	return std::string();
 }
@@ -144,6 +146,8 @@ cGameInteractionCommand cLegacyGameInteractionProtocol::ParseCommand(const std::
 		if (!TryDecodeUtf8(asCommand.substr(17), identifier)) identifier.assign(1, static_cast<wchar_t>(1));
 		return cGameInteractionCommand(eGameInteractionCommand_StartCustomStory, identifier);
 	}
+	if (asCommand == "startmainstory")
+		return cGameInteractionCommand(eGameInteractionCommand_StartMainStory);
 	if (asCommand == "getcustomstories")
 		return cGameInteractionCommand(eGameInteractionCommand_GetCustomStories);
 	if (asCommand == "ping" || asCommand == "getpos" || asCommand == "getrot" ||
@@ -166,6 +170,9 @@ std::string cLegacyGameInteractionProtocol::SerializeResponse(const cGameInterac
 		default: return "RESPONSE:startcustomstory:not in main menu";
 		}
 	}
+	if (aResponse.GetCommandType() == eGameInteractionCommand_StartMainStory)
+		return aResponse.GetOutcome() == eGameInteractionCommandOutcome_Success ? "RESPONSE:startmainstory:starting" :
+			"RESPONSE:startmainstory:not in main menu";
 	const char* command = "ping";
 	if (aResponse.GetCommandType() == eGameInteractionCommand_GetPosition) command = "getpos";
 	else if (aResponse.GetCommandType() == eGameInteractionCommand_GetRotation) command = "getrot";

@@ -743,6 +743,30 @@ bool cLuxBase::StartCustomStory()
 
 //-----------------------------------------------------------------------
 
+bool cLuxBase::StartMainStory()
+{
+	SetCustomStory(NULL);
+
+	mpMainMenu->SetWindowActive(eLuxMainMenuWindow_LastEnum);
+	mpInputHandler->ChangeState(eLuxInputState_Game);
+
+	if(mpUserConfig==NULL)
+	{
+		CreateProfile(msDefaultProfileName);
+		SetProfile(msDefaultProfileName);
+		InitUserConfig();
+	}
+
+	mpEngine->GetUpdater()->SetContainer("Default");
+
+	if(mpSocketServer)
+		mpSocketServer->PublishEvent(cGameInteractionEvent(eGameInteractionEvent_MainStoryStarted));
+
+	return StartGame("", "", ""); //""= using user config values.
+}
+
+//-----------------------------------------------------------------------
+
 //////////////////////////////////////////////////////////////////////////
 // PRIVATE METHODS
 //////////////////////////////////////////////////////////////////////////

@@ -142,6 +142,26 @@ namespace
 			gpBase->StartCustomStory();
 		}
 
+		virtual bool IsInMainMenu() const
+		{
+			return gpBase->mpInputHandler->GetState() == eLuxInputState_MainMenu &&
+				!gpBase->mpMapHandler->MapIsLoaded() && !gpBase->mpMainMenu->IsTransitioning();
+		}
+
+		virtual void StartMainStory()
+		{
+			// The game may have left the main menu since the Command was accepted.
+			if(!IsInMainMenu())
+			{
+				Log("Game Interaction Protocol: cannot start the Main Story: not in main menu\n");
+				return;
+			}
+
+			// A Command start always runs in normal mode; only the menu offers hard mode.
+			gpBase->mbHardMode = false;
+			gpBase->StartMainStory();
+		}
+
 		virtual eGameInteractionLocalPoseAvailability GetLocalPoseAvailability() const
 		{
 			if(!IsMapLoaded()) return eGameInteractionLocalPoseAvailability_Unavailable;
@@ -374,14 +394,8 @@ namespace
 				eGameInteractionCommandOutcome_EntityWrongType;
 		}
 
-		static bool IsInMainMenu()
-		{
-			return gpBase->mpInputHandler->GetState() == eLuxInputState_MainMenu &&
-				!gpBase->mpMapHandler->MapIsLoaded() && !gpBase->mpMainMenu->IsTransitioning();
-		}
-
-		static eGameInteractionCustomStoryAvailability FindCustomStory(const tWString& asIdentifier,
-			cLuxCustomStorySettings& aStory)
+		eGameInteractionCustomStoryAvailability FindCustomStory(const tWString& asIdentifier,
+			cLuxCustomStorySettings& aStory) const
 		{
 			if(!IsInMainMenu())
 			{

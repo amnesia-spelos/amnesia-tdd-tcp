@@ -187,6 +187,8 @@ public:
 
 	bool StartGame(const tString& asFile, const tString& asFolder, const tString& asStartPos);
 	bool StartCustomStory();
+	// Starts the Main Story from the configured start map, as confirming a new game in the main menu does.
+	bool StartMainStory();
 
 	void SaveConfig();
 

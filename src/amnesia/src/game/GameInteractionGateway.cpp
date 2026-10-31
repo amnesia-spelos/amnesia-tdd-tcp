@@ -90,7 +90,7 @@ bool cGameInteractionEvent::IsInteractionsEvent() const
 
 bool cGameInteractionEvent::IsStoryStartEvent() const
 {
-	return mType == eGameInteractionEvent_CustomStoryStarted;
+	return mType == eGameInteractionEvent_CustomStoryStarted || mType == eGameInteractionEvent_MainStoryStarted;
 }
 
 cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
@@ -154,7 +154,8 @@ cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aTy
 eGameInteractionCommandClassification cGameInteractionCommand::GetClassification() const
 {
 	return mType == eGameInteractionCommand_ExecuteScript || mType == eGameInteractionCommand_Chat ||
-		mType == eGameInteractionCommand_StartCustomStory || mType == eGameInteractionCommand_AvatarCreate ||
+		mType == eGameInteractionCommand_StartCustomStory || mType == eGameInteractionCommand_StartMainStory ||
+		mType == eGameInteractionCommand_AvatarCreate ||
 		mType == eGameInteractionCommand_AvatarEnemySight || mType == eGameInteractionCommand_AvatarRemove || mType == eGameInteractionCommand_AvatarCollision ||
 		mType == eGameInteractionCommand_AvatarPose || mType == eGameInteractionCommand_EntityDrive ||
 		mType == eGameInteractionCommand_EntityBodies || mType == eGameInteractionCommand_EntityInteracting ||
@@ -179,10 +180,19 @@ cGameInteractionResponse::cGameInteractionResponse(eGameInteractionCommandType a
 
 namespace
 {
-	struct cPendingCustomStoryStart
+	enum ePendingStoryStart
 	{
-		cPendingCustomStoryStart() : mbPending(false) {}
-		bool mbPending;
+		ePendingStoryStart_None,
+		ePendingStoryStart_MainStory,
+		ePendingStoryStart_CustomStory
+	};
+
+	// The one accepted start of either kind that has not been performed yet.
+	struct cPendingStoryStart
+	{
+		cPendingStoryStart() : mKind(ePendingStoryStart_None) {}
+		ePendingStoryStart mKind;
+		// The Custom Story Identifier of a pending Custom Story start.
 		std::wstring msIdentifier;
 	};
 
@@ -776,7 +786,7 @@ namespace
 
 	cGameInteractionResponse ExecuteCommand(const cGameInteractionCommand& aCommand,
 		iGameInteractionGameAdapter& aGameAdapter, cSessionProtocol& aSession,
-		cPendingCustomStoryStart& aPendingStart, cPeerSettingModel& aPeerSettings, unsigned int alSession)
+		cPendingStoryStart& aPendingStart, cPeerSettingModel& aPeerSettings, unsigned int alSession)
 	{
 		if (aCommand.GetType() != eGameInteractionCommand_NegotiateProtocol) aSession.mbCommandProcessed = true;
 		const unsigned int requiredCapability = RequiredCapability(aCommand.GetType());
@@ -902,15 +912,22 @@ namespace
 		case eGameInteractionCommand_StartCustomStory:
 		{
 			// A pending start will leave the main menu, so a second start cannot be accepted.
-			const eGameInteractionCommandOutcome outcome = aPendingStart.mbPending ?
+			const eGameInteractionCommandOutcome outcome = aPendingStart.mKind != ePendingStoryStart_None ?
 				eGameInteractionCommandOutcome_NotInMainMenu :
 				OutcomeFor(aGameAdapter.GetCustomStoryAvailability(aCommand.GetCustomStoryIdentifier()));
 			if (outcome == eGameInteractionCommandOutcome_Success)
 			{
-				aPendingStart.mbPending = true;
+				aPendingStart.mKind = ePendingStoryStart_CustomStory;
 				aPendingStart.msIdentifier = aCommand.GetCustomStoryIdentifier();
 			}
 			return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_CustomStoryStarting, outcome);
+		}
+		case eGameInteractionCommand_StartMainStory:
+		{
+			const bool accepted = aPendingStart.mKind == ePendingStoryStart_None && aGameAdapter.IsInMainMenu();
+			if (accepted) aPendingStart.mKind = ePendingStoryStart_MainStory;
+			return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_MainStoryStarting,
+				accepted ? eGameInteractionCommandOutcome_Success : eGameInteractionCommandOutcome_NotInMainMenu);
 		}
 		default:
 			return cGameInteractionResponse(aCommand.GetType(), eGameInteractionResponse_Pong);
@@ -923,7 +940,7 @@ class cGameInteractionGateway::cImplementation
 public:
 	cGameInteractionTransport mTransport;
 	cGameInteractionLineBuffer mInboundLines;
-	cPendingCustomStoryStart mPendingCustomStoryStart;
+	cPendingStoryStart mPendingStoryStart;
 	cSessionProtocol mSession;
 	// Avatars of ended Sessions that the game has not removed yet. A Session can end without a game
 	// adapter at hand, such as on Shutdown, so they are removed on the next update.
@@ -998,13 +1015,13 @@ public:
 	}
 
 	// Runs after the transport has flushed the accepting Response and outside Command processing,
-	// because starting a Custom Story blocks while its start map loads.
-	void PerformPendingCustomStoryStart(iGameInteractionGameAdapter& aGameAdapter)
+	// because starting a story blocks while its start map loads.
+	void PerformPendingStoryStart(iGameInteractionGameAdapter& aGameAdapter)
 	{
-		if (!mPendingCustomStoryStart.mbPending) return;
-		const std::wstring identifier = mPendingCustomStoryStart.msIdentifier;
-		mPendingCustomStoryStart = cPendingCustomStoryStart();
-		aGameAdapter.StartCustomStory(identifier);
+		const cPendingStoryStart start = mPendingStoryStart;
+		mPendingStoryStart = cPendingStoryStart();
+		if (start.mKind == ePendingStoryStart_MainStory) aGameAdapter.StartMainStory();
+		else if (start.mKind == ePendingStoryStart_CustomStory) aGameAdapter.StartCustomStory(start.msIdentifier);
 	}
 };
 
@@ -1049,7 +1066,7 @@ void cGameInteractionGateway::Update(iGameInteractionGameAdapter& aGameAdapter)
 	}
 
 	mpImplementation->CleanUpEndedSessions(aGameAdapter);
-	mpImplementation->PerformPendingCustomStoryStart(aGameAdapter);
+	mpImplementation->PerformPendingStoryStart(aGameAdapter);
 	if (event == eGameInteractionTransportEvent_PeerDisconnected)
 	{
 		aGameAdapter.SetPeerConnected(false);
@@ -1066,7 +1083,7 @@ void cGameInteractionGateway::Update(iGameInteractionGameAdapter& aGameAdapter)
 	{
 		const cGameInteractionCommand command = mpImplementation->ParseCommand(commandText);
 		const cGameInteractionResponse response = ExecuteCommand(command, aGameAdapter,
-			mpImplementation->mSession, mpImplementation->mPendingCustomStoryStart, mpImplementation->mPeerSettings,
+			mpImplementation->mSession, mpImplementation->mPendingStoryStart, mpImplementation->mPeerSettings,
 			mpImplementation->mlSessionNumber);
 		if (response.GetType() == eGameInteractionResponse_None) continue;
 		mpImplementation->mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(

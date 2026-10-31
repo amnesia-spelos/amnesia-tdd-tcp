@@ -216,7 +216,6 @@ bool cLuxMainMenu_StartGame::ClickedStartGamePopup(iWidget* apWidget, const cGui
 
 	if (bStartGame)
 	{
-		gpBase->SetCustomStory(NULL);
 		gpBase->mpMainMenu->ExitMenu(eLuxMainMenuExit_StartGame);
 		gpBase->mpMainMenu->SetWindowActive(eLuxMainMenuWindow_LastEnum);
 	}

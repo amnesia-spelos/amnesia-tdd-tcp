@@ -123,6 +123,7 @@ namespace
 		bool mbInMainMenu;
 		std::wstring msInvalidCustomStory;
 		std::vector<std::wstring> mvStartedCustomStories;
+		int mlMainStoryStarts;
 
 		virtual std::vector<cGameInteractionEnemyPose> GetEnemyPoses() const { return std::vector<cGameInteractionEnemyPose>(); }
 		virtual eGameInteractionCommandOutcome DriveEnemy(int) { return eGameInteractionCommandOutcome_EntityNotFound; }
@@ -163,6 +164,8 @@ namespace
 			return eGameInteractionCustomStoryAvailability_NotFound;
 		}
 		virtual void StartCustomStory(const std::wstring& identifier) { mvStartedCustomStories.push_back(identifier); }
+		virtual bool IsInMainMenu() const { return mbInMainMenu; }
+		virtual void StartMainStory() { ++mlMainStoryStarts; }
 		virtual eGameInteractionLocalPoseAvailability GetLocalPoseAvailability() const
 		{
 			return eGameInteractionLocalPoseAvailability_Unavailable;
@@ -256,6 +259,7 @@ int main(int argc, char** argv)
 		adapter.mPosition = cGameInteractionPosition(position[0], position[1], position[2]);
 		adapter.mRotation = cGameInteractionRotation(rotation[0], rotation[1]);
 		adapter.mbInMainMenu = ReadBool(line, "in_main_menu");
+		adapter.mlMainStoryStarts = 0;
 		adapter.msInvalidCustomStory = Utf8ToWide(ReadString(line, "invalid_custom_story"));
 		const std::vector<std::string> storyIds = ReadStrings(line, "custom_story_ids");
 		const std::vector<std::string> storyNames = ReadStrings(line, "custom_story_names");
@@ -344,6 +348,12 @@ int main(int argc, char** argv)
 			gateway.Update(adapter);
 			actual = Receive(peer);
 		}
+		else if (kind == "main_story_started_event")
+		{
+			gateway.Report(cGameInteractionEvent(eGameInteractionEvent_MainStoryStarted));
+			gateway.Update(adapter);
+			actual = Receive(peer);
+		}
 		else if (kind == "script_call_observation")
 		{
 			gateway.Report(cGameInteractionEvent(eGameInteractionEvent_ScriptCallObserved,
@@ -391,6 +401,11 @@ int main(int argc, char** argv)
 		if (ReadBool(line, "expected_no_start") && !adapter.mvStartedCustomStories.empty())
 		{
 			std::cerr << "FAIL: " << ReadString(line, "name") << " started a Custom Story\n";
+			++failures;
+		}
+		if (adapter.mlMainStoryStarts != (ReadBool(line, "expected_started_main_story") ? 1 : 0))
+		{
+			std::cerr << "FAIL: " << ReadString(line, "name") << " did not start the Main Story the expected number of times\n";
 			++failures;
 		}
 		if (ReadBool(line, "expected_no_display") && adapter.mlDisplayedCount != 0)
