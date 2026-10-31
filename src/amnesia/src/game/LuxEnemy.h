@@ -585,6 +585,9 @@ protected:
 	virtual void UpdateEnemyCopySpecific(float afTimeStep, float afSpeed){}
 	// The simulating game reported this copy's attack, which ResolveEnemyAttack tested against the local player.
 	virtual void OnEnemyCopyAttack(eGameInteractionEnemyAttackKind aKind){}
+	// The state a released copy, or one saved while driven, resumes its own AI in. It must be one this
+	// enemy's state machine defines.
+	virtual eLuxEnemyState GetCopyResumeState(){ return eLuxEnemyState_Wait; }
 	virtual void OnResetProperties(){}
 	virtual void OnDisableTriggers(){}
 

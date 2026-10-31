@@ -94,6 +94,8 @@ private:
 	void OnSetActiveEnemySpecific(bool abX);
 	void UpdateEnemyCopySpecific(float afTimeStep, float afSpeed);
 	void OnEnemyCopyAttack(eGameInteractionEnemyAttackKind aKind);
+	// The Kaernk has no Wait state.
+	eLuxEnemyState GetCopyResumeState(){ return eLuxEnemyState_Idle; }
 
 	float GetDamageMul(float afAmount, int alStrength);
 

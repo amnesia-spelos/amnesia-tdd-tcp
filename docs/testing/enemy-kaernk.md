@@ -2,111 +2,125 @@
 
 Run the rebuilt game from an Amnesia installation, then run the Controller as described in the root README. Version 2 output appears as `uncategorised`.
 
-The fixture is the base game's Archives Cellar, `maps/main/ch01/07_archives_cellar.map`, which has water, meat, and four Kaernks, all initially inactive. `mp-test-cs` has no Kaernk. To get there, type `startmainstory` in the main menu and, once you are in control, type:
+The fixture is the base game's Archives Cellar, Map Path `maps/main/ch01/07_archives_cellar.map`, written `<map>` below. It has water, meat, and Kaernks. `mp-test-cs` has no Kaernk. In the main menu, start a Controller Session and type, as its first lines:
 
 ```text
-exec:ChangeMap("07_archives_cellar.map", "PlayerStartArea_1", "", "")
+protocol 2 avatars enemies
+startmainstory
 ```
 
-Copy the Map Path from the first `STATE enemypose` or `EVENT checkpoint` line; it is written `<map>` below. Each step uses one Kaernk:
+`protocol` must be the first line of a Session; anything before it answers `RESPONSE protocol too-late`. Once you are in control in the first map, type:
 
-| Name | ID | Position |
-| --- | --- | --- |
-| `waterlurker_1` | `5490` | `(125.91, -4, 6.26)` |
-| `waterlurker_3` | `5745` | `(137, -4, 4.25)` |
+```text
+exec:ChangeMap("07_archives_cellar.map", "PlayerStartArea_x4", "", "")
+```
 
-`PlayerStartArea_1`, at `(107.75, -4, -52.25)`, is about 60 m from both Kaernks, out of their 20 m activation range. A Kaernk senses anyone in the water at its own height, however far away, once someone is in range. So stay at the start unless a step says to move. Load the map again with the `ChangeMap` line, and `/reconnect`, between steps.
+You arrive on a ledge at `(143.5, -3, 18)`, about 1 m above the floor of the water in front of you. A Kaernk senses only players within 0.6 m of its own height, so it never senses you there. **Do not move** unless a step says so: the Map Script's areas start the map's own Kaernk encounters. Arriving runs `CollidePastFirstGate`, which registers checkpoint `check02` (with a callback), activates `waterlurker_2`, and deactivates the others:
+
+| Name | ID | Position | On arrival |
+| --- | --- | --- | --- |
+| `waterlurker_2` | `5571` | `(150.5, -4, 6.26)` | active |
+| `waterlurker_1` | `5490` | `(125.91, -4, 6.26)` | inactive |
+
+Between steps, reconnect the Controller and repeat the setup, or carry on in the same Session where a step says so.
 
 1. A Kaernk is reported at Pose rate. Type:
 
    ```text
-   protocol 2 enemies
    enemyposes subscribe 20
-   exec:SetEntityActive("waterlurker_3", true)
    ```
 
-   Expect `RESPONSE protocol ok 2 enemies` and `RESPONSE enemyposes ok subscribe 20`. Then `STATE enemypose 5745 ...` lines arrive, with `-` for the clip because the Kaernk has no animations, ending with `<map>`. Type `enemyposes unsubscribe` to stop them.
+   Expect `RESPONSE enemyposes ok subscribe 20`, then `STATE enemypose 5571 ...` lines every 50 ms, with `-` for the clip because the Kaernk has no animations, ending with `<map>`. Type `enemyposes unsubscribe`.
 
 2. On the Session Host, a Kaernk hunts an Avatar in the water, and its attacks are reported. Type:
 
    ```text
-   protocol 2 avatars enemies
    avatarcreate visitor
-   avatarpose visitor 1000 0 125.91 -4 6.26 0 0 0 0 <map>
+   avatarpose visitor 1000 0 146 -4 6.26 0 0 0 0 <map>
    avatarenemysight visitor 1
-   exec:SetEntityActive("waterlurker_3", true)
    ```
 
-   The Avatar stands in the water about 11 m from the Kaernk. Expect the Kaernk's hunt sounds, then running splashes heading for the Avatar, then attack splashes. Each attack prints one line:
+   The Avatar stands in the water about 4.5 m from the Kaernk and 12 m in front of you. Within seconds the Kaernk splashes over to it and attacks it about every 2.5 s, with attack splashes. Each attack prints:
 
    ```text
-   EVENT enemyattack 5745 normal <sizeX> <sizeY> <sizeZ> <offsetX> <offsetY> <offsetZ> <map>
+   EVENT enemyattack 5571 normal 1.0000 1.0000 1.3000 0.0000 0.0000 1.0000 <map>
    ```
 
-   The Avatar does not react, and you take no damage. Copy the six box numbers for step 4.
+   The Avatar does not react, and you take no damage. Watching a hunting Kaernk drains sanity as vanilla; `exec:SetPlayerSanity(100)` restores it.
 
-3. A driven copy splashes as it moves. Type:
+3. A death that preserves Shared Enemies leaves the Kaernk active. While the Kaernk attacks the Avatar, type:
 
    ```text
-   protocol 2 enemies
-   exec:SetEntityActive("waterlurker_1", true)
-   enemydrive 5490 <map>
+   exec:CheckPoint("nocb", "PlayerStartArea_x4", "", "", "")
+   exec:SetPlayerHealth(0)
    ```
 
-   Expect `RESPONSE enemydrive ok 5490`. Walk to the edge of the water near `(125.91, -4, 6.26)`, without stepping in. Paste both lines at once:
+   Expect `EVENT checkpoint 0 0 nocb <map>`, then `EVENT playerdeath 1 0 0 nocb <map>`, and the game log line `Shared Death: no death callback, so Shared Enemies survive this death`. After you wake on the ledge, `EVENT enemyattack 5571 ...` lines continue: the Kaernk is still attacking the Avatar. Type `avatarremove visitor`.
+
+4. A driven copy splashes as it moves. Type:
 
    ```text
-   enemypose 5490 1000 0 125.91 -4 6.26 0 - 0 0 <map>
-   enemypose 5490 3000 0 125.91 -4 9.46 0 - 0 0 <map>
+   enemydrive 5571 <map>
+   enemypose 5571 10000 0 146 -4 10.2 0 - 0 0 <map>
    ```
 
-   The copy walks 3.2 m in 2 s. Expect about two walk splashes with the medium water impact sound, then nothing. Paste:
+   Expect `RESPONSE enemydrive ok 5571`. Within a few seconds, paste this block in one go. A copy snaps without splashing across any jump over 3 m between poses, so the poses step 0.8 m:
 
    ```text
-   enemypose 5490 4000 0 125.91 -4 9.46 0 - 0 0 <map>
-   enemypose 5490 6000 0 125.91 -4 1.46 0 - 0 0 <map>
+   enemypose 5571 11500 0 146 -4 11.0 0 - 0 0 <map>
+   enemypose 5571 12000 0 146 -4 11.8 0 - 0 0 <map>
+   enemypose 5571 12500 0 146 -4 12.6 0 - 0 0 <map>
+   enemypose 5571 13000 0 146 -4 13.4 0 - 0 0 <map>
+   enemypose 5571 14500 0 146 -4 13.4 0 - 0 0 <map>
+   enemypose 5571 14700 0 146 -4 12.6 0 - 0 0 <map>
+   enemypose 5571 14900 0 146 -4 11.8 0 - 0 0 <map>
+   enemypose 5571 15100 0 146 -4 11.0 0 - 0 0 <map>
+   enemypose 5571 15300 0 146 -4 10.2 0 - 0 0 <map>
+   enemypose 5571 15500 0 146 -4 9.4 0 - 0 0 <map>
+   enemypose 5571 15700 0 146 -4 8.6 0 - 0 0 <map>
+   enemypose 5571 15900 0 146 -4 7.8 0 - 0 0 <map>
+   enemypose 5571 16100 0 146 -4 7.0 0 - 0 0 <map>
+   enemypose 5571 16300 0 146 -4 6.2 0 - 0 0 <map>
+   enemypose 5571 16500 0 146 -4 5.4 0 - 0 0 <map>
    ```
 
-   The copy runs 8 m in 2 s. Expect about four run splashes, closer together, with the high water impact sound. A copy standing still never splashes, and stepping into the water does not make it hunt you.
+   The copy walks 3.2 m toward you in 2 s, waits, then runs 8 m away in 2 s. Expect about two walk splashes with the medium water impact sound, then about four run splashes, closer together, with the high one. The farthest are faint. A copy standing still never splashes.
 
-4. A driven copy shows reported bites and attacks. Keep driving `5490` from step 3, stand at the water's edge in front of the copy, and type, putting your box numbers in place of `<box>`:
+5. A driven copy shows reported bites and attacks. Carry on driving `5571` and type:
 
    ```text
-   enemyeat 5490 <map>
-   enemyattack 5490 normal <box> <map>
-   enemyattack 5490 breakdoor <box> <map>
+   enemypose 5571 20000 1 146 -4 10.8 0 - 0 0 <map>
+   enemyeat 5571 <map>
+   enemyattack 5571 normal 1 1 1.3 0 0 1 <map>
+   enemyattack 5571 breakdoor 1 1 1.3 0 0 1 <map>
    ```
 
-   Expect `RESPONSE enemyeat ok 5490` with an eat splash and the Kaernk's eating sound. The first `enemyattack` gets `RESPONSE enemyattack ok 5490` with an attack splash, and a hit if you are within reach. The `breakdoor` attack gets `RESPONSE enemyattack ok 5490` with no splash. Type `enemyrelease 5490 <map>`, then `enemyeat 5490 <map>`: expect `RESPONSE enemyrelease ok 5490`, then `RESPONSE enemyeat not-found 5490`, because only a driven copy shows a reported bite.
-
-5. A simulated Kaernk's bites are reported. Type:
+   The copy snaps to 7 m in front of you. Each Command answers `ok 5571`. The bite shows an eat splash with the Kaernk's eating sound, the normal attack an attack splash with the high water impact sound, and the door-break attack nothing. Then type:
 
    ```text
-   protocol 2 enemies
-   exec:SetEntityActive("waterlurker_3", true)
+   enemyrelease 5571 <map>
+   enemyeat 5571 <map>
    ```
 
-   Pick up a piece of meat and, staying out of the water, throw it into the water near `(137, -4, 4.25)`. The Kaernk walks to it, splashing, and eats it. Each bite prints:
+   Expect `RESPONSE enemyrelease ok 5571`, the game still running, and `RESPONSE enemyeat not-found 5571`: only a driven copy shows a reported bite. Releasing a Kaernk copy, including by closing the Controller, must never end the game with `FATAL ERROR: Tried calling undefined state` in the log.
+
+6. A simulated Kaernk's bites are reported. With `5571` released, pick up a piece of meat and, staying on the ledge, throw it into the water in front of you. The Kaernk comes to it, splashing, and eats it. Each bite, about 1.2 s apart, prints:
 
    ```text
-   EVENT enemyeat 5745 <map>
+   EVENT enemyeat 5571 <map>
    ```
-
-6. A death that preserves Shared Enemies leaves the Kaernk active. Repeat step 2's setup and let the Kaernk start attacking the Avatar. Type `exec:SetPlayerHealth(0)`. Expect `EVENT playerdeath 1 0 0 _auto <map>` and the game log line `Shared Death: no death callback, so Shared Enemies survive this death`. After you wake, the Kaernk is still splashing at the Avatar. Without the `avatarpose` line, the same death deactivates the Kaernk, as vanilla.
 
 7. A coordinated death resets a driven copy. Type:
 
    ```text
-   protocol 2 enemies
-   exec:CheckPoint("check01", "PlayerStartArea_1", "CheckPoint01", "Hints", "DeathWaterLurker01")
-   exec:SetEntityActive("waterlurker_1", true)
+   exec:CheckPoint("check02", "PlayerStartArea_x4", "CheckPoint02", "Hints", "DeathWaterLurker02")
    enemydrive 5490 <map>
    enemypose 5490 1000 0 125.91 -4 6.26 0 - 0 0 <map>
-   shareddeath 1 0 1 check01 <map>
+   shareddeath 1 0 0 check02 <map>
    ```
 
-   Expect `RESPONSE shareddeath ok`, and you die at once. After you wake, `EVENT checkpoint 2 1 check01 <map>` follows. Type `enemyrelease 5490 <map>`: expect `RESPONSE enemyrelease ok 5490`, and the Kaernk stays inactive (no splashes, no `STATE enemypose 5490` lines on `enemyposes subscribe 20`).
+   The first line registers the map's own `check02` again, as the Map Script does, in case an earlier step replaced it. Expect `EVENT checkpoint 0 1 check02 <map>`, `RESPONSE enemydrive ok 5490`, and `RESPONSE shareddeath ok`, and you die at once. After you wake, `EVENT checkpoint 1 1 check02 <map>` follows. Type `enemyrelease 5490 <map>`, then `enemyposes subscribe 20`: expect `RESPONSE enemyrelease ok 5490`, and no `STATE enemypose 5490` lines, because the copy stays inactive.
 
-A Kaernk can break doors: one stuck at a closed door while hunting attacks it with its `breakdoor` attack (`BreakDoorAttackDamage` `10 20`, strength `3`). That attack is reported as `EVENT enemyattack <id> breakdoor ...`, and a door it breaks as `EVENT enemydoorbreak`, the same as a Grunt's; the Archives Cellar has no door in the Kaernks' water, so [the door break checks](enemy-doors-and-callbacks.md) cover that path with the Grunt.
+A Kaernk can break doors: one stuck at a closed door while hunting attacks it with its `breakdoor` attack (`BreakDoorAttackDamage` `10 20`, strength `3`). That attack is reported as `EVENT enemyattack <id> breakdoor ...`, and a door it breaks as `EVENT enemydoorbreak`, the same as a Grunt's. The Archives Cellar has no door in the Kaernks' water, so [the door break checks](enemy-doors-and-callbacks.md) cover that path with the Grunt.
 
-Automated tests cover the `enemyeat` wire format, Capability gating, and map checks, as well as the splash cadence a copy's movement implies. The real-game checks above, and the two-PC LAN check from the issue, remain manual. The Game Peer in `../amnesia-multiplayer` relays `enemyeat` only once it learns the Event; until then a Joining Player's copy shows walk, run, and attack splashes but no bites.
+Automated tests cover the `enemyeat` wire format, Capability gating, and map checks, as well as the splash cadence a copy's movement implies. The real-game checks above, and the two-PC LAN check from the issue, remain manual. The Game Peer in `../amnesia-multiplayer` relays `enemyeat` only once it learns the Event (amnesia-spelos/amnesia-multiplayer#89); until then a Joining Player's copy shows walk, run, and attack splashes but no bites.

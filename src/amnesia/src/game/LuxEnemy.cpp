@@ -2826,7 +2826,7 @@ void iLuxEnemy::SaveToSaveData(iLuxEntity_SaveData* apSaveData)
 		pData->mbActive = mbCopyWasActive;
 		pData->mCharBody.mbActive = mbCopyWasActive;
 		pData->mlCurrentState = eLuxEnemyState_Idle;
-		pData->mlNextState = eLuxEnemyState_Wait;
+		pData->mlNextState = GetCopyResumeState();
 		pData->mbCanSeePlayer = pData->mbPlayerDetected = pData->mbPlayerInRange = false;
 		pData->mlPlayerInLOSCount = 0;
 		pData->mMover.mbOverideMoveState = false;
@@ -3071,6 +3071,8 @@ void iLuxEnemy::SetEnemyDriven(bool abDriven)
 		gpBase->mpMusicHandler->RemoveEnemy(eLuxEnemyMusic_Attack, this);
 		gpBase->mpMusicHandler->RemoveEnemy(eLuxEnemyMusic_Search, this);
 		gpBase->mpPlayer->RemoveTerrorEnemy(this);
+		// A Kaernk drains sanity only while hunting, and a taken-over hunt never ends to turn it off.
+		mbCausesSanityDecrease = mbCausesSanityDecreaseAsDefault;
 		// A disappeared copy waits for a pose sampled after its disappearance.
 		if(mCopyLifecycle.ActivatesOnDrive()) SetActive(true);
 	}
@@ -3093,7 +3095,7 @@ void iLuxEnemy::SetEnemyDriven(bool abDriven)
 		mbCanSeePlayer = mbPlayerDetected = mbPlayerInRange = false;
 		mlPlayerInLOSCount = 0;
 		mCurrentState = eLuxEnemyState_Idle;
-		mNextState = eLuxEnemyState_Wait;
+		mNextState = GetCopyResumeState();
 		for(size_t i=0; i<mvCopyAnimationSpeeds.size(); ++i)
 			mpMeshEntity->GetAnimationState(static_cast<int>(i))->SetSpeed(mvCopyAnimationSpeeds[i]);
 		mvCopyAnimationSpeeds.clear();
