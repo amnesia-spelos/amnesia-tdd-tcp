@@ -1906,15 +1906,32 @@ void iLuxEnemy::UpdateRegenHealth(float afTimeStep)
 	}
 }
 
+// A Shared Enemy's hallucination ends near either player, and the other games play the disappearance
+// on their copies.
 void iLuxEnemy::UpdateHallucination(float afTimeStep)
 {
 	if(mbHallucination==false || mfHealth <= 0) return;
 
-	float fDistSqr = cMath::Vector3DistSqr(mpCharBody->GetPosition(), gpBase->mpPlayer->GetCharacterBody()->GetPosition());
-	if(fDistSqr < mfHallucinationEndDist * mfHallucinationEndDist)
+	const cVector3f vPosition = mpCharBody->GetPosition();
+	const bool bShared = IsSharedEnemy();
+	std::vector<float> vAvatarDistancesSqr;
+	if(bShared)
 	{
-		FadeToSmoke(true);
+		const std::vector<cVector3f> vAvatars = gpBase->mpAvatarHandler->GetAwakeAvatarPositions();
+		for(size_t i = 0; i < vAvatars.size(); ++i) vAvatarDistancesSqr.push_back(cMath::Vector3DistSqr(vPosition, vAvatars[i]));
 	}
+	const float fLocalDistSqr = cMath::Vector3DistSqr(vPosition, gpBase->mpPlayer->GetCharacterBody()->GetPosition());
+	if(!cEnemyPerceptionModel::HallucinationEnds(mfHallucinationEndDist, fLocalDistSqr, vAvatarDistancesSqr)) return;
+
+	if(bShared)
+	{
+		cGameInteractionEnemyDisappearance disappearance;
+		disappearance.mlEntityId = GetID();
+		disappearance.mlTimeMs = static_cast<unsigned long long>(gpBase->mpEngine->GetGameTime() * 1000.0);
+		disappearance.msMapFile = mpMap->GetMapPath();
+		gpBase->mpSocketServer->PublishEvent(cGameInteractionEvent(eGameInteractionEvent_EnemyDisappear, disappearance));
+	}
+	FadeToSmoke(true);
 }
 
 //-----------------------------------------------------------------------
@@ -2484,6 +2501,8 @@ bool iLuxEnemy::PlayerInFOV()
 
 void iLuxEnemy::OnSetActive(bool abX)
 {	
+	// Anything activating a disappeared copy, such as its Map Script, ends the disappearance.
+	if(abX) mCopyLifecycle.Activated();
 	if(mpCharBody)
 	{
 		mpCharBody->SetActive(abX);
@@ -3052,7 +3071,8 @@ void iLuxEnemy::SetEnemyDriven(bool abDriven)
 		gpBase->mpMusicHandler->RemoveEnemy(eLuxEnemyMusic_Attack, this);
 		gpBase->mpMusicHandler->RemoveEnemy(eLuxEnemyMusic_Search, this);
 		gpBase->mpPlayer->RemoveTerrorEnemy(this);
-		SetActive(true);
+		// A disappeared copy waits for a pose sampled after its disappearance.
+		if(mCopyLifecycle.ActivatesOnDrive()) SetActive(true);
 	}
 	else
 	{
@@ -3117,8 +3137,24 @@ bool iLuxEnemy::AddEnemyPose(const cGameInteractionEnemyPose& aPose)
 {
 	if(!mbEnemyDriven) return false;
 	if(!aPose.msClip.empty() && !mpMeshEntity->GetAnimationStateFromName(aPose.msClip)) return false;
+	const eEnemyCopyPoseAdmission admission = mCopyLifecycle.AdmitPose(aPose.mPose.mlTimeMs, IsActive());
+	if(admission == eEnemyCopyPoseAdmission_Ignore) return true;
+	if(admission == eEnemyCopyPoseAdmission_Reactivate)
+	{
+		// The simulating game activated the enemy again; the samples from before the disappearance are stale.
+		mEnemyCopy = cEnemyCopyModel();
+		mbCopyWasActive = true;
+		SetActive(true);
+	}
 	mEnemyCopy.AddPose(aPose, gpBase->mpEngine->GetGameTime() * 1000.0);
 	return true;
+}
+
+void iLuxEnemy::DisappearReportedHallucination(unsigned long long alTimeMs)
+{
+	const bool bPlay = mCopyLifecycle.Disappear(alTimeMs, IsActive());
+	if(!mCopyLifecycle.ActivatesOnDrive()) mbCopyWasActive = false;
+	if(bPlay) FadeToSmoke(true);
 }
 
 void iLuxEnemy::UpdateEnemyCopy(float afTimeStep)

@@ -47,6 +47,8 @@ public:
 	void SetAvatarCollision(const tString& asIdentifier, bool abCollides);
 	// Whether another player is on the current map, shown by an awake Avatar.
 	bool HasAwakeAvatar() const;
+	// The body centers of the Avatars awake on the current map, opted into enemy sight or not.
+	std::vector<cVector3f> GetAwakeAvatarPositions() const;
 
 	void Update(float afTimeStep);
 	void Reset();

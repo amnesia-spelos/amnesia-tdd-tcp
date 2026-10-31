@@ -41,6 +41,16 @@ public:
 			if (!nearest || avatars[i].mfDistance < nearest->mfDistance) nearest = &avatars[i];
 		return nearest ? nearest->msIdentifier : std::string();
 	}
+	// Whether a hallucination disappears: any player strictly inside its end distance, whichever player the
+	// enemy targets. Squared distances keep vanilla's comparison.
+	static bool HallucinationEnds(float endDistance, float localDistanceSqr, const std::vector<float>& avatarDistancesSqr)
+	{
+		const float endDistanceSqr = endDistance * endDistance;
+		if (localDistanceSqr < endDistanceSqr) return true;
+		for (size_t i = 0; i < avatarDistancesSqr.size(); ++i)
+			if (avatarDistancesSqr[i] < endDistanceSqr) return true;
+		return false;
+	}
 	cEnemyPerceptionModel(bool localVisible = false) : mbVisible(localVisible)
 	{ if (localVisible) mCounts[""] = 3; }
 	void Update(const std::vector<cEnemyPerceptionCandidate>& players)

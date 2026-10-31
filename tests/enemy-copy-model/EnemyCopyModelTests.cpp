@@ -46,5 +46,27 @@ int main()
 	Expect(release.NewestPose("map", rendered) && rendered.mPose.mFeetPosition.mfX == 2 &&
 		rendered.mPose.mfBodyYawDegrees == 90 && rendered.msClip == "Run", "newest pose is the last driven one");
 	Expect(!release.NewestPose("other map", rendered), "another map's pose is not resumed");
+	// A disappearance the simulating game reports plays once; only its later samples bring the copy back.
+	cEnemyCopyLifecycle lifecycle;
+	Expect(lifecycle.ActivatesOnDrive(), "a copy that never disappeared activates when driven");
+	Expect(lifecycle.AdmitPose(900, true) == eEnemyCopyPoseAdmission_Show, "poses show before any disappearance");
+	Expect(lifecycle.Disappear(1000, true), "an active copy plays the delivered disappearance");
+	Expect(!lifecycle.Disappear(1000, false), "a duplicate disappearance plays nothing");
+	Expect(!lifecycle.Disappear(800, false), "an older disappearance plays nothing");
+	Expect(lifecycle.AdmitPose(1000, false) == eEnemyCopyPoseAdmission_Ignore, "a pose from the disappearing update is late");
+	Expect(lifecycle.AdmitPose(950, false) == eEnemyCopyPoseAdmission_Ignore, "a late pose cannot resurrect the copy");
+	Expect(!lifecycle.ActivatesOnDrive(), "driving again keeps a disappeared copy inactive");
+	Expect(lifecycle.AdmitPose(1050, false) == eEnemyCopyPoseAdmission_Reactivate,
+		"a pose sampled after the disappearance reactivates the copy");
+	Expect(lifecycle.ActivatesOnDrive(), "a reactivated copy activates when driven again");
+	Expect(lifecycle.AdmitPose(1100, true) == eEnemyCopyPoseAdmission_Show, "the reactivated copy shows its poses");
+	Expect(!lifecycle.Disappear(1000, true), "a stale duplicate after reactivation plays nothing");
+	Expect(lifecycle.AdmitPose(990, true) == eEnemyCopyPoseAdmission_Ignore, "a pose older than the last disappearance stays late");
+	Expect(lifecycle.Disappear(2000, true), "a later disappearance plays again");
+	cEnemyCopyLifecycle inactive;
+	Expect(!inactive.Disappear(1000, false), "an inactive copy plays nothing");
+	Expect(!inactive.ActivatesOnDrive(), "but still stays inactive when driven");
+	inactive.Activated();
+	Expect(inactive.ActivatesOnDrive(), "a Map Script activating the copy ends the disappearance");
 	std::cout << "Enemy copy model cases passed\n";
 }

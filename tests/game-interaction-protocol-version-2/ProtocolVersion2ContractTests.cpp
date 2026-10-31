@@ -142,6 +142,7 @@ namespace
 		virtual void ReleaseDrivenEnemies() {}
 		virtual eGameInteractionCommandOutcome ResolveEnemyAttack(const cGameInteractionEnemyAttack&) { return eGameInteractionCommandOutcome_EntityNotFound; }
 		virtual eGameInteractionCommandOutcome BreakEnemyDoor(int) { return eGameInteractionCommandOutcome_EntityNotFound; }
+		virtual eGameInteractionCommandOutcome DisappearEnemy(int, unsigned long long) { return eGameInteractionCommandOutcome_EntityNotFound; }
 		virtual bool GetCheckPoint(cGameInteractionCheckPoint& aCheckPoint) const
 		{
 			aCheckPoint = cGameInteractionCheckPoint();

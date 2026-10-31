@@ -63,6 +63,8 @@ See [enemy attack Controller checks](docs/testing/enemy-attacks.md) for reportin
 
 See [enemy door break and callback Controller checks](docs/testing/enemy-doors-and-callbacks.md) for doors a Grunt breaks and collides it triggers.
 
+See [enemy hallucination Controller checks](docs/testing/enemy-hallucinations.md) for hallucinations that end near either player and their disappearance on a driven copy.
+
 Shared Death episodes, their death-screen wait, and the agreed checkpoint count have a standalone harness:
 
 ```powershell

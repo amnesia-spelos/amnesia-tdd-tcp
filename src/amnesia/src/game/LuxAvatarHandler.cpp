@@ -115,6 +115,16 @@ bool cLuxAvatarHandler::HasAwakeAvatar() const
 	return false;
 }
 
+std::vector<cVector3f> cLuxAvatarHandler::GetAwakeAvatarPositions() const
+{
+	std::vector<cVector3f> positions;
+	for(tAvatarMap::const_iterator it = m_mapAvatars.begin(); it != m_mapAvatars.end(); ++it)
+	{
+		if(it->second.mpBody && it->second.mpBody->IsActive()) positions.push_back(it->second.mpBody->GetPosition());
+	}
+	return positions;
+}
+
 std::vector<cLuxAvatarHandler::cEnemyTarget> cLuxAvatarHandler::GetEnemyTargets()
 {
 	std::vector<cEnemyTarget> targets;

@@ -236,6 +236,15 @@ namespace
 			return eGameInteractionCommandOutcome_Success;
 		}
 
+		virtual eGameInteractionCommandOutcome DisappearEnemy(int alEntityId, unsigned long long alTimeMs)
+		{
+			iLuxEnemy* enemy = NULL;
+			const eGameInteractionCommandOutcome outcome = FindEnemy(alEntityId, enemy);
+			if(outcome != eGameInteractionCommandOutcome_Success) return outcome;
+			enemy->DisappearReportedHallucination(alTimeMs);
+			return eGameInteractionCommandOutcome_Success;
+		}
+
 		virtual bool GetCheckPoint(cGameInteractionCheckPoint& aCheckPoint) const
 		{
 			if(!IsMapLoaded()) return false;

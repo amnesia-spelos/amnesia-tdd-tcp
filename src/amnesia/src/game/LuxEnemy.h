@@ -461,6 +461,10 @@ public:
 	void ResetEnemyCopy();
 	cGameInteractionEnemyPose GetEnemyPose();
 	bool AddEnemyPose(const cGameInteractionEnemyPose& aPose);
+	// This enemy's hallucination disappeared in the simulating game at its time alTimeMs. Plays the full
+	// disappearance once; a copy then stays inactive until a pose sampled after it. An enemy not driven
+	// yet is gone too, and driving it later does not activate it.
+	void DisappearReportedHallucination(unsigned long long alTimeMs);
 	bool ResolveEnemyAttack(const cGameInteractionEnemyAttack& aAttack);
 	void UpdateEnemyCopy(float afTimeStep);
 
@@ -648,6 +652,8 @@ protected:
 	bool mbCopyWasActive;
 	std::vector<float> mvCopyAnimationSpeeds;
 	cEnemyCopyModel mEnemyCopy;
+	// Kept across release and driving again, unlike mEnemyCopy.
+	cEnemyCopyLifecycle mCopyLifecycle;
 	bool mbDisabled;
 
 	bool mbDisableTriggers;

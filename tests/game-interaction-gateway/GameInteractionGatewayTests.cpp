@@ -39,6 +39,7 @@ namespace
 		{
 			mEnemyAttackOutcome = eGameInteractionCommandOutcome_Success;
 			mEnemyDoorBreakOutcome = eGameInteractionCommandOutcome_Success;
+			mEnemyDisappearOutcome = eGameInteractionCommandOutcome_Success;
 			mbPlayerKillable = true;
 			mlKilledPlayers = 0;
 			mCheckPoint.mlCount = 0;
@@ -74,6 +75,14 @@ namespace
 		eGameInteractionCommandOutcome mEnemyDoorBreakOutcome;
 		virtual eGameInteractionCommandOutcome BreakEnemyDoor(int id)
 		{ mvEntityOperations.push_back("door break " + Text(id)); return mEnemyDoorBreakOutcome; }
+		eGameInteractionCommandOutcome mEnemyDisappearOutcome;
+		virtual eGameInteractionCommandOutcome DisappearEnemy(int id, unsigned long long timeMs)
+		{
+			std::ostringstream text;
+			text << "enemy disappear " << id << " " << timeMs;
+			mvEntityOperations.push_back(text.str());
+			return mEnemyDisappearOutcome;
+		}
 
 		cGameInteractionCheckPoint mCheckPoint;
 		virtual bool GetCheckPoint(cGameInteractionCheckPoint& aCheckPoint) const
@@ -531,6 +540,69 @@ namespace
 		Expect(ReceiveLines(peer, 2) ==
 			"EVENT enemydoorbreak 31 maps/main/level01.map\nEVENT enemydoorbreak -4 maps/main/level01.map\n",
 			"each door an enemy breaks is reported with its map");
+		closesocket(peer);
+	}
+
+	cGameInteractionEvent EnemyDisappearance(int alEnemyId, unsigned long long alTimeMs)
+	{
+		cGameInteractionEnemyDisappearance disappearance;
+		disappearance.mlEntityId = alEnemyId;
+		disappearance.mlTimeMs = alTimeMs;
+		disappearance.msMapFile = "maps/main/level01.map";
+		return cGameInteractionEvent(eGameInteractionEvent_EnemyDisappear, disappearance);
+	}
+
+	void EnemyDisappearancesAreReportedOnlyToEnemiesSessions()
+	{
+		cGameInteractionGateway gateway;
+		cFakeGameAdapter adapter;
+		Expect(gateway.Listen("127.0.0.1", 0), "listen");
+		SOCKET peer = Connect(gateway, adapter); Receive(peer);
+		SendCommands(peer, gateway, adapter, "protocol 2 interactions sharedcallbacks\n");
+		Expect(Receive(peer) == "RESPONSE protocol ok 2 interactions sharedcallbacks\n", "negotiated without enemies");
+		gateway.Report(EnemyDisappearance(7, 1250));
+		gateway.Update(adapter);
+		Expect(ReceiveAvailable(peer, 100).empty(), "Sessions without enemies receive no disappearances");
+		closesocket(peer);
+		gateway.Shutdown();
+		Expect(gateway.Listen("127.0.0.1", 0), "listen again");
+		peer = Connect(gateway, adapter); Receive(peer);
+		SendCommands(peer, gateway, adapter, "protocol 2 enemies\n");
+		ReceiveLines(peer, 2);
+		gateway.Report(EnemyDisappearance(7, 1250));
+		gateway.Update(adapter);
+		Expect(Receive(peer) == "EVENT enemydisappear 7 1250 maps/main/level01.map\n",
+			"a disappearance names the enemy, the simulating game's time, and the map");
+		closesocket(peer);
+	}
+
+	void EnemyDisappearCommandsReachTheDrivenCopy()
+	{
+		cGameInteractionGateway gateway;
+		cFakeGameAdapter adapter;
+		Expect(gateway.Listen("127.0.0.1", 0), "listen");
+		SOCKET peer = Connect(gateway, adapter); Receive(peer);
+		SendCommands(peer, gateway, adapter, "protocol 2 interactions\nenemydisappear 7 1250 maps/main/level01.map\n");
+		Expect(ReceiveLines(peer, 2) == "RESPONSE protocol ok 2 interactions\nRESPONSE enemydisappear not-granted\n",
+			"disappearances require enemies");
+		Expect(adapter.mvEntityOperations.empty(), "an ungranted disappearance never reaches the game");
+		closesocket(peer);
+		gateway.Shutdown();
+		Expect(gateway.Listen("127.0.0.1", 0), "listen again");
+		peer = Connect(gateway, adapter); Receive(peer);
+		SendCommands(peer, gateway, adapter, "protocol 2 enemies\nenemydisappear 007 1250 maps/main/level01.map\n");
+		Expect(ReceiveLines(peer, 3) == "RESPONSE protocol ok 2 enemies\nRESPONSE enemydisappear ok 7\n"
+			"EVENT checkpoint 0 0 _auto maps/main/level01.map\n", "a granted disappearance succeeds");
+		Expect(adapter.mvEntityOperations.size() == 1 && adapter.mvEntityOperations[0] == "enemy disappear 7 1250",
+			"the enemy and the time reach the game");
+		adapter.mEnemyDisappearOutcome = eGameInteractionCommandOutcome_EntityNotFound;
+		SendCommands(peer, gateway, adapter, "enemydisappear 12 1250 maps/main/level01.map\n"
+			"enemydisappear 7 1250 other.map\nenemydisappear 7 -1 maps/main/level01.map\n"
+			"enemydisappear 7 maps/main/level01.map\nenemydisappear 7 1250\n");
+		Expect(ReceiveLines(peer, 5) == "RESPONSE enemydisappear not-found 12\nRESPONSE enemydisappear wrong-map 7\n"
+			"RESPONSE enemydisappear invalid\nRESPONSE enemydisappear invalid\nRESPONSE enemydisappear invalid\n",
+			"failures name the enemy; malformed lines are invalid");
+		Expect(adapter.mvEntityOperations.size() == 2, "only disappearances on the current map reach the game");
 		closesocket(peer);
 	}
 
@@ -2235,6 +2307,8 @@ int main()
 	EnemyAttackCommandsReachTheDrivenCopy();
 	EnemyDoorBreaksAreReportedOnlyToEnemiesSessions();
 	EnemyDoorBreakCommandsBreakThisGamesDoor();
+	EnemyDisappearancesAreReportedOnlyToEnemiesSessions();
+	EnemyDisappearCommandsReachTheDrivenCopy();
 	EnemiesAreSharedOnlyWhileAnEnemiesSessionLasts();
 	CheckPointStateIsReportedToEnemiesSessionsWhenItChanges();
 	LocalDeathsAreReportedWithTheirCheckPoint();

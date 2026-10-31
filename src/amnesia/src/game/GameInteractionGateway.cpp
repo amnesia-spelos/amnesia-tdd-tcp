@@ -68,6 +68,9 @@ cGameInteractionEvent::cGameInteractionEvent(eGameInteractionEventType aType,
 cGameInteractionEvent::cGameInteractionEvent(eGameInteractionEventType aType,
 	const cGameInteractionEnemyAttack& aAttack) : mType(aType), mEnemyAttack(aAttack) {}
 
+cGameInteractionEvent::cGameInteractionEvent(eGameInteractionEventType aType,
+	const cGameInteractionEnemyDisappearance& aDisappearance) : mType(aType), mEnemyDisappearance(aDisappearance) {}
+
 cGameInteractionCommand::cGameInteractionCommand(eGameInteractionCommandType aType,
 	const cGameInteractionEntityStateRequest& aRequest)
 	: mType(aType), mlProtocolVersion(0), mlCapabilities(0),
@@ -163,7 +166,7 @@ eGameInteractionCommandClassification cGameInteractionCommand::GetClassification
 		mType == eGameInteractionCommand_ButtonState || mType == eGameInteractionCommand_LampState ||
 		mType == eGameInteractionCommand_EnemyDrive || mType == eGameInteractionCommand_EnemyPose ||
 		mType == eGameInteractionCommand_EnemyRelease || mType == eGameInteractionCommand_EnemyAttack ||
-		mType == eGameInteractionCommand_EnemyDoorBreak ||
+		mType == eGameInteractionCommand_EnemyDoorBreak || mType == eGameInteractionCommand_EnemyDisappear ||
 		mType == eGameInteractionCommand_SharedDeath ||
 		mType == eGameInteractionCommand_SharedCallback || mType == eGameInteractionCommand_PlayerPlace ?
 		eGameInteractionCommandClassification_StateChanging :
@@ -493,6 +496,8 @@ namespace
 		}
 		else if (aCommand.GetType() == eGameInteractionCommand_EnemyRelease) outcome = aGameAdapter.ReleaseEnemy(id);
 		else if (aCommand.GetType() == eGameInteractionCommand_EnemyDoorBreak) outcome = aGameAdapter.BreakEnemyDoor(id);
+		else if (aCommand.GetType() == eGameInteractionCommand_EnemyDisappear)
+			outcome = aGameAdapter.DisappearEnemy(id, request.mEnemy.mPose.mlTimeMs);
 		else outcome = aGameAdapter.PoseEnemy(request.mEnemy);
 		if (aCommand.GetType() == eGameInteractionCommand_EnemyPose)
 		{
@@ -749,6 +754,7 @@ namespace
 		case eGameInteractionCommand_EnemyAttack:
 		case eGameInteractionCommand_SharedDeath:
 		case eGameInteractionCommand_EnemyDoorBreak:
+		case eGameInteractionCommand_EnemyDisappear:
 			return eGameInteractionCapability_Enemies;
 		case eGameInteractionCommand_LocalPose:
 			return eGameInteractionCapability_LocalPose;
@@ -801,6 +807,7 @@ namespace
 		case eGameInteractionCommand_EnemyPose:
 		case eGameInteractionCommand_EnemyRelease:
 		case eGameInteractionCommand_EnemyDoorBreak:
+		case eGameInteractionCommand_EnemyDisappear:
 			return ExecuteEnemyCommand(aCommand, aGameAdapter, aSession);
 		case eGameInteractionCommand_EnemyAttack:
 			return ExecuteEnemyAttack(aCommand, aGameAdapter);
@@ -1123,7 +1130,8 @@ void cGameInteractionGateway::Report(const cGameInteractionEvent& aEvent)
 		mpImplementation->mSession.mSharedDeaths.EndMapVisit();
 	}
 	if (!mpImplementation->mTransport.HasPeer()) return;
-	if (aEvent.GetType() == eGameInteractionEvent_EnemyAttack || aEvent.GetType() == eGameInteractionEvent_EnemyDoorBreak)
+	if (aEvent.GetType() == eGameInteractionEvent_EnemyAttack || aEvent.GetType() == eGameInteractionEvent_EnemyDoorBreak ||
+		aEvent.GetType() == eGameInteractionEvent_EnemyDisappear)
 	{
 		if (mpImplementation->mSession.mlGrantedCapabilities & eGameInteractionCapability_Enemies)
 			mpImplementation->mTransport.QueueBytes(cLegacyGameInteractionProtocol::ToWireLine(

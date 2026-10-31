@@ -83,6 +83,7 @@ namespace
 		{ eGameInteractionCommand_EnemyRelease, "enemyrelease" },
 		{ eGameInteractionCommand_EnemyAttack, "enemyattack" },
 		{ eGameInteractionCommand_EnemyDoorBreak, "enemydoorbreak" },
+		{ eGameInteractionCommand_EnemyDisappear, "enemydisappear" },
 		{ eGameInteractionCommand_SharedDeath, "shareddeath" },
 		{ eGameInteractionCommand_SettingAnnounce, "settingannounce" },
 		{ eGameInteractionCommand_SettingValue, "settingvalue" }
@@ -301,7 +302,8 @@ namespace
 		return cGameInteractionCommand(aType, request);
 	}
 
-	// enemydrive, enemypose, enemyrelease, and enemydoorbreak, whose entity is the door rather than an enemy.
+	// enemydrive, enemypose, enemyrelease, enemydisappear, and enemydoorbreak, whose entity is the door rather
+	// than an enemy.
 	cGameInteractionCommand ParseEnemyCommand(eGameInteractionCommandType aType, const std::string& asLine)
 	{
 		cGameInteractionFieldReader reader(asLine);
@@ -312,6 +314,8 @@ namespace
 		cGameInteractionPose& pose = enemy.mPose;
 		bool valid = reader.TryReadField(field) &&
 			cGameInteractionProtocolVersion2::TryParseEntityIdentifier(field, enemy.mlEntityId);
+		if (valid && aType == eGameInteractionCommand_EnemyDisappear)
+			valid = TryReadUnsignedInteger(reader, kMaximumTimeMs, pose.mlTimeMs);
 		if (valid && aType == eGameInteractionCommand_EnemyPose)
 		{
 			unsigned long long teleport = 0;
@@ -918,7 +922,8 @@ cGameInteractionCommand cGameInteractionProtocolVersion2::ParseCommand(const std
 		eGameInteractionCommand_Unknown;
 	if (type == eGameInteractionCommand_Unknown) return cLegacyGameInteractionProtocol::ParseCommand(asLine);
 	if (type == eGameInteractionCommand_EnemyDrive || type == eGameInteractionCommand_EnemyPose ||
-		type == eGameInteractionCommand_EnemyRelease || type == eGameInteractionCommand_EnemyDoorBreak)
+		type == eGameInteractionCommand_EnemyRelease || type == eGameInteractionCommand_EnemyDoorBreak ||
+		type == eGameInteractionCommand_EnemyDisappear)
 		return ParseEnemyCommand(type, asLine);
 	if (type == eGameInteractionCommand_EnemyAttack) return ParseEnemyAttack(asLine);
 	if (type == eGameInteractionCommand_SharedDeath) return ParseSharedDeath(asLine);
@@ -1031,6 +1036,13 @@ std::string cGameInteractionProtocolVersion2::SerializeEvent(const cGameInteract
 		return "EVENT enemyattack " + FormatEnemyAttack(aEvent.GetEnemyAttack());
 	case eGameInteractionEvent_EnemyDoorBreak:
 		return FormatEntityEvent("enemydoorbreak", entityEvent, std::string());
+	case eGameInteractionEvent_EnemyDisappear:
+	{
+		const cGameInteractionEnemyDisappearance& disappearance = aEvent.GetEnemyDisappearance();
+		char time[32];
+		sprintf(time, " %llu ", disappearance.mlTimeMs);
+		return "EVENT enemydisappear " + FormatEntityIdentifier(disappearance.mlEntityId) + time + disappearance.msMapFile;
+	}
 	default:
 		return std::string();
 	}

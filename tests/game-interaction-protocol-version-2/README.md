@@ -355,7 +355,7 @@ enemypose <entityId> <timeMs> <teleportCounter> <x> <y> <z> <yaw> <clip> <clipTi
 enemyrelease <entityId> <map>
 ```
 
-Subscribe at the same rate as `localpose` (normally 20 Hz); rates clamp to 1–60 Hz. Subscribing again restarts sampling. Each active `Enemy_Grunt` entity (including models using that class) produces one line per interval, including driven copies. Runtime-created Grunts are reported too; other classes are excluded in this slice. Driving still requires a map-placed enemy. No reports are produced in the main menu or while loading. There is one replaceable pending line per enemy; a new report replaces the complete pending set, so inactive enemies cannot retain stale pending samples. Reports do not describe activation/death transitions.
+Subscribe at the same rate as `localpose` (normally 20 Hz); rates clamp to 1–60 Hz. Subscribing again restarts sampling. Each active `Enemy_Grunt` entity (including models using that class) produces one line per interval, including driven copies. Runtime-created Grunts are reported too; other classes are excluded in this slice. Driving still requires a map-placed enemy. No reports are produced in the main menu or while loading. There is one replaceable pending line per enemy; a new report replaces the complete pending set, so inactive enemies cannot retain stale pending samples. Reports do not describe activation/death transitions, apart from a hallucination's disappearance (see [Enemy hallucinations](#enemy-hallucinations)).
 
 Position is the character body's feet, and rotation is body yaw in degrees. `<clip>` is the case-sensitive mesh animation name, one non-space field of at most 128 characters; `-` means no clip. `<clipTime>` is seconds within the clip, from 0 to 1000000000; `<loop>` is `0` or `1`. Position and yaw magnitudes cannot exceed 1000000000. Maps are nonempty rest-of-line paths of at most 1024 bytes. The ordinary Version 2 numeric grammar applies. The current game report emits teleport counter zero; recipients still honor a changed counter supplied by a Peer, and jumps over three meters snap automatically.
 
@@ -401,6 +401,30 @@ A break ends any Hold on the door, in every game, whichever game breaks it:
 A Peer that relays `reportbroke` as an `entitybreak` adds nothing: in a game where the door already broke, the Session no longer drives it and the Command answers `not-found`. One that arrives before `enemydoorbreak` releases the door, as `entitybreak` releases any entity that is not an `Object`, and `enemydoorbreak` then breaks it.
 
 Responses are `RESPONSE enemydoorbreak <outcome> <doorId>`, with outcome `ok`, also for a door already broken here, which stays broken, `wrong-map`, `not-found` (no map-placed entity with that identifier), or `wrong-type` (not a door, or a door that cannot break, such as one with `DisableBreakable`). A malformed line answers `invalid` without an identifier. Without `enemies`, the Command answers `not-granted` and no door breaks are reported.
+
+### Enemy hallucinations
+
+```text
+EVENT enemydisappear <entityId> <timeMs> <map>
+enemydisappear <entityId> <timeMs> <map>
+```
+
+A hallucination enemy disappears when a player comes within its `HallucinationEndDist`, measured from body center to body center, strictly closer, as vanilla. In the game that simulates a Shared Enemy, either player counts: the local player or any Avatar awake on this map, opted into enemy sight or not, whichever player the enemy targets. Alone on the map, or without a Session granted `enemies`, only the local player counts.
+
+When a Shared Enemy's hallucination ends this way, the game reports `enemydisappear` to a Session granted `enemies`, then plays the disappearance: smoke at each bone, a one-second dissolve, deactivation, and the `enemy_hallucination_disappear` sound. `<timeMs>` is the game time of the disappearance, on the clock of the enemy's `enemypose` reports, so every report of the enemy sampled before it has a `<timeMs>` no later than it. A Map Script's `FadeEnemyToSmoke` is not reported: the script runs in each game.
+
+The `enemydisappear` Command plays the same disappearance on this game's enemy, sound included, and fires no AI or Map Script callback. The enemy is normally a driven copy, but need not be driven yet: a hallucination can end before its first `enemypose` is relayed, so the copy is driven, if ever, only after the Command. Afterwards:
+
+- The copy stays inactive. A delivery with the same or an earlier `<timeMs>` plays nothing.
+- An `enemypose` sampled no later than the disappearance is accepted silently and ignored, so late poses cannot bring the copy back.
+- Releasing the copy leaves it inactive, and driving it again does not activate it.
+- An `enemypose` sampled after the disappearance means the simulating game activated the enemy again: the copy activates, drops its earlier samples, and follows it. A Map Script activating the copy here, such as a checkpoint callback, also ends the disappearance.
+
+A new Map Visit starts every enemy without a disappearance; `<map>` and the simulating game's clock, which never runs backwards, keep a delivery from one Map Visit out of the next. An inactive enemy records the disappearance without playing it. A Joining Player's game whose enemy is not driven can report its own `enemydisappear`; as with `enemyattack`, a Peer relays only the simulating game's.
+
+Responses are `RESPONSE enemydisappear <outcome> <entityId>`, with outcome `ok`, also for a duplicate or stale delivery, `wrong-map`, `not-found` (no map-placed enemy with that identifier), or `wrong-type` (not a Grunt). A malformed line, including a `<timeMs>` that is not an unsigned integer, answers `invalid` without an identifier. Without `enemies`, the Command answers `not-granted` and no disappearances are reported.
+
+See [the Controller checklist](../../docs/testing/enemy-hallucinations.md) for game adapter verification.
 
 ### Enemy-triggered callbacks
 

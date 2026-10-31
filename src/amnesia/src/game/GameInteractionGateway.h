@@ -94,7 +94,10 @@ enum eGameInteractionEventType
 	eGameInteractionEvent_EnemyAttack,
 	// A simulated enemy broke a map-placed door. Carries the door's identifier and Map Path, and only a
 	// Session granted enemies receives it.
-	eGameInteractionEvent_EnemyDoorBreak
+	eGameInteractionEvent_EnemyDoorBreak,
+	// A simulated hallucination disappeared because a player came close, which only a Session granted
+	// enemies receives.
+	eGameInteractionEvent_EnemyDisappear
 };
 
 // The kinds of Map Script callback that are Shared Callbacks.
@@ -206,6 +209,15 @@ struct cGameInteractionEnemyAttack
 	std::string msMapFile;
 };
 
+// A hallucination enemy's disappearance at the simulating game's time, the clock its enemy poses carry.
+struct cGameInteractionEnemyDisappearance
+{
+	cGameInteractionEnemyDisappearance() : mlEntityId(0), mlTimeMs(0) {}
+	int mlEntityId;
+	unsigned long long mlTimeMs;
+	std::string msMapFile;
+};
+
 // The current map's checkpoint registration. Every entered map has one, the automatic _auto checkpoint
 // without a callback until its Map Script registers another.
 struct cGameInteractionCheckPoint
@@ -231,7 +243,9 @@ public:
 	cGameInteractionEvent(eGameInteractionEventType aType, const cGameInteractionSharedCallback& aSharedCallback);
 	cGameInteractionEvent(eGameInteractionEventType aType, const cGameInteractionEntityState& aState);
 	cGameInteractionEvent(eGameInteractionEventType aType, const cGameInteractionEnemyAttack& aAttack);
+	cGameInteractionEvent(eGameInteractionEventType aType, const cGameInteractionEnemyDisappearance& aDisappearance);
 	const cGameInteractionEnemyAttack& GetEnemyAttack() const { return mEnemyAttack; }
+	const cGameInteractionEnemyDisappearance& GetEnemyDisappearance() const { return mEnemyDisappearance; }
 	const cGameInteractionEntityState& GetEntityState() const { return mEntityState; }
 	eGameInteractionEventType GetType() const { return mType; }
 	bool IsInteractionsEvent() const;
@@ -254,6 +268,7 @@ private:
 	cGameInteractionSharedCallback mSharedCallback;
 	cGameInteractionEntityState mEntityState;
 	cGameInteractionEnemyAttack mEnemyAttack;
+	cGameInteractionEnemyDisappearance mEnemyDisappearance;
 };
 
 enum eGameInteractionCommandType
@@ -294,7 +309,8 @@ enum eGameInteractionCommandType
 	eGameInteractionCommand_SharedDeath,
 	eGameInteractionCommand_EnemyDoorBreak,
 	eGameInteractionCommand_SettingAnnounce,
-	eGameInteractionCommand_SettingValue
+	eGameInteractionCommand_SettingValue,
+	eGameInteractionCommand_EnemyDisappear
 };
 
 enum eGameInteractionCapability
@@ -666,6 +682,10 @@ public:
 	// Breaks this game's own copy of a door that an enemy broke in the game simulating it. A door that
 	// is already broken stays so. Wrong type when the entity is not a door that can break.
 	virtual eGameInteractionCommandOutcome BreakEnemyDoor(int alEntityId) = 0;
+	// Plays a hallucination's disappearance, which the simulating game reported at its time alTimeMs, on
+	// this game's enemy once, and keeps it inactive until a driven pose sampled after it arrives. The
+	// enemy need not be driven yet.
+	virtual eGameInteractionCommandOutcome DisappearEnemy(int alEntityId, unsigned long long alTimeMs) = 0;
 	// False when no map is loaded.
 	virtual bool GetCheckPoint(cGameInteractionCheckPoint& aCheckPoint) const = 0;
 	// Kills the local player the ordinary way, as a Shared Death. False when the player is not in play.
