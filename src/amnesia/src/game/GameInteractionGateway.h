@@ -97,7 +97,10 @@ enum eGameInteractionEventType
 	eGameInteractionEvent_EnemyDoorBreak,
 	// A simulated hallucination disappeared because a player came close, which only a Session granted
 	// enemies receives.
-	eGameInteractionEvent_EnemyDisappear
+	eGameInteractionEvent_EnemyDisappear,
+	// A simulated Kaernk took a bite of food, which shows only as a splash. Carries the enemy's identifier
+	// and Map Path, and only a Session granted enemies receives it.
+	eGameInteractionEvent_EnemyEat
 };
 
 // The kinds of Map Script callback that are Shared Callbacks.
@@ -310,7 +313,8 @@ enum eGameInteractionCommandType
 	eGameInteractionCommand_EnemyDoorBreak,
 	eGameInteractionCommand_SettingAnnounce,
 	eGameInteractionCommand_SettingValue,
-	eGameInteractionCommand_EnemyDisappear
+	eGameInteractionCommand_EnemyDisappear,
+	eGameInteractionCommand_EnemyEat
 };
 
 enum eGameInteractionCapability
@@ -686,6 +690,9 @@ public:
 	// this game's enemy once, and keeps it inactive until a driven pose sampled after it arrives. The
 	// enemy need not be driven yet.
 	virtual eGameInteractionCommandOutcome DisappearEnemy(int alEntityId, unsigned long long alTimeMs) = 0;
+	// Plays the eat splash of a bite the simulating game reported on this game's driven copy. Wrong type
+	// when the enemy is not one that eats.
+	virtual eGameInteractionCommandOutcome EatEnemy(int alEntityId) = 0;
 	// False when no map is loaded.
 	virtual bool GetCheckPoint(cGameInteractionCheckPoint& aCheckPoint) const = 0;
 	// Kills the local player the ordinary way, as a Shared Death. False when the player is not in play.

@@ -56,4 +56,68 @@ private:
 	bool mbHasDisappearance;
 	unsigned long long mlDisappearedMs;
 };
+
+enum eEnemyCopySplash
+{
+	eEnemyCopySplash_None,
+	eEnemyCopySplash_Walk,
+	eEnemyCopySplash_Run
+};
+
+namespace EnemyCopySplash
+{
+	const float kEpsilon = 0.0001f;
+	// Slower than this, the copy is still; the slowest Kaernk walk is 1.6 m/s.
+	const float kStoppedSpeed = 0.25f;
+	const float kStartDelay = 0.1f;
+	const float kWalkInterval = 1.0f;
+	const float kRunInterval = 0.6f;
+	const float kEatPause = 1.3f;
+	// Faster than this, the copy snapped to a teleport or its first pose; the fastest Kaernk run is 4 m/s.
+	const float kTeleportSpeed = 20.0f;
+}
+
+// When a driven Kaernk copy splashes as it moves. The Kaernk has no visible body and no animations, so its
+// poses carry no clip: the copy splashes as its horizontal speed implies, on the simulating Kaernk's
+// cadence. That Kaernk splashes 0.1 s after it starts moving, then every second walking or every 0.6 s
+// running, and not as it moves while eating.
+class cEnemyCopySplashModel
+{
+public:
+	// afRunSpeed is the slowest horizontal speed that splashes as running.
+	explicit cEnemyCopySplashModel(float afRunSpeed)
+		: mfRunSpeed(afRunSpeed), mfCountdown(0), mfEatPause(0), mbMoving(false) {}
+	eEnemyCopySplash Update(float afTimeStep, float afSpeed)
+	{
+		using namespace EnemyCopySplash;
+		if (mfEatPause > kEpsilon)
+		{
+			mfEatPause -= afTimeStep;
+			mbMoving = false;
+			return eEnemyCopySplash_None;
+		}
+		if (afSpeed > kTeleportSpeed) return eEnemyCopySplash_None;
+		if (afSpeed < kStoppedSpeed)
+		{
+			mbMoving = false;
+			return eEnemyCopySplash_None;
+		}
+		const bool bRun = afSpeed >= mfRunSpeed;
+		const float fInterval = bRun ? kRunInterval : kWalkInterval;
+		if (!mbMoving) mfCountdown = kStartDelay;
+		else if (mfCountdown > fInterval) mfCountdown = fInterval;
+		mbMoving = true;
+		mfCountdown -= afTimeStep;
+		if (mfCountdown > kEpsilon) return eEnemyCopySplash_None;
+		mfCountdown = fInterval;
+		return bRun ? eEnemyCopySplash_Run : eEnemyCopySplash_Walk;
+	}
+	// The simulating Kaernk took a bite. It bites every 1.2 s while eating, so the pause outlasts the next.
+	void Ate() { mfEatPause = EnemyCopySplash::kEatPause; }
+private:
+	float mfRunSpeed;
+	float mfCountdown;
+	float mfEatPause;
+	bool mbMoving;
+};
 #endif

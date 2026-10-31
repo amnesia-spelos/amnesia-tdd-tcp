@@ -448,7 +448,7 @@ void cLuxProp_SwingDoor::OnHealthChange()
 
 		// The game simulating an enemy tells the other games, which drive a copy that never attacks the door.
 		iLuxEnemy *pAttacker = iLuxEnemy::GetAttackingEnemy();
-		if(pAttacker && pAttacker->GetEnemyType() == eLuxEnemyType_Grunt && !IsCreatedAtRuntime() && gpBase->mpSocketServer)
+		if(pAttacker && iLuxEnemy::IsSharedEnemyType(pAttacker->GetEnemyType()) && !IsCreatedAtRuntime() && gpBase->mpSocketServer)
 		{
 			cGameInteractionEntityEvent doorBreak;
 			doorBreak.mlEntityId = GetID();

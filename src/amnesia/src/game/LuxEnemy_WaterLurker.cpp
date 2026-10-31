@@ -31,6 +31,7 @@
 #include "LuxPlayerHelpers.h"
 
 #include "LuxProp_Object.h"
+#include "LuxSocketServer.h"
 
 //////////////////////////////////////////////////////////////////////////
 // LOADER
@@ -98,7 +99,8 @@ void cLuxEnemyLoader_WaterLurker::LoadInstanceVariables(iLuxEnemy *apEnemy, cRes
 
 //-----------------------------------------------------------------------
 
-cLuxEnemy_WaterLurker::cLuxEnemy_WaterLurker(const tString &asName, int alID, cLuxMap *apMap) : iLuxEnemy(asName,alID,apMap, eLuxEnemyType_WaterLurker)
+cLuxEnemy_WaterLurker::cLuxEnemy_WaterLurker(const tString &asName, int alID, cLuxMap *apMap) : iLuxEnemy(asName,alID,apMap, eLuxEnemyType_WaterLurker),
+	mCopySplashes(0)
 {
 	mbUseAnimations = false;
 	mbCausesSanityDecrease = false;
@@ -124,6 +126,10 @@ void cLuxEnemy_WaterLurker::OnSetupAfterLoad(cWorld *apWorld)
 {
 	mpMeshEntity->SetActive(false);
 	mpMeshEntity->SetVisible(false);
+
+	// Copies splash as running above the speed halfway between a walk and a run.
+	mCopySplashes = cEnemyCopySplashModel(0.5f * (mfDefaultForwardSpeed[eLuxEnemyPoseType_Biped][eLuxEnemyMoveSpeed_Walk] +
+		mfDefaultForwardSpeed[eLuxEnemyPoseType_Biped][eLuxEnemyMoveSpeed_Run]));
 }
 
 
@@ -335,6 +341,13 @@ bool cLuxEnemy_WaterLurker::StateEventImplement(int alState, eLuxEnemyStateEvent
                 pFoodBody->AddImpulse(vToFeet*2.5f);				
 
 				SplashWater(eWaterLurkerSplash_Eat);
+				if(gpBase->mpSocketServer)
+				{
+					cGameInteractionEntityEvent eat;
+					eat.mlEntityId = GetID();
+					eat.msMapFile = mpMap->GetMapPath();
+					gpBase->mpSocketServer->PublishEvent(cGameInteractionEvent(eGameInteractionEvent_EnemyEat, eat));
+				}
 				pFood->GiveDamage(mfEatDamage, 10);
 				gpBase->mpDebugHandler->AddMessage(_W("took bite!!"),false);
 				gpBase->mpDebugHandler->AddMessage(_W("Health: ")+cString::ToStringW(pFood->GetHealth()),false);
@@ -548,6 +561,16 @@ bool cLuxEnemy_WaterLurker::InRangeOfFood(iPhysicsBody *apFoodBody)
 
 //-----------------------------------------------------------------------
 
+// A copy shows the simulating Kaernk's bite; the food is that game's to push and damage.
+bool cLuxEnemy_WaterLurker::ShowReportedEat()
+{
+	SplashWater(eWaterLurkerSplash_Eat);
+	mCopySplashes.Ate();
+	return true;
+}
+
+//-----------------------------------------------------------------------
+
 void cLuxEnemy_WaterLurker::OnRenderSolidImplemented(cRendererCallbackFunctions* apFunctions)
 {
 	iPhysicsWorld *pPhysicsWorld = mpMap->GetPhysicsWorld();
@@ -612,6 +635,21 @@ void cLuxEnemy_WaterLurker::OnSetActiveEnemySpecific(bool abX)
 	//Make sure the mesh is invisible!
 	mpMeshEntity->SetActive(false);
 	mpMeshEntity->SetVisible(false);
+}
+
+//-----------------------------------------------------------------------
+
+void cLuxEnemy_WaterLurker::UpdateEnemyCopySpecific(float afTimeStep, float afSpeed)
+{
+	const eEnemyCopySplash splash = mCopySplashes.Update(afTimeStep, afSpeed);
+	if(splash == eEnemyCopySplash_Walk) SplashWater(eWaterLurkerSplash_Walk);
+	else if(splash == eEnemyCopySplash_Run) SplashWater(eWaterLurkerSplash_Run);
+}
+
+// The simulating Kaernk splashes with its normal attacks, not as it breaks a door.
+void cLuxEnemy_WaterLurker::OnEnemyCopyAttack(eGameInteractionEnemyAttackKind aKind)
+{
+	if(aKind == eGameInteractionEnemyAttackKind_Normal) SplashWater(eWaterLurkerSplash_Attack);
 }
 
 //-----------------------------------------------------------------------

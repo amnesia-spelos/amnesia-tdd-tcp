@@ -203,7 +203,7 @@ namespace
 			while(it.HasNext())
 			{
 				iLuxEnemy* enemy = it.Next();
-				if(enemy->GetEnemyType() == eLuxEnemyType_Grunt && enemy->IsActive() &&
+				if(iLuxEnemy::IsSharedEnemyType(enemy->GetEnemyType()) && enemy->IsActive() &&
 					!enemy->GetDestroyMe()) poses.push_back(enemy->GetEnemyPose());
 			}
 			return poses;
@@ -243,6 +243,16 @@ namespace
 			if(outcome != eGameInteractionCommandOutcome_Success) return outcome;
 			enemy->DisappearReportedHallucination(alTimeMs);
 			return eGameInteractionCommandOutcome_Success;
+		}
+
+		virtual eGameInteractionCommandOutcome EatEnemy(int alEntityId)
+		{
+			iLuxEnemy* enemy = NULL;
+			const eGameInteractionCommandOutcome outcome = FindEnemy(alEntityId, enemy);
+			if(outcome != eGameInteractionCommandOutcome_Success) return outcome;
+			if(!enemy->IsEnemyDriven()) return eGameInteractionCommandOutcome_EntityNotFound;
+			return enemy->ShowReportedEat() ? eGameInteractionCommandOutcome_Success :
+				eGameInteractionCommandOutcome_EntityWrongType;
 		}
 
 		virtual bool GetCheckPoint(cGameInteractionCheckPoint& aCheckPoint) const
@@ -399,7 +409,7 @@ namespace
 			if(entity->GetEntityType() != eLuxEntityType_Enemy || entity->IsCreatedAtRuntime())
 				return eGameInteractionCommandOutcome_EntityWrongType;
 			apEnemy = static_cast<iLuxEnemy*>(entity);
-			return apEnemy->GetEnemyType() == eLuxEnemyType_Grunt ? eGameInteractionCommandOutcome_Success :
+			return iLuxEnemy::IsSharedEnemyType(apEnemy->GetEnemyType()) ? eGameInteractionCommandOutcome_Success :
 				eGameInteractionCommandOutcome_EntityWrongType;
 		}
 

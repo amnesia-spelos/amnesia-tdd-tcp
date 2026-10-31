@@ -530,8 +530,7 @@ void cLuxMap::LoadCheckPoint()
 	for(; it != mlstEnemies.end(); ++it)
 	{
 		iLuxEnemy *pEnemy = *it;
-		// Only Grunts are Shared Enemies; any other enemy is each game's own.
-		if(death.mReset == eSharedDeathPolicy_PreserveEnemies && pEnemy->GetEnemyType() == eLuxEnemyType_Grunt) continue;
+		if(death.mReset == eSharedDeathPolicy_PreserveEnemies && iLuxEnemy::IsSharedEnemyType(pEnemy->GetEnemyType())) continue;
 		if(pEnemy->IsEnemyDriven())
 		{
 			// Every game resets in a coordinated death, so a copy follows the enemy it copies.

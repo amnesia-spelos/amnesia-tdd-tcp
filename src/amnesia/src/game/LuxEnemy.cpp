@@ -1688,7 +1688,7 @@ void iLuxEnemy::UpdatePlayerInRange(float afTimeStep)
 	if(!mbAvatarPerception && IsTargetDead()) return;
 
 	// A death that preserves Shared Enemies must not send one out of range while the local player is gone.
-	const bool bKeepInRange = gpBase->mpPlayer->IsDead() && mEnemyType == eLuxEnemyType_Grunt &&
+	const bool bKeepInRange = gpBase->mpPlayer->IsDead() && IsSharedEnemyType(mEnemyType) &&
 		gpBase->mpSocketServer && gpBase->mpSocketServer->PreservesSharedEnemies();
 	float fDistance = gpBase->mpPlayer->IsDead() ? 100000.0f : DistToChar(gpBase->mpPlayer->GetCharacterBody());
 	if(mbAvatarPerception)
@@ -1993,7 +1993,7 @@ bool iLuxEnemy::TriggersDisabled()
 bool iLuxEnemy::Attack(const cEnemyAttackSizeData &aSizeData, const cEnemyAttackDamageData &aDamageData, float afDamageMul)
 {
 	if(mbEnemyDriven) return false;
-	if(mEnemyType == eLuxEnemyType_Grunt && gpBase->mpSocketServer)
+	if(IsSharedEnemyType(mEnemyType) && gpBase->mpSocketServer)
 		gpBase->mpSocketServer->PublishEvent(cGameInteractionEvent(eGameInteractionEvent_EnemyAttack,
 			GetEnemyAttack(aSizeData, aDamageData)));
 	bool bHitPlayer = false;
@@ -3105,8 +3105,13 @@ void iLuxEnemy::SetEnemyDriven(bool abDriven)
 
 bool iLuxEnemy::IsSharedEnemy()
 {
-	return mEnemyType == eLuxEnemyType_Grunt && !mbEnemyDriven && gpBase->mpSocketServer &&
+	return IsSharedEnemyType(mEnemyType) && !mbEnemyDriven && gpBase->mpSocketServer &&
 		gpBase->mpSocketServer->SharesEnemies() && gpBase->mpAvatarHandler && gpBase->mpAvatarHandler->HasAwakeAvatar();
+}
+
+bool iLuxEnemy::IsSharedEnemyType(eLuxEnemyType aType)
+{
+	return aType == eLuxEnemyType_Grunt || aType == eLuxEnemyType_WaterLurker;
 }
 
 void iLuxEnemy::ResetEnemyCopy()
@@ -3161,11 +3166,16 @@ void iLuxEnemy::UpdateEnemyCopy(float afTimeStep)
 {
 	mpCharBody->StopMovement();
 	mpCharBody->SetForce(0); mpCharBody->SetForceVelocity(0);
+	const cVector3f vShownFeet = mpCharBody->GetFeetPosition();
+	float fSpeed = 0;
 	cGameInteractionEnemyPose sample;
 	if(mEnemyCopy.Sample(gpBase->mpEngine->GetGameTime() * 1000.0, mpMap->GetMapPath(), sample))
 	{
 		const cGameInteractionPosition& feet = sample.mPose.mFeetPosition;
-		mpCharBody->SetFeetPosition(cVector3f(feet.mfX, feet.mfY, feet.mfZ), true);
+		const cVector3f vFeet(feet.mfX, feet.mfY, feet.mfZ);
+		if(afTimeStep > 0)
+			fSpeed = cMath::Vector3Dist(cVector3f(vFeet.x, 0, vFeet.z), cVector3f(vShownFeet.x, 0, vShownFeet.z)) / afTimeStep;
+		mpCharBody->SetFeetPosition(vFeet, true);
 		mpCharBody->SetYaw(cMath::ToRad(sample.mPose.mfBodyYawDegrees));
 		cAnimationState* clip = sample.msClip.empty() ? NULL : mpMeshEntity->GetAnimationStateFromName(sample.msClip);
 		for(int i=0; i<mpMeshEntity->GetAnimationStateNum(); ++i)
@@ -3181,6 +3191,7 @@ void iLuxEnemy::UpdateEnemyCopy(float afTimeStep)
 			clip->SetTimePosition(cMath::Min(sample.mfAnimationTime, clip->GetLength()));
 		}
 	}
+	UpdateEnemyCopySpecific(afTimeStep, fSpeed);
 	UpdateSoundState(afTimeStep);
 	UpdateDarknessGlow(afTimeStep);
 }
@@ -3221,5 +3232,6 @@ bool iLuxEnemy::ResolveEnemyAttack(const cGameInteractionEnemyAttack& aAttack)
 									false, true, false, true, &bHitPlayer,
 									gpBase->mpPlayer->GetCharacterBody()->GetCurrentBody());
 	if(bHitPlayer) PlaySound(damageData.msHitSound);
+	OnEnemyCopyAttack(aAttack.mKind);
 	return true;
 }

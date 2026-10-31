@@ -65,6 +65,8 @@ See [enemy door break and callback Controller checks](docs/testing/enemy-doors-a
 
 See [enemy hallucination Controller checks](docs/testing/enemy-hallucinations.md) for hallucinations that end near either player and their disappearance on a driven copy.
 
+See [Kaernk Shared Enemy Controller checks](docs/testing/enemy-kaernk.md) for Kaernk reports, Avatar hunts, bites, and the splashes a driven copy shows.
+
 Shared Death episodes, their death-screen wait, and the agreed checkpoint count have a standalone harness:
 
 ```powershell

@@ -149,7 +149,7 @@ The script file with the same name as a map, stored beside it, that the game run
 _Avoid_: Level script, map code, hps
 
 **Shared Enemy**:
-An enemy that is one threat to every player on a map: one game simulates it, and every other game drives a copy that has no AI and triggers nothing itself. Only Grunts are Shared Enemies, and only while another player is on the map.
+An enemy that is one threat to every player on a map: one game simulates it, and every other game drives a copy that has no AI and triggers nothing itself. Only Grunts (Brutes included) and Kaernks are Shared Enemies, and only while another player is on the map.
 _Avoid_: Synced enemy, networked enemy, remote enemy
 
 **Shared Death**:

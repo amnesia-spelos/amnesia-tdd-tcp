@@ -68,6 +68,7 @@ public:
 	//////////////////////
 	//Callbacks
 	bool InRangeOfFood(iPhysicsBody *apFoodBody);
+	bool ShowReportedEat();
 
 	//////////////////////
 	//Debug
@@ -91,6 +92,8 @@ private:
 	bool PerceivesTarget(iCharacterBody* apBody, bool abSight);
 	bool PlayerIsDetected();
 	void OnSetActiveEnemySpecific(bool abX);
+	void UpdateEnemyCopySpecific(float afTimeStep, float afSpeed);
+	void OnEnemyCopyAttack(eGameInteractionEnemyAttackKind aKind);
 
 	float GetDamageMul(float afAmount, int alStrength);
 
@@ -114,6 +117,9 @@ private:
 	tString msSplashSound_Run;
 	tString msSplashSound_Eat;
 	tString msSplashSound_Attack;
+
+	// A driven copy splashes as its movement implies; its eat and attack splashes follow reported Events.
+	cEnemyCopySplashModel mCopySplashes;
 	
 	//////////////
 	//Variables

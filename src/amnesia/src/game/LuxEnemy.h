@@ -400,8 +400,10 @@ public:
 	void AlertOfPlayerPresence();
 	// The enemy whose attack is testing for hits right now, or NULL. Lets a door tell an enemy broke it.
 	static iLuxEnemy* GetAttackingEnemy() { return mpAttackingEnemy; }
-	// A Grunt this game simulates while the other player is on the map, so the other games drive a copy.
+	// A Grunt or Kaernk this game simulates while the other player is on the map, so the other games drive a copy.
 	bool IsSharedEnemy();
+	// Grunts, which Brutes load as, and Kaernks are Shared Enemies; any other enemy is each game's own.
+	static bool IsSharedEnemyType(eLuxEnemyType aType);
 
 	void ChangeState(eLuxEnemyState aState);
 
@@ -467,6 +469,8 @@ public:
 	void DisappearReportedHallucination(unsigned long long alTimeMs);
 	bool ResolveEnemyAttack(const cGameInteractionEnemyAttack& aAttack);
 	void UpdateEnemyCopy(float afTimeStep);
+	// Shows a bite of food the simulating game reported on this driven copy. False for an enemy that never eats.
+	virtual bool ShowReportedEat() { return false; }
 
 	eLuxEnemyType GetEnemyType(){ return mEnemyType;}
 
@@ -577,6 +581,10 @@ protected:
 	// Callbacks
 	virtual bool PlayerIsDetected()=0;
 	virtual void OnSetActiveEnemySpecific(bool abX){}
+	// A driven copy moved this update at afSpeed, its horizontal speed as shown.
+	virtual void UpdateEnemyCopySpecific(float afTimeStep, float afSpeed){}
+	// The simulating game reported this copy's attack, which ResolveEnemyAttack tested against the local player.
+	virtual void OnEnemyCopyAttack(eGameInteractionEnemyAttackKind aKind){}
 	virtual void OnResetProperties(){}
 	virtual void OnDisableTriggers(){}
 

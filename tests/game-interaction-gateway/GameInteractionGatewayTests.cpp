@@ -40,6 +40,7 @@ namespace
 			mEnemyAttackOutcome = eGameInteractionCommandOutcome_Success;
 			mEnemyDoorBreakOutcome = eGameInteractionCommandOutcome_Success;
 			mEnemyDisappearOutcome = eGameInteractionCommandOutcome_Success;
+			mEnemyEatOutcome = eGameInteractionCommandOutcome_Success;
 			mbPlayerKillable = true;
 			mlKilledPlayers = 0;
 			mCheckPoint.mlCount = 0;
@@ -83,6 +84,9 @@ namespace
 			mvEntityOperations.push_back(text.str());
 			return mEnemyDisappearOutcome;
 		}
+		eGameInteractionCommandOutcome mEnemyEatOutcome;
+		virtual eGameInteractionCommandOutcome EatEnemy(int id)
+		{ mvEntityOperations.push_back("enemy eat " + Text(id)); return mEnemyEatOutcome; }
 
 		cGameInteractionCheckPoint mCheckPoint;
 		virtual bool GetCheckPoint(cGameInteractionCheckPoint& aCheckPoint) const
@@ -603,6 +607,66 @@ namespace
 			"RESPONSE enemydisappear invalid\nRESPONSE enemydisappear invalid\nRESPONSE enemydisappear invalid\n",
 			"failures name the enemy; malformed lines are invalid");
 		Expect(adapter.mvEntityOperations.size() == 2, "only disappearances on the current map reach the game");
+		closesocket(peer);
+	}
+
+	cGameInteractionEvent EnemyEat(int alEnemyId)
+	{
+		cGameInteractionEntityEvent eat;
+		eat.mlEntityId = alEnemyId;
+		eat.msMapFile = "maps/main/level01.map";
+		return cGameInteractionEvent(eGameInteractionEvent_EnemyEat, eat);
+	}
+
+	void EnemyEatsAreReportedOnlyToEnemiesSessions()
+	{
+		cGameInteractionGateway gateway;
+		cFakeGameAdapter adapter;
+		Expect(gateway.Listen("127.0.0.1", 0), "listen");
+		SOCKET peer = Connect(gateway, adapter); Receive(peer);
+		SendCommands(peer, gateway, adapter, "protocol 2 interactions sharedcallbacks\n");
+		Expect(Receive(peer) == "RESPONSE protocol ok 2 interactions sharedcallbacks\n", "negotiated without enemies");
+		gateway.Report(EnemyEat(9));
+		gateway.Update(adapter);
+		Expect(ReceiveAvailable(peer, 100).empty(), "Sessions without enemies receive no bites");
+		closesocket(peer);
+		gateway.Shutdown();
+		Expect(gateway.Listen("127.0.0.1", 0), "listen again");
+		peer = Connect(gateway, adapter); Receive(peer);
+		SendCommands(peer, gateway, adapter, "protocol 2 enemies\n");
+		ReceiveLines(peer, 2);
+		gateway.Report(EnemyEat(9));
+		gateway.Update(adapter);
+		Expect(Receive(peer) == "EVENT enemyeat 9 maps/main/level01.map\n", "a bite names the enemy and the map");
+		closesocket(peer);
+	}
+
+	void EnemyEatCommandsReachTheDrivenCopy()
+	{
+		cGameInteractionGateway gateway;
+		cFakeGameAdapter adapter;
+		Expect(gateway.Listen("127.0.0.1", 0), "listen");
+		SOCKET peer = Connect(gateway, adapter); Receive(peer);
+		SendCommands(peer, gateway, adapter, "protocol 2 interactions\nenemyeat 9 maps/main/level01.map\n");
+		Expect(ReceiveLines(peer, 2) == "RESPONSE protocol ok 2 interactions\nRESPONSE enemyeat not-granted\n",
+			"bites require enemies");
+		Expect(adapter.mvEntityOperations.empty(), "an ungranted bite never reaches the game");
+		closesocket(peer);
+		gateway.Shutdown();
+		Expect(gateway.Listen("127.0.0.1", 0), "listen again");
+		peer = Connect(gateway, adapter); Receive(peer);
+		SendCommands(peer, gateway, adapter, "protocol 2 enemies\nenemyeat 009 maps/main/level01.map\n");
+		Expect(ReceiveLines(peer, 3) == "RESPONSE protocol ok 2 enemies\nRESPONSE enemyeat ok 9\n"
+			"EVENT checkpoint 0 0 _auto maps/main/level01.map\n", "a granted bite succeeds");
+		Expect(adapter.mvEntityOperations.size() == 1 && adapter.mvEntityOperations[0] == "enemy eat 9",
+			"the enemy reaches the game");
+		adapter.mEnemyEatOutcome = eGameInteractionCommandOutcome_EntityWrongType;
+		SendCommands(peer, gateway, adapter, "enemyeat 139 maps/main/level01.map\n"
+			"enemyeat 9 other.map\nenemyeat kaernk maps/main/level01.map\nenemyeat 9\n");
+		Expect(ReceiveLines(peer, 4) == "RESPONSE enemyeat wrong-type 139\nRESPONSE enemyeat wrong-map 9\n"
+			"RESPONSE enemyeat invalid\nRESPONSE enemyeat invalid\n",
+			"failures name the enemy; malformed lines are invalid");
+		Expect(adapter.mvEntityOperations.size() == 2, "only bites on the current map reach the game");
 		closesocket(peer);
 	}
 
@@ -2309,6 +2373,8 @@ int main()
 	EnemyDoorBreakCommandsBreakThisGamesDoor();
 	EnemyDisappearancesAreReportedOnlyToEnemiesSessions();
 	EnemyDisappearCommandsReachTheDrivenCopy();
+	EnemyEatsAreReportedOnlyToEnemiesSessions();
+	EnemyEatCommandsReachTheDrivenCopy();
 	EnemiesAreSharedOnlyWhileAnEnemiesSessionLasts();
 	CheckPointStateIsReportedToEnemiesSessionsWhenItChanges();
 	LocalDeathsAreReportedWithTheirCheckPoint();

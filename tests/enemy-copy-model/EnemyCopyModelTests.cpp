@@ -68,5 +68,24 @@ int main()
 	Expect(!inactive.ActivatesOnDrive(), "but still stays inactive when driven");
 	inactive.Activated();
 	Expect(inactive.ActivatesOnDrive(), "a Map Script activating the copy ends the disappearance");
+	// A Kaernk copy splashes as its movement implies: walk splashes every second, run splashes every 0.6 s.
+	cEnemyCopySplashModel splashes(2.8f);
+	Expect(splashes.Update(1.0f, 0) == eEnemyCopySplash_None, "a still copy never splashes");
+	Expect(splashes.Update(0.05f, 1.6f) == eEnemyCopySplash_None, "a copy starting to move splashes shortly after");
+	Expect(splashes.Update(0.05f, 1.6f) == eEnemyCopySplash_Walk, "the first walk splash comes 0.1 s after it starts");
+	Expect(splashes.Update(0.9f, 1.6f) == eEnemyCopySplash_None, "walk splashes wait a second");
+	Expect(splashes.Update(0.1f, 1.6f) == eEnemyCopySplash_Walk, "the next walk splash comes a second later");
+	Expect(splashes.Update(0.5f, 4.0f) == eEnemyCopySplash_None, "speeding up keeps no more than the run interval");
+	Expect(splashes.Update(0.1f, 4.0f) == eEnemyCopySplash_Run, "a fast copy splashes as running");
+	Expect(splashes.Update(0.5f, 4.0f) == eEnemyCopySplash_None, "run splashes wait 0.6 s");
+	Expect(splashes.Update(0.1f, 4.0f) == eEnemyCopySplash_Run, "the next run splash comes 0.6 s later");
+	Expect(splashes.Update(0.3f, 0.1f) == eEnemyCopySplash_None, "a copy that stops stops splashing");
+	Expect(splashes.Update(0.1f, 4.0f) == eEnemyCopySplash_Run, "moving again splashes 0.1 s after it starts");
+	Expect(splashes.Update(0.6f, 500.0f) == eEnemyCopySplash_None, "a copy snapping to a teleport does not splash");
+	// The simulating Kaernk does not splash as it moves while it eats, and bites every 1.2 s.
+	splashes.Ate();
+	Expect(splashes.Update(1.2f, 1.6f) == eEnemyCopySplash_None, "a copy that just ate does not splash as it moves");
+	Expect(splashes.Update(0.1f, 1.6f) == eEnemyCopySplash_None, "the pause outlasts the next bite");
+	Expect(splashes.Update(0.1f, 1.6f) == eEnemyCopySplash_Walk, "after eating, moving splashes 0.1 s after the pause");
 	std::cout << "Enemy copy model cases passed\n";
 }

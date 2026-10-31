@@ -355,13 +355,13 @@ enemypose <entityId> <timeMs> <teleportCounter> <x> <y> <z> <yaw> <clip> <clipTi
 enemyrelease <entityId> <map>
 ```
 
-Subscribe at the same rate as `localpose` (normally 20 Hz); rates clamp to 1–60 Hz. Subscribing again restarts sampling. Each active `Enemy_Grunt` entity (including models using that class) produces one line per interval, including driven copies. Runtime-created Grunts are reported too; other classes are excluded in this slice. Driving still requires a map-placed enemy. No reports are produced in the main menu or while loading. There is one replaceable pending line per enemy; a new report replaces the complete pending set, so inactive enemies cannot retain stale pending samples. Reports do not describe activation/death transitions, apart from a hallucination's disappearance (see [Enemy hallucinations](#enemy-hallucinations)).
+Subscribe at the same rate as `localpose` (normally 20 Hz); rates clamp to 1–60 Hz. Subscribing again restarts sampling. Each active `Enemy_Grunt` entity (including models using that class, such as the Brute) and each active `Enemy_WaterLurker` (the Kaernk) produces one line per interval, including driven copies. Runtime-created ones are reported too; other classes are excluded. Driving still requires a map-placed enemy. No reports are produced in the main menu or while loading. There is one replaceable pending line per enemy; a new report replaces the complete pending set, so inactive enemies cannot retain stale pending samples. Reports do not describe activation/death transitions, apart from a hallucination's disappearance (see [Enemy hallucinations](#enemy-hallucinations)).
 
 Position is the character body's feet, and rotation is body yaw in degrees. `<clip>` is the case-sensitive mesh animation name, one non-space field of at most 128 characters; `-` means no clip. `<clipTime>` is seconds within the clip, from 0 to 1000000000; `<loop>` is `0` or `1`. Position and yaw magnitudes cannot exceed 1000000000. Maps are nonempty rest-of-line paths of at most 1024 bytes. The ordinary Version 2 numeric grammar applies. The current game report emits teleport counter zero; recipients still honor a changed counter supplied by a Peer, and jumps over three meters snap automatically.
 
 Responses are `RESPONSE enemyposes ok subscribe <clampedHz>` or `RESPONSE enemyposes ok unsubscribe`. Malformed subscriptions answer `RESPONSE enemyposes invalid`.
 
-Drive and release answer `RESPONSE <keyword> <outcome> <entityId>`. Outcomes are `ok`, `wrong-map`, `not-found`, or `wrong-type`; malformed lines answer `invalid` without an identifier. Driving again is idempotent. Only a map-placed Grunt can be driven; release and pose require an already driven enemy. An unknown animation is `invalid`. Successful `enemypose` is silent; only the first failure of a consecutive failure streak is reported. A successful sample or a new Map Visit ends that streak. Capability failures answer `not-granted` without an identifier.
+Drive and release answer `RESPONSE <keyword> <outcome> <entityId>`. Outcomes are `ok`, `wrong-map`, `not-found`, or `wrong-type`; malformed lines answer `invalid` without an identifier. Driving again is idempotent. Only a map-placed Grunt or Kaernk can be driven; release and pose require an already driven enemy. An unknown animation is `invalid`. Successful `enemypose` is silent; only the first failure of a consecutive failure streak is reported. A successful sample or a new Map Visit ends that streak. Capability failures answer `not-granted` without an identifier.
 
 Copies buffer sender-timestamped motion using the Avatar's 100 ms interpolation delay, shortest-path yaw, clock alignment, and discontinuity rules. Animation time interpolates within a monotonically advancing clip; clip changes, restarts, and wraps switch at their sample time. A stalled stream holds its last pose and animation. Local AI, senses, pathfinding, attacks, damage reactions, and enemy-triggered Map Script callbacks are suppressed, including collide callbacks in which the copy is either side. The game simulating the enemy shares them instead (see [Enemy-triggered callbacks](#enemy-triggered-callbacks)). Local ambient sound and darkness glow remain. A copy attacks only when an `enemyattack` Command delivers an attack.
 
@@ -376,9 +376,9 @@ EVENT enemyattack <entityId> <attack> <sizeX> <sizeY> <sizeZ> <offsetX> <offsetY
 enemyattack <entityId> <attack> <sizeX> <sizeY> <sizeZ> <offsetX> <offsetY> <offsetZ> <map>
 ```
 
-The game that simulates an enemy reports each Grunt attack at the clip's special-event time, the moment it tests for a hit, to a Session granted `enemies`. `<attack>` is `normal` or `breakdoor`, which selects the enemy's attack damage. The box is the one the attack tests: its size, then its center offset along the enemy body's right, up, and forward axes, in metres, using the ordinary Version 2 number grammar. The Event is reported whether or not the attack hits anything locally, and it never carries damage: each game rolls its own.
+The game that simulates an enemy reports each Grunt or Kaernk attack at the moment it tests for a hit (a Grunt's clip special-event time), to a Session granted `enemies`. `<attack>` is `normal` or `breakdoor`, which selects the enemy's attack damage. The box is the one the attack tests: its size, then its center offset along the enemy body's right, up, and forward axes, in metres, using the ordinary Version 2 number grammar. The Event is reported whether or not the attack hits anything locally, and it never carries damage: each game rolls its own.
 
-The `enemyattack` Command takes the same fields, so a Peer can deliver a reported attack to a driven copy unchanged apart from its prefix. The game tests the box from the copy's position and yaw as this game shows it, against the local player only, and applies a hit the vanilla way: damage within the attack's range, blood splash, red flash, head spin, knockback, and the enemy's hit sound. A miss does nothing. Attacks never hit an Avatar, in the simulating game or on a copy; the simulating game's own player is hit as before.
+The `enemyattack` Command takes the same fields, so a Peer can deliver a reported attack to a driven copy unchanged apart from its prefix. The game tests the box from the copy's position and yaw as this game shows it, against the local player only, and applies a hit the vanilla way: damage within the attack's range, blood splash, red flash, head spin, knockback, and the enemy's hit sound. A miss does nothing. A Kaernk copy also shows the attack splash and its sound for a `normal` attack, hit or miss, as the simulating Kaernk does; a `breakdoor` attack has no splash. Attacks never hit an Avatar, in the simulating game or on a copy; the simulating game's own player is hit as before.
 
 Responses are `RESPONSE enemyattack <outcome> <entityId>`, with outcome `ok` whether the attack hits or misses, `wrong-map`, `not-found` (including an enemy that is not driven), or `wrong-type`. A malformed line, an unknown attack, a size that is not positive, or a box size that none of the copy's own attacks uses answers `invalid` without an identifier. Without `enemies`, the Command answers `not-granted` and no attacks are reported.
 
@@ -389,7 +389,7 @@ EVENT enemydoorbreak <doorId> <map>
 enemydoorbreak <doorId> <map>
 ```
 
-The game that simulates an enemy reports, to a Session granted `enemies`, each map-placed door a Grunt's attack breaks. The door runs out of health in that game only, because a driven copy never attacks a door. The Event follows, in the same update, any Events that end a Hold on the door (below).
+The game that simulates an enemy reports, to a Session granted `enemies`, each map-placed door a Grunt's or Kaernk's attack breaks. A Kaernk stuck at a closed door while hunting attacks it with its `breakdoor` attack. The door runs out of health in that game only, because a driven copy never attacks a door. The Event follows, in the same update, any Events that end a Hold on the door (below).
 
 The `enemydoorbreak` Command breaks this game's own copy of the door through the game's own break path: the door's bodies disappear, and its broken entity, sound, particles, and `Break` callback appear and run here. The broken entity is created at runtime in each game, so it is never shared or Held. The break runs in Shared Callback mode, so its callback cannot take the local player's control or camera and is never reported back. It is State-Changing, so it needs the Authority Grant.
 
@@ -422,18 +422,33 @@ The `enemydisappear` Command plays the same disappearance on this game's enemy, 
 
 A new Map Visit starts every enemy without a disappearance; `<map>` and the simulating game's clock, which never runs backwards, keep a delivery from one Map Visit out of the next. An inactive enemy records the disappearance without playing it. A Joining Player's game whose enemy is not driven can report its own `enemydisappear`; as with `enemyattack`, a Peer relays only the simulating game's.
 
-Responses are `RESPONSE enemydisappear <outcome> <entityId>`, with outcome `ok`, also for a duplicate or stale delivery, `wrong-map`, `not-found` (no map-placed enemy with that identifier), or `wrong-type` (not a Grunt). A malformed line, including a `<timeMs>` that is not an unsigned integer, answers `invalid` without an identifier. Without `enemies`, the Command answers `not-granted` and no disappearances are reported.
+Responses are `RESPONSE enemydisappear <outcome> <entityId>`, with outcome `ok`, also for a duplicate or stale delivery, `wrong-map`, `not-found` (no map-placed enemy with that identifier), or `wrong-type` (not a Grunt or Kaernk). A malformed line, including a `<timeMs>` that is not an unsigned integer, answers `invalid` without an identifier. Without `enemies`, the Command answers `not-granted` and no disappearances are reported.
 
 See [the Controller checklist](../../docs/testing/enemy-hallucinations.md) for game adapter verification.
 
+### Kaernk bites
+
+```text
+EVENT enemyeat <entityId> <map>
+enemyeat <entityId> <map>
+```
+
+The Kaernk has no visible body and no animations, so its `enemypose` reports carry `-` for the clip, and players see it only through its splashes and their sounds. A driven Kaernk copy shows its walk and run splashes from its own movement, on the simulating Kaernk's cadence: the first 0.1 s after it starts moving, then every second below the speed halfway between its walk and run speeds, or every 0.6 s above it. A still copy, or one snapping to a teleport, does not splash. Its attack splash follows `enemyattack` (above).
+
+The game that simulates a Kaernk reports each bite it takes of food to a Session granted `enemies`. The food is that game's own: only it pushes and damages the meat. The `enemyeat` Command shows the bite on this game's driven copy: the eat splash and its sound, and no movement splashes for the next 1.3 s, as the simulating Kaernk does not splash as it moves while eating. The splash appears where the copy is shown, without the Pose delay.
+
+Responses are `RESPONSE enemyeat <outcome> <entityId>`, with outcome `ok`, `wrong-map`, `not-found` (no map-placed enemy with that identifier, or one that is not driven), or `wrong-type` (not a Grunt or Kaernk, or a Grunt, which never eats). A malformed line answers `invalid` without an identifier. Without `enemies`, the Command answers `not-granted` and no bites are reported. The multiplayer consumer must relay `enemyeat` from the simulating game to the copies in its own repository.
+
+See [the Controller checklist](../../docs/testing/enemy-kaernk.md) for game adapter verification.
+
 ### Enemy-triggered callbacks
 
-A driven copy fires no Map Script callbacks, so the game that simulates a Shared Enemy shares the ones the enemy triggers, as Shared Callbacks (amnesia-multiplayer's ADR 0009). A Shared Enemy is a Grunt this game simulates, rather than drives, while a Session granted `enemies` lasts and the other player is on this map, shown by an awake Avatar. A Session granted `sharedcallbacks` then receives:
+A driven copy fires no Map Script callbacks, so the game that simulates a Shared Enemy shares the ones the enemy triggers, as Shared Callbacks (amnesia-multiplayer's ADR 0009). A Shared Enemy is a Grunt or Kaernk this game simulates, rather than drives, while a Session granted `enemies` lasts and the other player is on this map, shown by an awake Avatar. A Session granted `sharedcallbacks` then receives:
 
 - `entitycollide`, for a collide callback either side of which is a Shared Enemy, such as an area the Grunt walks into. The other games run their own registration on their copy, which never triggers it itself, so the callback runs once in each game.
 - `autodisabled`, when the Shared Enemy reaches the end of its patrol, unseen by the local player and every Avatar with enemy sight, and more than 10 m from the nearest of them, and disables itself. The other games disable their copy and run its `OnAutoDisabled` callback.
 
-Alone on the map, or without such a Session, every enemy is vanilla and nothing is reported. Brutes and Kaernks are not Shared Enemies yet. A copy triggers nothing whenever it is driven, so a Peer must drive copies only while the simulating game has the other player's Avatar awake on the map; otherwise an enemy-triggered callback runs only in the simulating game, which does not report it. A Peer's Command run of any kind counts as another player's trigger for the two functions below, including the `Break` callback of an `enemydoorbreak`.
+Alone on the map, or without such a Session, every enemy is vanilla and nothing is reported. Brutes load as Grunts, so they are Shared Enemies too. A copy triggers nothing whenever it is driven, so a Peer must drive copies only while the simulating game has the other player's Avatar awake on the map; otherwise an enemy-triggered callback runs only in the simulating game, which does not report it. A Peer's Command run of any kind counts as another player's trigger for the two functions below, including the `Break` callback of an `enemydoorbreak`.
 
 The other enemy behavior that reads the player:
 
@@ -459,7 +474,7 @@ The `playerdeath` Event is sent when the local player starts dying on its own, n
 How a death treats enemies depends on whether the other player is on this map, shown by an awake Avatar:
 
 - Alone on the map, or without an `enemies` Session, a death is vanilla.
-- With the other player on the map and no callback, Shared Enemies (Grunts) survive the death: the checkpoint does not deactivate or reset them, and a Grunt does not leave range while the local player is dead. It still drops a dead local target as vanilla does, and keeps hunting a perceived Avatar. Other enemies, and the respawn itself, are vanilla.
+- With the other player on the map and no callback, Shared Enemies (Grunts and Kaernks) survive the death: the checkpoint does not deactivate or reset them, and one does not leave range while the local player is dead. It still drops a dead local target as vanilla does, and keeps hunting a perceived Avatar. Other enemies, and the respawn itself, are vanilla.
 - With the other player on the map and a callback, the death is coordinated: the death screen stays up to 3 more seconds until an episode answers the death, so its callback can receive the agreed count.
 
 The `shareddeath` Command applies one episode of a Shared Death, numbered by the Session Host's Game Peer in the order it decided them. `<death>` is `0` to kill this game's player, or the number of this game's own reported death the episode answers, which never kills. `<count>` is the agreed pre-increment count, the Session Host's own. Every game in an episode follows its own checkpoint: it places its player, deactivates and resets the enemies it simulates and deactivates its driven copies so they stay inactive on release, then runs its own callback once. When `<checkPoint>` is this game's current checkpoint and it has a callback, the callback receives `<count>` and the stored count becomes `<count>` plus one, or one after a callback that registered a new checkpoint, as vanilla. Otherwise, or when no episode answers a death in time, the game keeps its own count and logs one line.
