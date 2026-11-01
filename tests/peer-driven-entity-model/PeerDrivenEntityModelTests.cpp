@@ -39,6 +39,9 @@ namespace
 
 		void Remove(int alEntityId) { m_mapEntities.erase(alEntityId); }
 
+		// As when a script makes the entity's physics static: its bodies are no longer the stream's to move.
+		void RemoveBodies(int alEntityId) { m_mapBodyCounts[alEntityId] = 0; }
+
 		virtual eGameInteractionEntityOutcome FindEntity(int alEntityId) const
 		{
 			std::map<int, eGameInteractionEntityOutcome>::const_iterator it = m_mapEntities.find(alEntityId);
@@ -76,6 +79,8 @@ namespace
 
 		virtual void SetBodyState(int alEntityId, int alBodyId, const cGameInteractionBodyState& aState)
 		{
+			// The game's world dereferences the body it finds, so it must have it.
+			Expect(HasBody(alEntityId, alBodyId), "only a body the world has is set");
 			m_mapStates[std::make_pair(alEntityId, alBodyId)] = aState;
 			++mlBodyStatesSet;
 		}
@@ -504,6 +509,27 @@ namespace
 		Expect(world.mvCalls.size() == 2, "the Peer is not told again during cleanup");
 	}
 
+	// A Coward's Debt, chateau2.hps: the candle lever entering CandleTurnArea runs SetPropStaticPhysics on it while
+	// the other player still Holds it, which crashed the game that drove it.
+	void TestAnEntityWhoseBodiesTheWorldLostIsGivenBack()
+	{
+		cFakeWorld world;
+		world.Place(12);
+		cPeerDrivenEntityModel model;
+		model.Drive(12, world);
+		Add(model, world, 0, 1000.0, Body(12, 0, 1.0f));
+		Add(model, world, 50, 1050.0, Body(12, 0, 2.0f));
+
+		world.RemoveBodies(12);
+		world.mvCalls.clear();
+		world.ForgetStates();
+		model.Update(1125.0, world);
+		Expect(world.mlBodyStatesSet == 0, "a body the world lost is not set");
+		Expect(!model.IsDriving(12), "the entity is no longer driven");
+		Expect(world.mvCalls.size() == 2 && world.mvCalls[0] == "end 12" &&
+			world.mvCalls[1] == "script-release 12", "it is given back and the Peer is told");
+	}
+
 	void TestClearingForgetsWithoutTouchingTheWorld()
 	{
 		cFakeWorld world;
@@ -540,6 +566,7 @@ int main()
 	TestReleasingAllEndsEveryDrivenEntity();
 	TestBreakingSnapsTheEntityAndEndsDrivingIt();
 	TestAnEntityTheWorldLostIsForgotten();
+	TestAnEntityWhoseBodiesTheWorldLostIsGivenBack();
 	TestClearingForgetsWithoutTouchingTheWorld();
 	std::cout << "Peer-Driven Entity model cases passed\n";
 	return 0;

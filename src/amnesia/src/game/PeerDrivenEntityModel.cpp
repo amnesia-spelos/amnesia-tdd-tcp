@@ -187,8 +187,8 @@ void cPeerDrivenEntityModel::Update(double afLocalTimeMs, iPeerDrivenEntityWorld
 	for (size_t i = 0; i < mvDriven.size();)
 	{
 		cDrivenEntity& driven = mvDriven[i];
-		// Destroyed, as by a script, so there is nothing to give back.
-		if (aWorld.FindEntity(driven.mlEntityId) != eGameInteractionEntityOutcome_Success)
+		// Destroyed, or its bodies taken from the stream, as by a script making its physics static.
+		if (!CanStillDrive(driven, aWorld))
 		{
 			const int lEntityId = driven.mlEntityId;
 			EndDriving(i, aWorld);
@@ -242,6 +242,16 @@ cPeerDrivenEntityModel::cDrivenEntity* cPeerDrivenEntityModel::FindDriven(int al
 		if (mvDriven[i].mlEntityId == alEntityId) return &mvDriven[i];
 	}
 	return NULL;
+}
+
+bool cPeerDrivenEntityModel::CanStillDrive(const cDrivenEntity& aDriven, const iPeerDrivenEntityWorld& aWorld)
+{
+	if (aWorld.FindEntity(aDriven.mlEntityId) != eGameInteractionEntityOutcome_Success) return false;
+	for (size_t i = 0; i < aDriven.mvBodies.size(); ++i)
+	{
+		if (!aWorld.HasBody(aDriven.mlEntityId, aDriven.mvBodies[i].mlBodyId)) return false;
+	}
+	return true;
 }
 
 void cPeerDrivenEntityModel::EndDriving(size_t alIndex, iPeerDrivenEntityWorld& aWorld)

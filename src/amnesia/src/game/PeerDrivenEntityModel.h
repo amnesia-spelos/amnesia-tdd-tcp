@@ -101,6 +101,7 @@ private:
 	};
 
 	cDrivenEntity* FindDriven(int alEntityId);
+	static bool CanStillDrive(const cDrivenEntity& aDriven, const iPeerDrivenEntityWorld& aWorld);
 	void EndDriving(size_t alIndex, iPeerDrivenEntityWorld& aWorld);
 	void ClearSamples();
 
