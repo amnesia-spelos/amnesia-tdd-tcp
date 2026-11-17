@@ -660,6 +660,30 @@ void cLevelEditor::OnSetUpDirectories()
 	mpDirHandler->AddLookUpDir(eDir_StaticObjects, sWorkingDir + mpMainConfig->GetStringW("Directories", "StaticObjectsDir", _W("static_objects")), true);
 	mpDirHandler->AddLookUpDir(eDir_Entities, sWorkingDir + mpMainConfig->GetStringW("Directories", "EntitiesDir", _W("entities")), true);
 	mpDirHandler->AddLookUpDir(eDir_Decals, sWorkingDir + mpMainConfig->GetStringW("Directories", "DecalsDir", _W("textures/decals")), true);
+
+	////////////////////////////////////
+	// Each Custom Story's own entities and static objects join the Object Browser after the game's.
+	// A Custom Story Category with the same name as an earlier one stays hidden behind it.
+	tWString sCustomStoriesDir = sWorkingDir + _W("custom_stories");
+	if(cPlatform::FolderExists(sCustomStoriesDir)==false)
+		return;
+
+	tWStringList lstCustomStories;
+	cPlatform::FindFoldersInDir(lstCustomStories, sCustomStoriesDir, false);
+
+	tWStringListIt it = lstCustomStories.begin();
+	for(;it!=lstCustomStories.end();++it)
+	{
+		tWString sCustomStoryDir = cString::AddSlashAtEndW(sCustomStoriesDir) + *it + _W("/");
+
+		tWString sStaticObjectsDir = sCustomStoryDir + _W("static_objects");
+		if(cPlatform::FolderExists(sStaticObjectsDir))
+			mpDirHandler->AddLookUpDir(eDir_StaticObjects, sStaticObjectsDir, true);
+
+		tWString sEntitiesDir = sCustomStoryDir + _W("entities");
+		if(cPlatform::FolderExists(sEntitiesDir))
+			mpDirHandler->AddLookUpDir(eDir_Entities, sEntitiesDir, true);
+	}
 }
 
 //--------------------------------------------------------------------
