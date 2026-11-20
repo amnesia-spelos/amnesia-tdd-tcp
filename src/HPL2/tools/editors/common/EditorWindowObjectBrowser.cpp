@@ -118,8 +118,9 @@ void iEditorObjectIndexEntryMeshObject::BuildThumbnail()
 		//pEditor->GetThumbnailBuilder()->BuildThumbnailFromMesh(sMeshFilename,sThumbnailFilename);
 		pTmbBuilder->BuildThumbnailFromMeshEntity(pEnt, _W(""));
 
-		if(bIsUpdated==false)
-			pIndex->SetRefreshThumbnails(true);
+		// An updated object can still get a thumbnail file that wasn't there before,
+		// for example when its index came from another game copy. Rescan either way.
+		pIndex->SetRefreshThumbnails(true);
 	}
 }
 
